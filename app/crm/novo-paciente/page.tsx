@@ -11,7 +11,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { createPatient } from "@/app/actions/patients"
+import { createPatient } from "@/app/actions/crm"
 
 export default function NewPatientPage() {
   const router = useRouter()
@@ -51,10 +51,26 @@ export default function NewPatientPage() {
       return
     }
 
-    const result = await createPatient(formData)
+    const result = await createPatient({
+      fullName: formData.full_name,
+      cpf: formData.cpf,
+      dateOfBirth: formData.date_of_birth,
+      gender: formData.gender,
+      phone: formData.phone,
+      email: formData.email,
+      address: formData.address,
+      city: formData.city,
+      state: formData.state,
+      cep: formData.zip_code,
+      bloodType: formData.blood_type,
+      allergies: formData.allergies,
+      chronicConditions: formData.chronic_conditions,
+      emergencyContactName: formData.emergency_contact,
+      emergencyContactPhone: formData.emergency_phone,
+    })
 
     if (result.success) {
-      router.push(`/crm/${result.patient.id}`)
+      router.push(`/crm/${result.patient?.id}`)
     } else {
       setError(result.error || "Erro ao cadastrar paciente")
       setLoading(false)

@@ -1,9 +1,7 @@
 import { NextResponse } from "next/server"
-import { neon } from "@neondatabase/serverless"
+import { sql } from "@/lib/db"
 import { verifySession } from "@/lib/auth"
 import { cookies } from "next/headers"
-
-const sql = neon(process.env.DATABASE_URL!)
 
 export async function GET() {
   try {
@@ -22,7 +20,7 @@ export async function GET() {
     const patients = await sql`
       SELECT id, full_name, cpf, date_of_birth, gender, phone, email
       FROM patients
-      WHERE user_id = ${session.userId}
+      WHERE user_id = ${session.id}
       ORDER BY full_name ASC
     `
 

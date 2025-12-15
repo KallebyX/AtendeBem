@@ -7,7 +7,7 @@ import { sql } from "@/lib/db"
 export async function createDigitalPrescription(data: {
   patientId: string
   medications: Array<{
-    medicationId: string
+    medicationId?: string
     medicationName: string
     dosage: string
     frequency: string
@@ -38,11 +38,13 @@ export async function createDigitalPrescription(data: {
       return { error: "Sessão inválida" }
     }
 
+    const userId = session.id
+
     // Buscar dados do paciente
     const patientResult = await sql`
       SELECT full_name, cpf, date_of_birth 
       FROM patients 
-      WHERE id = ${data.patientId} AND user_id = ${session.userId}
+      WHERE id = ${data.patientId} AND user_id = ${userId}
     `
 
     if (patientResult.length === 0) {
@@ -55,7 +57,7 @@ export async function createDigitalPrescription(data: {
     const userResult = await sql`
       SELECT name, crm, crm_uf, specialty 
       FROM users 
-      WHERE id = ${session.userId}
+      WHERE id = ${userId}
     `
 
     const doctor = userResult[0]
@@ -72,7 +74,7 @@ export async function createDigitalPrescription(data: {
         cid11_code, cid11_description, clinical_indication, notes, valid_until, status)
        VALUES (
          ${data.patientId}, 
-         ${session.userId}, 
+         ${userId}, 
          CURRENT_DATE, 
          ${data.cid10Code || null}, 
          ${data.cid10Description || null}, 
@@ -120,7 +122,7 @@ export async function createDigitalPrescription(data: {
        VALUES (
          ${prescriptionId}, 
          ${data.patientId}, 
-         ${session.userId}, 
+         ${userId}, 
          ${doctor.name}, 
          ${doctor.crm}, 
          ${doctor.crm_uf}, 
@@ -168,6 +170,8 @@ export async function signDigitalPrescription(data: {
       return { error: "Sessão inválida" }
     }
 
+    const userId = session.id
+
     // Atualizar receita com assinatura digital
     await sql`
       UPDATE digital_prescriptions 
@@ -178,7 +182,7 @@ export async function signDigitalPrescription(data: {
            signature_hash = ${data.signatureHash},
            digital_signature_data = ${data.digitalSignatureData},
            status = 'signed'
-       WHERE id = ${data.digitalPrescriptionId} AND user_id = ${session.userId}
+       WHERE id = ${data.digitalPrescriptionId} AND user_id = ${userId}
     `
 
     // Registrar log de assinatura
@@ -187,7 +191,7 @@ export async function signDigitalPrescription(data: {
        (digital_prescription_id, user_id, action, success, certificate_details)
        VALUES (
          ${data.digitalPrescriptionId}, 
-         ${session.userId}, 
+         ${userId}, 
          'sign', 
          true, 
          ${JSON.stringify({
@@ -218,11 +222,13 @@ export async function getDigitalPrescriptions() {
       return { error: "Sessão inválida" }
     }
 
+    const userId = session.id
+
     const prescriptions = await sql`
       SELECT 
         dp.*
        FROM digital_prescriptions dp
-       WHERE dp.user_id = ${session.userId}
+       WHERE dp.user_id = ${userId}
        ORDER BY dp.created_at DESC
     `
 
@@ -259,13 +265,15 @@ export async function renewDigitalPrescription(originalPrescriptionId: string) {
       return { error: "Sessão inválida" }
     }
 
+    const userId = session.id
+
     // Buscar receita original
     const originalResult = await sql`
       SELECT dp.*, mp.patient_id, mp.cid10_code, mp.cid10_description,
               mp.cid11_code, mp.cid11_description, mp.clinical_indication, mp.notes
        FROM digital_prescriptions dp
        JOIN medical_prescriptions mp ON dp.prescription_id = mp.id
-       WHERE dp.id = ${originalPrescriptionId} AND dp.user_id = ${session.userId}
+       WHERE dp.id = ${originalPrescriptionId} AND dp.user_id = ${userId}
     `
 
     if (originalResult.length === 0) {

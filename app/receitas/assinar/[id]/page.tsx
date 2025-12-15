@@ -6,28 +6,44 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { Logo } from "@/components/logo"
-import { ArrowLeft, ShieldCheck, CheckCircle2, AlertCircle, Download, FileKey } from "lucide-react"
+import { ArrowLeft, ShieldCheck, CheckCircle2, AlertCircle, Download, FileKey, Pill } from "lucide-react"
 import Link from "next/link"
 import { useParams, useRouter } from "next/navigation"
-import { signDigitalPrescription } from "@/app/actions/digital-prescriptions"
+import { signDigitalPrescription, getDigitalPrescriptions } from "@/app/actions/digital-prescriptions"
 import { generatePrescriptionPDF } from "@/app/actions/export-prescription"
 
 export default function AssinarReceitaPage() {
   const params = useParams()
   const router = useRouter()
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
   const [signing, setSigning] = useState(false)
   const [signed, setSigned] = useState(false)
   const [error, setError] = useState("")
   const [prescription, setPrescription] = useState<any>(null)
 
   useEffect(() => {
-    // TODO: Buscar dados da receita
-    setPrescription({
-      id: params.id,
-      patientName: "João da Silva",
-      medications: ["Dipirona 500mg", "Amoxicilina 500mg"],
-    })
+    async function fetchPrescription() {
+      try {
+        const result = await getDigitalPrescriptions()
+        if (result.error) {
+          setError(result.error)
+        } else if (result.prescriptions) {
+          const found = result.prescriptions.find((p: any) => p.id === params.id)
+          if (found) {
+            setPrescription(found)
+            setSigned(found.is_digitally_signed)
+          } else {
+            setError("Receita nao encontrada")
+          }
+        }
+      } catch (err) {
+        setError("Erro ao carregar receita")
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchPrescription()
   }, [params.id])
 
   const handleSign = async () => {
@@ -36,7 +52,7 @@ export default function AssinarReceitaPage() {
 
     try {
       // Simular processo de assinatura digital com certificado ICP-Brasil
-      // Em produção, isso integraria com a API de certificado digital
+      // Em producao, isso integraria com a API de certificado digital
       await new Promise((resolve) => setTimeout(resolve, 2000))
 
       const mockSignatureData = {
@@ -67,14 +83,31 @@ export default function AssinarReceitaPage() {
       const result = await generatePrescriptionPDF(params.id as string)
       if (result.error) {
         setError(result.error)
-      } else if (result.pdfUrl) {
-        window.open(result.pdfUrl, "_blank")
+      } else if (result.html) {
+        // Open HTML in new window for printing
+        const printWindow = window.open("", "_blank")
+        if (printWindow) {
+          printWindow.document.write(result.html)
+          printWindow.document.close()
+          printWindow.print()
+        }
       }
     } catch (err) {
       setError("Erro ao gerar PDF")
     } finally {
       setLoading(false)
     }
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4" />
+          <p className="text-muted-foreground">Carregando receita...</p>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -104,7 +137,7 @@ export default function AssinarReceitaPage() {
               Assinatura Digital ICP-Brasil
             </h1>
             <p className="text-muted-foreground leading-relaxed">
-              Assine digitalmente a receita médica com validade jurídica nacional
+              Assine digitalmente a receita medica com validade juridica nacional
             </p>
           </div>
 
@@ -128,7 +161,7 @@ export default function AssinarReceitaPage() {
                       Receita Assinada com Sucesso!
                     </h3>
                     <p className="text-sm text-green-700 dark:text-green-300">
-                      A receita foi assinada digitalmente e está pronta para uso
+                      A receita foi assinada digitalmente e esta pronta para uso
                     </p>
                   </div>
                 </div>
@@ -156,7 +189,7 @@ export default function AssinarReceitaPage() {
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
                       <span className="text-sm text-muted-foreground">Paciente</span>
-                      <span className="font-medium">{prescription?.patientName || "Carregando..."}</span>
+                      <span className="font-medium">{prescription?.patient_name || "Carregando..."}</span>
                     </div>
                     <div className="flex items-center justify-between">
                       <span className="text-sm text-muted-foreground">Medicamentos</span>
@@ -164,15 +197,39 @@ export default function AssinarReceitaPage() {
                         {prescription?.medications?.length || 0} itens
                       </Badge>
                     </div>
+                    {prescription?.medications && prescription.medications.length > 0 && (
+                      <div className="pt-2 space-y-2">
+                        {prescription.medications.map((med: any, index: number) => (
+                          <div key={index} className="flex items-center gap-2 p-2 bg-muted rounded-xl">
+                            <Pill className="h-4 w-4 text-primary" />
+                            <span className="text-sm">
+                              {med.medication_name} - {med.dosage}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                     <div className="flex items-center justify-between">
-                      <span className="text-sm text-muted-foreground">Data de Emissão</span>
-                      <span className="font-medium">{new Date().toLocaleDateString("pt-BR")}</span>
+                      <span className="text-sm text-muted-foreground">Data de Emissao</span>
+                      <span className="font-medium">
+                        {prescription?.created_at
+                          ? new Date(prescription.created_at).toLocaleDateString("pt-BR")
+                          : new Date().toLocaleDateString("pt-BR")}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-muted-foreground">Validade</span>
+                      <span className="font-medium">
+                        {prescription?.valid_until
+                          ? new Date(prescription.valid_until).toLocaleDateString("pt-BR")
+                          : `${prescription?.validity_days || 30} dias`}
+                      </span>
                     </div>
                   </div>
                 </CardContent>
               </Card>
 
-              {/* Informações sobre Assinatura Digital */}
+              {/* Informacoes sobre Assinatura Digital */}
               <Card className="rounded-3xl border-primary bg-primary/5">
                 <CardContent className="p-6 space-y-4">
                   <div className="flex items-start gap-3">
@@ -183,23 +240,23 @@ export default function AssinarReceitaPage() {
                       <div className="space-y-2 text-sm text-muted-foreground">
                         <p className="flex items-start gap-2">
                           <CheckCircle2 className="h-4 w-4 text-primary flex-shrink-0 mt-0.5" />
-                          <span>Validade jurídica equivalente à assinatura manuscrita (MP 2.200-2/2001)</span>
+                          <span>Validade juridica equivalente a assinatura manuscrita (MP 2.200-2/2001)</span>
                         </p>
                         <p className="flex items-start gap-2">
                           <CheckCircle2 className="h-4 w-4 text-primary flex-shrink-0 mt-0.5" />
-                          <span>Documento não pode ser alterado após assinatura</span>
+                          <span>Documento nao pode ser alterado apos assinatura</span>
                         </p>
                         <p className="flex items-start gap-2">
                           <CheckCircle2 className="h-4 w-4 text-primary flex-shrink-0 mt-0.5" />
-                          <span>Aceito em farmácias e operadoras de saúde em todo Brasil</span>
+                          <span>Aceito em farmacias e operadoras de saude em todo Brasil</span>
                         </p>
                         <p className="flex items-start gap-2">
                           <CheckCircle2 className="h-4 w-4 text-primary flex-shrink-0 mt-0.5" />
-                          <span>QR Code para validação instantânea do documento</span>
+                          <span>QR Code para validacao instantanea do documento</span>
                         </p>
                         <p className="flex items-start gap-2">
                           <CheckCircle2 className="h-4 w-4 text-primary flex-shrink-0 mt-0.5" />
-                          <span>Rastreabilidade completa e segurança certificada</span>
+                          <span>Rastreabilidade completa e seguranca certificada</span>
                         </p>
                       </div>
                     </div>
@@ -212,10 +269,10 @@ export default function AssinarReceitaPage() {
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <FileKey className="h-5 w-5 text-primary" />
-                    Certificado Digital Necessário
+                    Certificado Digital Necessario
                   </CardTitle>
                   <CardDescription>
-                    Você precisa de um certificado digital ICP-Brasil e-CPF ou e-CNPJ (A1 ou A3)
+                    Voce precisa de um certificado digital ICP-Brasil e-CPF ou e-CNPJ (A1 ou A3)
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
@@ -228,7 +285,7 @@ export default function AssinarReceitaPage() {
                       credenciadas pela ICP-Brasil
                     </p>
                     <p className="text-xs pt-2 text-amber-600 dark:text-amber-400">
-                      ⚠️ Certifique-se de que seu certificado está válido e instalado corretamente no dispositivo
+                      Certifique-se de que seu certificado esta valido e instalado corretamente no dispositivo
                     </p>
                   </div>
 
@@ -252,13 +309,13 @@ export default function AssinarReceitaPage() {
               <Card className="rounded-3xl bg-muted/50">
                 <CardContent className="p-4 text-xs text-muted-foreground space-y-2">
                   <p>
-                    <strong>Importante:</strong> Ao assinar digitalmente, você declara ser o profissional de saúde
-                    responsável pela emissão desta receita e assume total responsabilidade legal pelo conteúdo
+                    <strong>Importante:</strong> Ao assinar digitalmente, voce declara ser o profissional de saude
+                    responsavel pela emissao desta receita e assume total responsabilidade legal pelo conteudo
                     prescrito.
                   </p>
                   <p>
-                    A assinatura digital com certificado ICP-Brasil garante autenticidade, integridade e não-repúdio do
-                    documento, conforme legislação brasileira vigente.
+                    A assinatura digital com certificado ICP-Brasil garante autenticidade, integridade e nao-repudio do
+                    documento, conforme legislacao brasileira vigente.
                   </p>
                 </CardContent>
               </Card>

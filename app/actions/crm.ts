@@ -13,9 +13,11 @@ export async function getPatientsList() {
   }
 
   const session = await verifySession(sessionCookie.value)
-  if (!session || !session.userId) {
+  if (!session || !session.id) {
     return { success: false, error: "Sessão inválida" }
   }
+
+  const userId = session.id
 
   try {
     const patients = await sql`
@@ -28,7 +30,7 @@ export async function getPatientsList() {
       LEFT JOIN appointments a ON a.user_id = p.user_id AND 
         (a.patient_cpf = p.cpf OR a.patient_name = p.full_name)
       LEFT JOIN medical_prescriptions pr ON pr.patient_id = p.id
-      WHERE p.user_id = ${session.userId}
+      WHERE p.user_id = ${userId}
       GROUP BY p.id
       ORDER BY p.created_at DESC
     `
@@ -48,15 +50,17 @@ export async function getPatientDetails(patientId: string) {
   }
 
   const session = await verifySession(sessionCookie.value)
-  if (!session || !session.userId) {
+  if (!session || !session.id) {
     return { success: false, error: "Sessão inválida" }
   }
+
+  const userId = session.id
 
   try {
     // Dados do paciente
     const patientResult = await sql`
       SELECT * FROM patients 
-      WHERE id = ${patientId} AND user_id = ${session.userId}
+      WHERE id = ${patientId} AND user_id = ${userId}
     `
 
     const patient = patientResult[0]
@@ -68,7 +72,7 @@ export async function getPatientDetails(patientId: string) {
     // Histórico de consultas
     const appointments = await sql`
       SELECT * FROM appointments 
-      WHERE user_id = ${session.userId} 
+      WHERE user_id = ${userId} 
       AND (patient_cpf = ${patient.cpf} OR patient_name = ${patient.full_name})
       ORDER BY appointment_date DESC
     `
@@ -133,16 +137,18 @@ export async function getFinancialDashboard() {
   }
 
   const session = await verifySession(sessionCookie.value)
-  if (!session || !session.userId) {
+  if (!session || !session.id) {
     return { success: false, error: "Sessão inválida" }
   }
+
+  const userId = session.id
 
   try {
     // Receita total
     const totalRevenueResult = await sql`
       SELECT COALESCE(SUM(amount), 0) as total
       FROM payments
-      WHERE user_id = ${session.userId}
+      WHERE user_id = ${userId}
       AND status = 'completed'
     `
     const totalRevenue = totalRevenueResult[0]
@@ -151,7 +157,7 @@ export async function getFinancialDashboard() {
     const monthRevenueResult = await sql`
       SELECT COALESCE(SUM(amount), 0) as total
       FROM payments
-      WHERE user_id = ${session.userId}
+      WHERE user_id = ${userId}
       AND status = 'completed'
       AND EXTRACT(MONTH FROM payment_date) = EXTRACT(MONTH FROM CURRENT_DATE)
       AND EXTRACT(YEAR FROM payment_date) = EXTRACT(YEAR FROM CURRENT_DATE)
@@ -162,7 +168,7 @@ export async function getFinancialDashboard() {
     const scheduledCountResult = await sql`
       SELECT COUNT(*) as count
       FROM appointments_schedule
-      WHERE user_id = ${session.userId}
+      WHERE user_id = ${userId}
       AND status = 'scheduled'
       AND appointment_date >= NOW()
     `
@@ -172,7 +178,7 @@ export async function getFinancialDashboard() {
     const activePatientsResult = await sql`
       SELECT COUNT(*) as count
       FROM patients
-      WHERE user_id = ${session.userId}
+      WHERE user_id = ${userId}
       AND is_active = true
     `
     const activePatients = activePatientsResult[0]
@@ -181,7 +187,7 @@ export async function getFinancialDashboard() {
     const pendingPaymentsResult = await sql`
       SELECT COALESCE(SUM(value), 0) as total
       FROM appointments_schedule
-      WHERE user_id = ${session.userId}
+      WHERE user_id = ${userId}
       AND payment_status = 'pending'
     `
     const pendingPayments = pendingPaymentsResult[0]
@@ -192,7 +198,7 @@ export async function getFinancialDashboard() {
         TO_CHAR(payment_date, 'YYYY-MM') as month,
         SUM(amount) as revenue
       FROM payments
-      WHERE user_id = ${session.userId}
+      WHERE user_id = ${userId}
       AND status = 'completed'
       AND payment_date >= NOW() - INTERVAL '6 months'
       GROUP BY TO_CHAR(payment_date, 'YYYY-MM')
@@ -207,7 +213,7 @@ export async function getFinancialDashboard() {
         COALESCE(SUM(pay.amount), 0) as total_spent
       FROM patients p
       LEFT JOIN payments pay ON pay.patient_id = p.id
-      WHERE p.user_id = ${session.userId}
+      WHERE p.user_id = ${userId}
       GROUP BY p.id, p.full_name, p.cpf
       ORDER BY total_spent DESC
       LIMIT 5
@@ -239,9 +245,11 @@ export async function createSchedule(data: any) {
   }
 
   const session = await verifySession(sessionCookie.value)
-  if (!session || !session.userId) {
+  if (!session || !session.id) {
     return { success: false, error: "Sessão inválida" }
   }
+
+  const userId = session.id
 
   try {
     const scheduleResult = await sql`
@@ -249,7 +257,7 @@ export async function createSchedule(data: any) {
         user_id, patient_id, appointment_date, duration_minutes,
         appointment_type, value, payment_method, notes, status
       ) VALUES (
-        ${session.userId}, ${data.patient_id}, ${data.appointment_date},
+        ${userId}, ${data.patient_id}, ${data.appointment_date},
         ${data.duration_minutes || 60}, ${data.appointment_type},
         ${data.value || null}, ${data.payment_method || null}, ${data.notes || null},
         'scheduled'
@@ -272,9 +280,11 @@ export async function addPatientExam(data: any) {
   }
 
   const session = await verifySession(sessionCookie.value)
-  if (!session || !session.userId) {
+  if (!session || !session.id) {
     return { success: false, error: "Sessão inválida" }
   }
+
+  const userId = session.id
 
   try {
     const examResult = await sql`
@@ -282,7 +292,7 @@ export async function addPatientExam(data: any) {
         patient_id, user_id, exam_type, exam_name, exam_date,
         laboratory, observations, status
       ) VALUES (
-        ${data.patient_id}, ${session.userId}, ${data.exam_type},
+        ${data.patient_id}, ${userId}, ${data.exam_type},
         ${data.exam_name}, ${data.exam_date}, ${data.laboratory || null},
         ${data.observations || null}, ${data.status || "requested"}
       )
@@ -322,9 +332,11 @@ export async function createPatient(data: {
   }
 
   const session = await verifySession(sessionCookie.value)
-  if (!session || !session.userId) {
+  if (!session || !session.id) {
     return { success: false, error: "Sessão inválida" }
   }
+
+  const userId = session.id
 
   try {
     const result = await sql`
@@ -334,7 +346,7 @@ export async function createPatient(data: {
         blood_type, allergies, chronic_conditions, emergency_contact_name,
         emergency_contact_phone
       ) VALUES (
-        ${session.userId}, ${data.fullName}, ${data.cpf}, ${data.dateOfBirth}::date, 
+        ${userId}, ${data.fullName}, ${data.cpf}, ${data.dateOfBirth}::date, 
         ${data.gender}, ${data.phone || null}, ${data.email || null},
         ${data.address || null}, ${data.city || null}, ${data.state || null}, 
         ${data.cep || null}, ${data.insuranceProvider || null}, ${data.insuranceNumber || null},
@@ -359,9 +371,11 @@ export async function getSchedules(startDate?: string, endDate?: string) {
   }
 
   const session = await verifySession(sessionCookie.value)
-  if (!session || !session.userId) {
+  if (!session || !session.id) {
     return { success: false, error: "Sessão inválida" }
   }
+
+  const userId = session.id
 
   try {
     let schedules
@@ -370,7 +384,7 @@ export async function getSchedules(startDate?: string, endDate?: string) {
         SELECT s.*, p.full_name as patient_name, p.phone as patient_phone
         FROM appointments_schedule s
         LEFT JOIN patients p ON s.patient_id = p.id
-        WHERE s.user_id = ${session.userId}
+        WHERE s.user_id = ${userId}
         AND s.appointment_date >= ${startDate}::date
         AND s.appointment_date <= ${endDate}::date
         ORDER BY s.appointment_date ASC
@@ -380,7 +394,7 @@ export async function getSchedules(startDate?: string, endDate?: string) {
         SELECT s.*, p.full_name as patient_name, p.phone as patient_phone
         FROM appointments_schedule s
         LEFT JOIN patients p ON s.patient_id = p.id
-        WHERE s.user_id = ${session.userId}
+        WHERE s.user_id = ${userId}
         ORDER BY s.appointment_date ASC
       `
     }
