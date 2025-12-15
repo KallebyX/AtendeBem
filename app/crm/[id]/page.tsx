@@ -310,14 +310,18 @@ export default function PatientDetailPage() {
                           </div>
                           <span
                             className={`px-3 py-1 rounded-full text-xs ${
-                              exam.status === "completed"
+                              exam.status === "concluido"
                                 ? "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300"
-                                : exam.status === "scheduled"
+                                : exam.status === "agendado"
                                   ? "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300"
                                   : "bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300"
                             }`}
                           >
-                            {exam.status}
+                            {exam.status === "concluido"
+                              ? "Concluído"
+                              : exam.status === "pendente"
+                                ? "Pendente"
+                                : exam.status}
                           </span>
                         </div>
                       </div>
