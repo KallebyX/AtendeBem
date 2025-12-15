@@ -16,6 +16,8 @@ DELETE FROM appointments WHERE 1=1;
 DELETE FROM user_settings WHERE 1=1;
 DELETE FROM users WHERE 1=1;
 
+-- Fixed all UUIDs to use valid hexadecimal format (0-9, a-f only)
+
 -- Usuários de teste
 -- Senha: teste123 (hash bcrypt)
 INSERT INTO users (id, email, name, password_hash, crm, crm_uf, specialty, phone, is_active)
@@ -58,11 +60,11 @@ ON CONFLICT (user_id) DO UPDATE SET
   clinic_name = EXCLUDED.clinic_name,
   clinic_address = EXCLUDED.clinic_address;
 
--- Pacientes de teste para Dr. João Silva
+-- Pacientes com UUIDs válidos (usando 'b' em vez de 'p')
 INSERT INTO patients (id, user_id, full_name, cpf, date_of_birth, gender, phone, email, address, city, state, cep, blood_type, allergies, chronic_conditions, insurance_provider, insurance_number, emergency_contact_name, emergency_contact_phone, is_active)
 VALUES 
   (
-    'p0000000-0000-0000-0000-000000000001',
+    'b0000000-0000-0000-0000-000000000001',
     'a0000000-0000-0000-0000-000000000001',
     'Carlos Oliveira Santos',
     '123.456.789-00',
@@ -84,7 +86,7 @@ VALUES
     true
   ),
   (
-    'p0000000-0000-0000-0000-000000000002',
+    'b0000000-0000-0000-0000-000000000002',
     'a0000000-0000-0000-0000-000000000001',
     'Ana Paula Costa',
     '987.654.321-00',
@@ -106,7 +108,7 @@ VALUES
     true
   ),
   (
-    'p0000000-0000-0000-0000-000000000003',
+    'b0000000-0000-0000-0000-000000000003',
     'a0000000-0000-0000-0000-000000000001',
     'Roberto Mendes Silva',
     '456.789.123-00',
@@ -128,7 +130,7 @@ VALUES
     true
   ),
   (
-    'p0000000-0000-0000-0000-000000000004',
+    'b0000000-0000-0000-0000-000000000004',
     'a0000000-0000-0000-0000-000000000001',
     'Juliana Ferreira Lima',
     '321.654.987-00',
@@ -150,7 +152,7 @@ VALUES
     true
   ),
   (
-    'p0000000-0000-0000-0000-000000000005',
+    'b0000000-0000-0000-0000-000000000005',
     'a0000000-0000-0000-0000-000000000001',
     'Fernando Gomes Pereira',
     '654.321.789-00',
@@ -176,13 +178,13 @@ ON CONFLICT (id) DO UPDATE SET
   phone = EXCLUDED.phone,
   email = EXCLUDED.email;
 
--- Agendamentos futuros
+-- Agendamentos com UUIDs válidos (usando 'c' em vez de 'ag')
 INSERT INTO appointments_schedule (id, user_id, patient_id, appointment_date, appointment_type, duration_minutes, status, value, payment_status, payment_method, notes)
 VALUES 
   (
-    'ag000000-0000-0000-0000-000000000001',
+    'c0000000-0000-0000-0000-000000000001',
     'a0000000-0000-0000-0000-000000000001',
-    'p0000000-0000-0000-0000-000000000001',
+    'b0000000-0000-0000-0000-000000000001',
     NOW() + INTERVAL '1 day' + INTERVAL '9 hours',
     'Consulta',
     30,
@@ -193,9 +195,9 @@ VALUES
     'Retorno hipertensão'
   ),
   (
-    'ag000000-0000-0000-0000-000000000002',
+    'c0000000-0000-0000-0000-000000000002',
     'a0000000-0000-0000-0000-000000000001',
-    'p0000000-0000-0000-0000-000000000002',
+    'b0000000-0000-0000-0000-000000000002',
     NOW() + INTERVAL '1 day' + INTERVAL '10 hours',
     'Consulta',
     30,
@@ -206,9 +208,9 @@ VALUES
     'Acompanhamento diabetes'
   ),
   (
-    'ag000000-0000-0000-0000-000000000003',
+    'c0000000-0000-0000-0000-000000000003',
     'a0000000-0000-0000-0000-000000000001',
-    'p0000000-0000-0000-0000-000000000003',
+    'b0000000-0000-0000-0000-000000000003',
     NOW() + INTERVAL '2 days' + INTERVAL '14 hours',
     'Retorno',
     30,
@@ -219,9 +221,9 @@ VALUES
     'Resultados de exames'
   ),
   (
-    'ag000000-0000-0000-0000-000000000004',
+    'c0000000-0000-0000-0000-000000000004',
     'a0000000-0000-0000-0000-000000000001',
-    'p0000000-0000-0000-0000-000000000004',
+    'b0000000-0000-0000-0000-000000000004',
     NOW() + INTERVAL '3 days' + INTERVAL '11 hours',
     'Primeira Consulta',
     45,
@@ -232,9 +234,9 @@ VALUES
     'Nova paciente - check-up geral'
   ),
   (
-    'ag000000-0000-0000-0000-000000000005',
+    'c0000000-0000-0000-0000-000000000005',
     'a0000000-0000-0000-0000-000000000001',
-    'p0000000-0000-0000-0000-000000000005',
+    'b0000000-0000-0000-0000-000000000005',
     NOW() + INTERVAL '5 days' + INTERVAL '15 hours',
     'Consulta',
     30,
@@ -244,11 +246,10 @@ VALUES
     NULL,
     'Controle asma'
   ),
-  -- Agendamento para hoje
   (
-    'ag000000-0000-0000-0000-000000000006',
+    'c0000000-0000-0000-0000-000000000006',
     'a0000000-0000-0000-0000-000000000001',
-    'p0000000-0000-0000-0000-000000000001',
+    'b0000000-0000-0000-0000-000000000001',
     NOW() + INTERVAL '2 hours',
     'Consulta',
     30,
@@ -262,11 +263,11 @@ ON CONFLICT (id) DO UPDATE SET
   appointment_date = EXCLUDED.appointment_date,
   status = EXCLUDED.status;
 
--- Atendimentos realizados (histórico)
+-- Atendimentos com UUIDs válidos (usando 'd' em vez de 'at')
 INSERT INTO appointments (id, user_id, patient_name, patient_cpf, patient_age, patient_gender, appointment_date, appointment_type, specialty, main_complaint, clinical_history, physical_exam, diagnosis, treatment_plan, status)
 VALUES 
   (
-    'at000000-0000-0000-0000-000000000001',
+    'd0000000-0000-0000-0000-000000000001',
     'a0000000-0000-0000-0000-000000000001',
     'Carlos Oliveira Santos',
     '123.456.789-00',
@@ -280,10 +281,10 @@ VALUES
     'PA: 140x90 mmHg. FC: 78 bpm. Sem alterações neurológicas focais.',
     'Cefaleia tensional. Hipertensão arterial sistêmica.',
     'Ajuste de medicação anti-hipertensiva. Orientações sobre estresse e postura.',
-    'finalizado'
+    'completed'
   ),
   (
-    'at000000-0000-0000-0000-000000000002',
+    'd0000000-0000-0000-0000-000000000002',
     'a0000000-0000-0000-0000-000000000001',
     'Ana Paula Costa',
     '987.654.321-00',
@@ -297,10 +298,10 @@ VALUES
     'PA: 120x80 mmHg. Peso: 68kg. IMC: 26.5. Glicemia capilar: 145 mg/dL.',
     'Diabetes mellitus tipo 2 em controle parcial.',
     'Manter Metformina. Reforçar orientações dietéticas. Solicitar hemoglobina glicada.',
-    'finalizado'
+    'completed'
   ),
   (
-    'at000000-0000-0000-0000-000000000003',
+    'd0000000-0000-0000-0000-000000000003',
     'a0000000-0000-0000-0000-000000000001',
     'Roberto Mendes Silva',
     '456.789.123-00',
@@ -314,20 +315,20 @@ VALUES
     'PA: 150x95 mmHg. FC: 82 bpm. Ausculta cardíaca: bulhas rítmicas, sem sopros.',
     'Angina estável. Hipertensão mal controlada.',
     'Encaminhamento para cardiologista. Ajuste de anti-hipertensivos. ECG solicitado.',
-    'finalizado'
+    'completed'
   )
 ON CONFLICT (id) DO UPDATE SET
   diagnosis = EXCLUDED.diagnosis,
   status = EXCLUDED.status;
 
--- Pagamentos realizados
+-- Pagamentos com UUIDs válidos (usando 'e' em vez de 'pay')
 INSERT INTO payments (id, user_id, patient_id, appointment_schedule_id, amount, payment_method, payment_date, status)
 VALUES 
   (
-    'pay00000-0000-0000-0000-000000000001',
+    'e0000000-0000-0000-0000-000000000001',
     'a0000000-0000-0000-0000-000000000001',
-    'p0000000-0000-0000-0000-000000000003',
-    'ag000000-0000-0000-0000-000000000003',
+    'b0000000-0000-0000-0000-000000000003',
+    'c0000000-0000-0000-0000-000000000003',
     150.00,
     'cartao_credito',
     NOW() - INTERVAL '1 day',
@@ -336,49 +337,49 @@ VALUES
 ON CONFLICT (id) DO UPDATE SET
   status = EXCLUDED.status;
 
--- Exames de pacientes
+-- Exames com UUIDs válidos (usando 'f' em vez de 'ex')
 INSERT INTO patient_exams (id, user_id, patient_id, exam_name, exam_type, exam_date, result_date, laboratory, status, result_summary)
 VALUES 
   (
-    'ex000000-0000-0000-0000-000000000001',
+    'f0000000-0000-0000-0000-000000000001',
     'a0000000-0000-0000-0000-000000000001',
-    'p0000000-0000-0000-0000-000000000001',
+    'b0000000-0000-0000-0000-000000000001',
     'Hemograma Completo',
     'Laboratorial',
     NOW() - INTERVAL '10 days',
     NOW() - INTERVAL '7 days',
     'Laboratório Fleury',
-    'concluído',
+    'concluido',
     'Hemácias: 4.8 milhões/mm³. Hemoglobina: 14.2 g/dL. Leucócitos: 7.500/mm³. Plaquetas: 250.000/mm³. Valores dentro da normalidade.'
   ),
   (
-    'ex000000-0000-0000-0000-000000000002',
+    'f0000000-0000-0000-0000-000000000002',
     'a0000000-0000-0000-0000-000000000001',
-    'p0000000-0000-0000-0000-000000000002',
+    'b0000000-0000-0000-0000-000000000002',
     'Hemoglobina Glicada (HbA1c)',
     'Laboratorial',
     NOW() - INTERVAL '15 days',
     NOW() - INTERVAL '12 days',
     'DASA',
-    'concluído',
+    'concluido',
     'HbA1c: 7.2%. Controle glicêmico adequado, porém próximo do limite superior recomendado.'
   ),
   (
-    'ex000000-0000-0000-0000-000000000003',
+    'f0000000-0000-0000-0000-000000000003',
     'a0000000-0000-0000-0000-000000000001',
-    'p0000000-0000-0000-0000-000000000003',
+    'b0000000-0000-0000-0000-000000000003',
     'Eletrocardiograma',
     'Cardiológico',
     NOW() - INTERVAL '20 days',
     NOW() - INTERVAL '20 days',
     'Hospital Sírio-Libanês',
-    'concluído',
+    'concluido',
     'Ritmo sinusal. FC: 75 bpm. Eixo normal. Sem alterações isquêmicas agudas.'
   ),
   (
-    'ex000000-0000-0000-0000-000000000004',
+    'f0000000-0000-0000-0000-000000000004',
     'a0000000-0000-0000-0000-000000000001',
-    'p0000000-0000-0000-0000-000000000001',
+    'b0000000-0000-0000-0000-000000000001',
     'Glicemia de Jejum',
     'Laboratorial',
     NOW() - INTERVAL '5 days',
@@ -390,12 +391,12 @@ VALUES
 ON CONFLICT (id) DO UPDATE SET
   status = EXCLUDED.status;
 
--- Histórico médico dos pacientes
+-- Histórico médico com UUIDs válidos (usando '0' prefixo numérico)
 INSERT INTO patient_medical_history (id, patient_id, diagnosis, diagnosis_date, cid10_code, status, notes, created_by)
 VALUES 
   (
-    'hm000000-0000-0000-0000-000000000001',
-    'p0000000-0000-0000-0000-000000000001',
+    '00000000-0000-0000-0001-000000000001',
+    'b0000000-0000-0000-0000-000000000001',
     'Hipertensão arterial sistêmica',
     '2020-03-15',
     'I10',
@@ -404,8 +405,8 @@ VALUES
     'a0000000-0000-0000-0000-000000000001'
   ),
   (
-    'hm000000-0000-0000-0000-000000000002',
-    'p0000000-0000-0000-0000-000000000002',
+    '00000000-0000-0000-0001-000000000002',
+    'b0000000-0000-0000-0000-000000000002',
     'Diabetes mellitus tipo 2',
     '2022-06-20',
     'E11',
@@ -414,8 +415,8 @@ VALUES
     'a0000000-0000-0000-0000-000000000001'
   ),
   (
-    'hm000000-0000-0000-0000-000000000003',
-    'p0000000-0000-0000-0000-000000000003',
+    '00000000-0000-0000-0001-000000000003',
+    'b0000000-0000-0000-0000-000000000003',
     'Dislipidemia',
     '2019-11-10',
     'E78.0',
@@ -424,8 +425,8 @@ VALUES
     'a0000000-0000-0000-0000-000000000001'
   ),
   (
-    'hm000000-0000-0000-0000-000000000004',
-    'p0000000-0000-0000-0000-000000000005',
+    '00000000-0000-0000-0001-000000000004',
+    'b0000000-0000-0000-0000-000000000005',
     'Asma brônquica',
     '2015-04-22',
     'J45',
