@@ -1,37 +1,143 @@
+"use server"
+
 import { sql } from "@/lib/db"
+import { cookies } from "next/headers"
+import { verifySession } from "@/lib/session"
 
-export async function generatePDFGuiaTISS(appointmentId: string) {
-  // Buscar dados do atendimento
-  const [appointment] = await sql`
-    SELECT 
-      a.*,
-      u.name as doctor_name,
-      u.crm,
-      u.crm_uf,
-      u.specialty
-    FROM appointments a
-    JOIN users u ON a.user_id = u.id
-    WHERE a.id = ${appointmentId}
-  `
+export async function exportAppointmentPDF(appointmentId: string) {
+  try {
+    const cookieStore = await cookies()
+    const token = cookieStore.get("session")?.value
 
-  if (!appointment) {
-    throw new Error("Atendimento não encontrado")
+    if (!token) {
+      return { success: false, error: "Não autenticado" }
+    }
+
+    const user = await verifySession(token)
+    if (!user) {
+      return { success: false, error: "Sessão inválida" }
+    }
+
+    // Buscar dados do atendimento
+    const [appointment] = await sql`
+      SELECT 
+        a.*,
+        u.name as doctor_name,
+        u.crm,
+        u.crm_uf,
+        u.specialty
+      FROM appointments a
+      JOIN users u ON a.user_id = u.id
+      WHERE a.id = ${appointmentId}
+    `
+
+    if (!appointment) {
+      return { success: false, error: "Atendimento não encontrado" }
+    }
+
+    // Buscar procedimentos
+    const procedures = await sql`
+      SELECT * FROM procedures
+      WHERE appointment_id = ${appointmentId}
+      ORDER BY created_at ASC
+    `
+
+    const html = generatePDFHTML(appointment, procedures)
+
+    return {
+      success: true,
+      html,
+      filename: `guia-tiss-${appointmentId}-${Date.now()}.pdf`,
+    }
+  } catch (error: any) {
+    console.error("Erro ao gerar PDF:", error)
+    return { success: false, error: error.message }
   }
+}
 
-  // Buscar procedimentos
-  const procedures = await sql`
-    SELECT * FROM procedures
-    WHERE appointment_id = ${appointmentId}
-    ORDER BY created_at ASC
-  `
+export async function exportAppointmentExcel(appointmentId: string) {
+  try {
+    const cookieStore = await cookies()
+    const token = cookieStore.get("session")?.value
 
-  const html = `
+    if (!token) {
+      return { success: false, error: "Não autenticado" }
+    }
+
+    const user = await verifySession(token)
+    if (!user) {
+      return { success: false, error: "Sessão inválida" }
+    }
+
+    const [appointment] = await sql`
+      SELECT 
+        a.*,
+        u.name as doctor_name,
+        u.crm,
+        u.crm_uf,
+        u.specialty
+      FROM appointments a
+      JOIN users u ON a.user_id = u.id
+      WHERE a.id = ${appointmentId}
+    `
+
+    if (!appointment) {
+      return { success: false, error: "Atendimento não encontrado" }
+    }
+
+    const procedures = await sql`
+      SELECT * FROM procedures
+      WHERE appointment_id = ${appointmentId}
+      ORDER BY created_at ASC
+    `
+
+    const data = {
+      guia: {
+        registroANS: "000000",
+        numeroGuia: appointmentId,
+        dataAtendimento: new Date(appointment.appointment_date).toLocaleDateString("pt-BR"),
+      },
+      beneficiario: {
+        numeroCarteira: appointment.patient_cpf || "N/A",
+        nome: appointment.patient_name,
+        cns: "-",
+      },
+      prestador: {
+        codigo: "-",
+        nome: appointment.doctor_name,
+        crm: appointment.crm,
+        uf: appointment.crm_uf,
+        cbos: "225125",
+      },
+      procedimentos: procedures.map((proc: any) => ({
+        data: new Date(proc.procedure_date || proc.created_at).toLocaleDateString("pt-BR"),
+        tabela: "TUSS",
+        codigo: proc.procedure_code || "-",
+        descricao: proc.procedure_name,
+        quantidade: 1,
+      })),
+      observacoes: appointment.observations || "",
+    }
+
+    return {
+      success: true,
+      data,
+      filename: `guia-tiss-${appointmentId}-${Date.now()}.xlsx`,
+    }
+  } catch (error: any) {
+    console.error("Erro ao gerar Excel:", error)
+    return { success: false, error: error.message }
+  }
+}
+
+function generatePDFHTML(appointment: any, procedures: any[]): string {
+  return `
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Guia de Consulta TISS - ${appointmentId}</title>
+  <title>Guia de Consulta TISS - ${appointment.id}</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: Arial, sans-serif; font-size: 11px; padding: 20mm; background: white; color: #000; }
@@ -56,7 +162,6 @@ export async function generatePDFGuiaTISS(appointmentId: string) {
   <div class="guia">
     <div class="header">GUIA DE CONSULTA - PADRÃO TISS</div>
     
-    <!-- 1. Registro ANS -->
     <div class="section">
       <div class="section-title">1 - Registro ANS</div>
       <div class="row">
@@ -67,7 +172,6 @@ export async function generatePDFGuiaTISS(appointmentId: string) {
       </div>
     </div>
 
-    <!-- 2. Dados do Beneficiário -->
     <div class="section">
       <div class="section-title">2 - Dados do Beneficiário</div>
       <div class="row">
@@ -92,7 +196,6 @@ export async function generatePDFGuiaTISS(appointmentId: string) {
       </div>
     </div>
 
-    <!-- 3. Dados do Contratado -->
     <div class="section">
       <div class="section-title">3 - Dados do Contratado</div>
       <div class="row">
@@ -107,7 +210,6 @@ export async function generatePDFGuiaTISS(appointmentId: string) {
       </div>
     </div>
 
-    <!-- 4. Dados da Consulta -->
     <div class="section">
       <div class="section-title">4 - Dados da Consulta</div>
       <div class="row">
@@ -136,7 +238,6 @@ export async function generatePDFGuiaTISS(appointmentId: string) {
       </div>
     </div>
 
-    <!-- 5. Procedimentos Realizados -->
     <div class="section">
       <div class="section-title">5 - Procedimentos e Exames Realizados</div>
       <table>
@@ -152,7 +253,7 @@ export async function generatePDFGuiaTISS(appointmentId: string) {
         <tbody>
           ${procedures
             .map(
-              (proc) => `
+              (proc: any) => `
             <tr>
               <td>${new Date(proc.procedure_date || proc.created_at).toLocaleDateString("pt-BR")}</td>
               <td>TUSS</td>
@@ -167,7 +268,6 @@ export async function generatePDFGuiaTISS(appointmentId: string) {
       </table>
     </div>
 
-    <!-- 6. Dados do Profissional Executante -->
     <div class="section">
       <div class="section-title">6 - Identificação do Profissional Executante</div>
       <div class="row">
@@ -196,7 +296,6 @@ export async function generatePDFGuiaTISS(appointmentId: string) {
       </div>
     </div>
 
-    <!-- Observações -->
     ${
       appointment.observations
         ? `
@@ -210,7 +309,6 @@ export async function generatePDFGuiaTISS(appointmentId: string) {
         : ""
     }
 
-    <!-- Assinatura -->
     <div class="signature-area">
       <div class="signature-line">
         ${appointment.doctor_name}<br>
@@ -221,58 +319,4 @@ export async function generatePDFGuiaTISS(appointmentId: string) {
 </body>
 </html>
   `
-
-  return html
-}
-
-export async function generateExcelGuiaTISS(appointmentId: string) {
-  const [appointment] = await sql`
-    SELECT 
-      a.*,
-      u.name as doctor_name,
-      u.crm,
-      u.crm_uf,
-      u.specialty
-    FROM appointments a
-    JOIN users u ON a.user_id = u.id
-    WHERE a.id = ${appointmentId}
-  `
-
-  if (!appointment) {
-    throw new Error("Atendimento não encontrado")
-  }
-
-  const procedures = await sql`
-    SELECT * FROM procedures
-    WHERE appointment_id = ${appointmentId}
-    ORDER BY created_at ASC
-  `
-
-  return {
-    guia: {
-      registroANS: "000000",
-      numeroGuia: appointmentId,
-      dataAtendimento: new Date(appointment.appointment_date).toLocaleDateString("pt-BR"),
-    },
-    beneficiario: {
-      numeroCarteira: appointment.patient_cpf || "N/A",
-      nome: appointment.patient_name,
-      cns: "-",
-    },
-    prestador: {
-      codigo: "-",
-      nome: appointment.doctor_name,
-      crm: appointment.crm,
-      uf: appointment.crm_uf,
-      cbos: "225125",
-    },
-    procedimentos: procedures.map((proc) => ({
-      data: new Date(proc.procedure_date || proc.created_at).toLocaleDateString("pt-BR"),
-      tabela: "TUSS",
-      codigo: proc.procedure_code || "-",
-      descricao: proc.procedure_name,
-      quantidade: 1,
-    })),
-    observacoes: appointment.observations || "",
-  }
 }

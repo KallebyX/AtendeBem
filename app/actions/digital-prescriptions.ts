@@ -1,7 +1,7 @@
 "use server"
 
 import { cookies } from "next/headers"
-import { verifySession } from "@/lib/auth"
+import { verifySession } from "@/lib/session"
 import { sql } from "@/lib/db"
 
 export async function createDigitalPrescription(data: {

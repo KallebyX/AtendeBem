@@ -1,7 +1,7 @@
 "use server"
 
 import { sql } from "@/lib/db"
-import { verifySession } from "@/lib/auth"
+import { verifySession } from "@/lib/session"
 import { cookies } from "next/headers"
 
 export async function getPatientsList() {

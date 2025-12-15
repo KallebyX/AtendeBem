@@ -2,7 +2,7 @@
 
 import { sql } from "@/lib/db"
 import { cookies } from "next/headers"
-import { verifyToken } from "@/lib/auth"
+import { verifyToken } from "@/lib/session"
 
 export async function createAppointment(data: {
   patientName: string
