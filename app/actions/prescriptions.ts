@@ -1,8 +1,8 @@
 "use server"
 
 import { cookies } from "next/headers"
-import { verifyToken } from "@/lib/auth"
-import { sql } from "@/lib/db"
+import { verifySession } from "@/lib/session"
+import { getDb } from "@/lib/db"
 
 export async function createPrescription(data: {
   patientId: number
@@ -33,10 +33,12 @@ export async function createPrescription(data: {
       return { success: false, error: "Não autenticado" }
     }
 
-    const user = await verifyToken(token)
+    const user = await verifySession(token)
     if (!user) {
       return { success: false, error: "Token inválido" }
     }
+
+    const sql = await getDb()
 
     // Criar prescrição
     const prescriptionResult = await sql`
@@ -97,10 +99,12 @@ export async function getPrescriptionsByPatient(patientId: number) {
       return { success: false, error: "Não autenticado" }
     }
 
-    const user = await verifyToken(token)
+    const user = await verifySession(token)
     if (!user) {
       return { success: false, error: "Token inválido" }
     }
+
+    const sql = await getDb()
 
     const prescriptions = await sql`
       SELECT 

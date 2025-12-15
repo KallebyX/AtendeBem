@@ -2,7 +2,7 @@
 
 import { cookies } from "next/headers"
 import { verifySession } from "@/lib/session"
-import { sql } from "@/lib/db"
+import { getDb } from "@/lib/db"
 
 export async function createDigitalPrescription(data: {
   patientId: string
@@ -39,6 +39,7 @@ export async function createDigitalPrescription(data: {
     }
 
     const userId = session.id
+    const sql = await getDb()
 
     // Buscar dados do paciente
     const patientResult = await sql`
@@ -171,6 +172,7 @@ export async function signDigitalPrescription(data: {
     }
 
     const userId = session.id
+    const sql = await getDb()
 
     // Atualizar receita com assinatura digital
     await sql`
@@ -223,6 +225,7 @@ export async function getDigitalPrescriptions() {
     }
 
     const userId = session.id
+    const sql = await getDb()
 
     const prescriptions = await sql`
       SELECT 
@@ -266,6 +269,7 @@ export async function renewDigitalPrescription(originalPrescriptionId: string) {
     }
 
     const userId = session.id
+    const sql = await getDb()
 
     // Buscar receita original
     const originalResult = await sql`
@@ -315,5 +319,50 @@ export async function renewDigitalPrescription(originalPrescriptionId: string) {
   } catch (error) {
     console.error("[v0] Error renewing prescription:", error)
     return { error: "Erro ao renovar receita" }
+  }
+}
+
+export async function getDigitalPrescriptionDetails(prescriptionId: string) {
+  try {
+    const cookieStore = await cookies()
+    const token = cookieStore.get("session")?.value
+
+    if (!token) {
+      return { error: "Não autenticado" }
+    }
+
+    const session = await verifySession(token)
+    if (!session) {
+      return { error: "Sessão inválida" }
+    }
+
+    const userId = session.id
+    const sql = await getDb()
+
+    const result = await sql`
+      SELECT dp.*, mp.clinical_indication, mp.cid10_code, mp.cid10_description
+      FROM digital_prescriptions dp
+      LEFT JOIN medical_prescriptions mp ON dp.prescription_id = mp.id
+      WHERE dp.id = ${prescriptionId} AND dp.user_id = ${userId}
+    `
+
+    if (result.length === 0) {
+      return { error: "Receita não encontrada" }
+    }
+
+    const prescription = result[0]
+
+    const items = await sql`
+      SELECT * FROM prescription_items
+      WHERE prescription_id = ${prescription.prescription_id}
+    `
+
+    return {
+      success: true,
+      prescription: { ...prescription, medications: items },
+    }
+  } catch (error) {
+    console.error("[v0] Error fetching prescription details:", error)
+    return { error: "Erro ao buscar receita" }
   }
 }

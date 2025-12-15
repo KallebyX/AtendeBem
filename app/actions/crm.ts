@@ -1,6 +1,6 @@
 "use server"
 
-import { sql } from "@/lib/db"
+import { getDb } from "@/lib/db"
 import { verifySession } from "@/lib/session"
 import { cookies } from "next/headers"
 
@@ -20,6 +20,7 @@ export async function getPatientsList() {
   const userId = session.id
 
   try {
+    const sql = await getDb()
     const patients = await sql`
       SELECT 
         p.*,
@@ -57,6 +58,8 @@ export async function getPatientDetails(patientId: string) {
   const userId = session.id
 
   try {
+    const sql = await getDb()
+
     // Dados do paciente
     const patientResult = await sql`
       SELECT * FROM patients 
@@ -144,6 +147,8 @@ export async function getFinancialDashboard() {
   const userId = session.id
 
   try {
+    const sql = await getDb()
+
     // Receita total
     const totalRevenueResult = await sql`
       SELECT COALESCE(SUM(amount), 0) as total
@@ -236,7 +241,15 @@ export async function getFinancialDashboard() {
   }
 }
 
-export async function createSchedule(data: any) {
+export async function createSchedule(data: {
+  patient_id: string
+  appointment_date: string
+  duration_minutes?: number
+  appointment_type: string
+  notes?: string | null
+  value?: number | null
+  payment_method?: string | null
+}) {
   const cookieStore = await cookies()
   const sessionCookie = cookieStore.get("session")
 
@@ -252,21 +265,29 @@ export async function createSchedule(data: any) {
   const userId = session.id
 
   try {
+    const sql = await getDb()
     const scheduleResult = await sql`
       INSERT INTO appointments_schedule (
         user_id, patient_id, appointment_date, duration_minutes,
-        appointment_type, value, payment_method, notes, status
+        appointment_type, value, payment_method, notes, status, payment_status
       ) VALUES (
-        ${userId}, ${data.patient_id}, ${data.appointment_date},
-        ${data.duration_minutes || 60}, ${data.appointment_type},
-        ${data.value || null}, ${data.payment_method || null}, ${data.notes || null},
-        'scheduled'
+        ${userId}, 
+        ${data.patient_id}, 
+        ${data.appointment_date}::timestamp with time zone,
+        ${data.duration_minutes || 60}, 
+        ${data.appointment_type},
+        ${data.value || null}, 
+        ${data.payment_method || null}, 
+        ${data.notes || null},
+        'scheduled',
+        'pending'
       )
       RETURNING *
     `
 
     return { success: true, schedule: scheduleResult[0] }
   } catch (error: any) {
+    console.error("Error creating schedule:", error)
     return { success: false, error: error.message }
   }
 }
@@ -287,6 +308,7 @@ export async function addPatientExam(data: any) {
   const userId = session.id
 
   try {
+    const sql = await getDb()
     const examResult = await sql`
       INSERT INTO patient_exams (
         patient_id, user_id, exam_type, exam_name, exam_date,
@@ -339,6 +361,7 @@ export async function createPatient(data: {
   const userId = session.id
 
   try {
+    const sql = await getDb()
     const result = await sql`
       INSERT INTO patients (
         user_id, full_name, cpf, date_of_birth, gender, phone, email,
@@ -367,6 +390,60 @@ export async function getSchedules(startDate?: string, endDate?: string) {
   const sessionCookie = cookieStore.get("session")
 
   if (!sessionCookie) {
+    return { success: false, error: "Não autenticado", schedules: [] }
+  }
+
+  const session = await verifySession(sessionCookie.value)
+  if (!session || !session.id) {
+    return { success: false, error: "Sessão inválida", schedules: [] }
+  }
+
+  const userId = session.id
+
+  try {
+    const sql = await getDb()
+    let schedules
+
+    if (startDate && endDate) {
+      schedules = await sql`
+        SELECT 
+          s.*,
+          p.full_name as patient_name, 
+          p.phone as patient_phone,
+          p.cpf as patient_cpf
+        FROM appointments_schedule s
+        LEFT JOIN patients p ON s.patient_id = p.id
+        WHERE s.user_id = ${userId}
+        AND s.appointment_date >= ${startDate}::date
+        AND s.appointment_date < (${endDate}::date + INTERVAL '1 day')
+        ORDER BY s.appointment_date ASC
+      `
+    } else {
+      schedules = await sql`
+        SELECT 
+          s.*,
+          p.full_name as patient_name, 
+          p.phone as patient_phone,
+          p.cpf as patient_cpf
+        FROM appointments_schedule s
+        LEFT JOIN patients p ON s.patient_id = p.id
+        WHERE s.user_id = ${userId}
+        ORDER BY s.appointment_date ASC
+      `
+    }
+
+    return { success: true, schedules }
+  } catch (error: any) {
+    console.error("Error getting schedules:", error)
+    return { success: false, error: error.message, schedules: [] }
+  }
+}
+
+export async function updateScheduleStatus(scheduleId: string, status: string) {
+  const cookieStore = await cookies()
+  const sessionCookie = cookieStore.get("session")
+
+  if (!sessionCookie) {
     return { success: false, error: "Não autenticado" }
   }
 
@@ -378,28 +455,68 @@ export async function getSchedules(startDate?: string, endDate?: string) {
   const userId = session.id
 
   try {
-    let schedules
-    if (startDate && endDate) {
-      schedules = await sql`
-        SELECT s.*, p.full_name as patient_name, p.phone as patient_phone
-        FROM appointments_schedule s
-        LEFT JOIN patients p ON s.patient_id = p.id
-        WHERE s.user_id = ${userId}
-        AND s.appointment_date >= ${startDate}::date
-        AND s.appointment_date <= ${endDate}::date
-        ORDER BY s.appointment_date ASC
-      `
-    } else {
-      schedules = await sql`
-        SELECT s.*, p.full_name as patient_name, p.phone as patient_phone
-        FROM appointments_schedule s
-        LEFT JOIN patients p ON s.patient_id = p.id
-        WHERE s.user_id = ${userId}
-        ORDER BY s.appointment_date ASC
-      `
+    const sql = await getDb()
+    const result = await sql`
+      UPDATE appointments_schedule 
+      SET status = ${status}, updated_at = NOW()
+      WHERE id = ${scheduleId} AND user_id = ${userId}
+      RETURNING *
+    `
+
+    if (result.length === 0) {
+      return { success: false, error: "Agendamento não encontrado" }
     }
 
-    return { success: true, schedules }
+    return { success: true, schedule: result[0] }
+  } catch (error: any) {
+    return { success: false, error: error.message }
+  }
+}
+
+export async function recordPayment(data: {
+  scheduleId: string
+  patientId: string
+  amount: number
+  paymentMethod: string
+  notes?: string
+}) {
+  const cookieStore = await cookies()
+  const sessionCookie = cookieStore.get("session")
+
+  if (!sessionCookie) {
+    return { success: false, error: "Não autenticado" }
+  }
+
+  const session = await verifySession(sessionCookie.value)
+  if (!session || !session.id) {
+    return { success: false, error: "Sessão inválida" }
+  }
+
+  const userId = session.id
+
+  try {
+    const sql = await getDb()
+
+    // Insert payment record
+    const paymentResult = await sql`
+      INSERT INTO payments (
+        user_id, patient_id, appointment_schedule_id, amount, 
+        payment_method, payment_date, status, notes
+      ) VALUES (
+        ${userId}, ${data.patientId}, ${data.scheduleId}, ${data.amount},
+        ${data.paymentMethod}, NOW(), 'completed', ${data.notes || null}
+      )
+      RETURNING *
+    `
+
+    // Update schedule payment status
+    await sql`
+      UPDATE appointments_schedule 
+      SET payment_status = 'paid', updated_at = NOW()
+      WHERE id = ${data.scheduleId}
+    `
+
+    return { success: true, payment: paymentResult[0] }
   } catch (error: any) {
     return { success: false, error: error.message }
   }

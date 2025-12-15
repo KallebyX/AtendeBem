@@ -1,7 +1,7 @@
 "use server"
 
-import { sql } from "@/lib/db"
-import { verifySession } from "@/lib/auth"
+import { getDb } from "@/lib/db"
+import { verifySession } from "@/lib/session"
 import { cookies } from "next/headers"
 
 export async function getFinancialReport() {
@@ -17,6 +17,8 @@ export async function getFinancialReport() {
     if (!session) {
       return { success: false, error: "Sessão inválida" }
     }
+
+    const sql = await getDb()
 
     // Receita por mês (últimos 6 meses)
     const monthlyRevenue = await sql`
@@ -112,6 +114,8 @@ export async function exportPatientsReport() {
       return { success: false, error: "Sessão inválida" }
     }
 
+    const sql = await getDb()
+
     const patients = await sql`
       SELECT 
         full_name,
@@ -167,6 +171,8 @@ export async function exportFinancialReport() {
       return { success: false, error: "Sessão inválida" }
     }
 
+    const sql = await getDb()
+
     const payments = await sql`
       SELECT 
         pt.full_name as patient_name,
@@ -218,6 +224,8 @@ export async function exportAppointmentsReport() {
     if (!session) {
       return { success: false, error: "Sessão inválida" }
     }
+
+    const sql = await getDb()
 
     const appointments = await sql`
       SELECT 

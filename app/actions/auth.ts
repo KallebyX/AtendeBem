@@ -1,10 +1,11 @@
 "use server"
 
 import { auth } from "@/lib/auth"
-import { createSession, setSessionCookie, clearSessionCookie, verifySession } from "@/lib/session"
+import { createSession, verifySession } from "@/lib/session"
+import { setSessionCookie, clearSessionCookie } from "@/lib/session-cookies"
 import { redirect } from "next/navigation"
 import { cookies } from "next/headers"
-import { sql } from "@/lib/db"
+import { getDb } from "@/lib/db"
 
 export async function registerAction(formData: FormData) {
   try {
@@ -81,6 +82,7 @@ export async function getCurrentUser() {
       return { success: false, error: "Sessão inválida" }
     }
 
+    const sql = await getDb()
     const users = await sql`
       SELECT id, name, email, crm, crm_uf, specialty
       FROM users
@@ -122,6 +124,8 @@ export async function updateUserProfile(data: {
     if (!data.name || !data.crm || !data.crm_uf || !data.specialty || !data.email) {
       return { success: false, error: "Todos os campos são obrigatórios" }
     }
+
+    const sql = await getDb()
 
     // Check if email is already in use by another user
     const existingUser = await sql`
@@ -169,6 +173,8 @@ export async function changePassword(currentPassword: string, newPassword: strin
     if (!newPassword || newPassword.length < 8) {
       return { success: false, error: "A nova senha deve ter pelo menos 8 caracteres" }
     }
+
+    const sql = await getDb()
 
     // Get current user with password hash
     const users = await sql`

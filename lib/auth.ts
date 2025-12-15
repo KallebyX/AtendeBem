@@ -1,4 +1,4 @@
-import { sql } from "./db"
+import { getDb } from "./db"
 import { hashPassword, verifyPassword } from "./session"
 
 // Database auth functions only - for server actions
@@ -12,6 +12,8 @@ export const auth = {
     crm_uf: string
     specialty: string
   }) {
+    const sql = await getDb()
+
     // Check if user already exists
     const existingUser = await sql`
       SELECT id FROM users WHERE email = ${data.email.toLowerCase()}
@@ -45,6 +47,8 @@ export const auth = {
 
   // Login user
   async login(email: string, password: string) {
+    const sql = await getDb()
+
     // Find user
     const users = await sql`
       SELECT id, name, email, password_hash, crm, crm_uf, specialty 

@@ -2,7 +2,7 @@
 
 import { sql } from "@/lib/db"
 import { cookies } from "next/headers"
-import { verifySession } from "@/lib/auth"
+import { verifySession } from "@/lib/session"
 
 export async function generatePrescriptionPDF(digitalPrescriptionId: string) {
   try {

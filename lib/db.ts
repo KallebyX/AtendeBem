@@ -1,14 +1,34 @@
-import { neon } from "@neondatabase/serverless"
+let _sql: any = null
 
-if (!process.env.DATABASE_URL) {
-  throw new Error("DATABASE_URL environment variable is not set")
+async function initSql() {
+  if (typeof window !== "undefined") {
+    throw new Error("Database cannot be accessed from the client side")
+  }
+
+  if (!_sql) {
+    if (!process.env.DATABASE_URL) {
+      throw new Error("DATABASE_URL environment variable is not set")
+    }
+    const { neon } = await import("@neondatabase/serverless")
+    _sql = neon(process.env.DATABASE_URL)
+  }
+
+  return _sql
 }
 
-export const sql = neon(process.env.DATABASE_URL)
+// Export a function that gets the sql client
+export async function getDb() {
+  return await initSql()
+}
+
+// For backwards compatibility - returns the initialized client
+// Must be called after initSql() in server actions
+export { initSql as sql }
 
 // Helper function to set the current user context for RLS
 export async function setUserContext(userId: string) {
-  await sql`SELECT set_config('app.current_user_id', ${userId}, true)`
+  const client = await initSql()
+  await client`SELECT set_config('app.current_user_id', ${userId}, true)`
 }
 
 // Database query helpers
@@ -16,14 +36,14 @@ export const db = {
   // Users
   async getUser(userId: string) {
     await setUserContext(userId)
-    const result = await sql`
-      SELECT * FROM users WHERE id = ${userId}
-    `
+    const sql = await initSql()
+    const result = await sql`SELECT * FROM users WHERE id = ${userId}`
     return result[0]
   },
 
   async updateUser(userId: string, data: any) {
     await setUserContext(userId)
+    const sql = await initSql()
     const result = await sql`
       UPDATE users 
       SET 
@@ -40,6 +60,7 @@ export const db = {
   // Appointments
   async getAppointments(userId: string, limit = 50, offset = 0) {
     await setUserContext(userId)
+    const sql = await initSql()
     return await sql`
       SELECT * FROM appointments 
       WHERE user_id = ${userId}
@@ -50,6 +71,7 @@ export const db = {
 
   async getAppointment(userId: string, appointmentId: string) {
     await setUserContext(userId)
+    const sql = await initSql()
     const result = await sql`
       SELECT * FROM appointments 
       WHERE id = ${appointmentId} AND user_id = ${userId}
@@ -59,6 +81,7 @@ export const db = {
 
   async createAppointment(userId: string, data: any) {
     await setUserContext(userId)
+    const sql = await initSql()
     const result = await sql`
       INSERT INTO appointments (
         user_id, patient_name, patient_cpf, patient_age, patient_gender,
@@ -81,6 +104,7 @@ export const db = {
 
   async updateAppointment(userId: string, appointmentId: string, data: any) {
     await setUserContext(userId)
+    const sql = await initSql()
     const result = await sql`
       UPDATE appointments
       SET
@@ -99,6 +123,7 @@ export const db = {
   // AI Conversations
   async getConversations(userId: string) {
     await setUserContext(userId)
+    const sql = await initSql()
     return await sql`
       SELECT * FROM ai_conversations 
       WHERE user_id = ${userId} AND is_archived = false
@@ -108,6 +133,7 @@ export const db = {
 
   async createConversation(userId: string, title?: string) {
     await setUserContext(userId)
+    const sql = await initSql()
     const result = await sql`
       INSERT INTO ai_conversations (user_id, title)
       VALUES (${userId}, ${title || "Nova conversa"})
@@ -118,6 +144,7 @@ export const db = {
 
   async addMessage(userId: string, conversationId: string, role: "user" | "assistant", content: string) {
     await setUserContext(userId)
+    const sql = await initSql()
     const result = await sql`
       INSERT INTO ai_messages (conversation_id, role, content)
       VALUES (${conversationId}, ${role}, ${content})
@@ -128,6 +155,7 @@ export const db = {
 
   async getMessages(userId: string, conversationId: string) {
     await setUserContext(userId)
+    const sql = await initSql()
     return await sql`
       SELECT m.* FROM ai_messages m
       JOIN ai_conversations c ON m.conversation_id = c.id
@@ -139,6 +167,7 @@ export const db = {
   // Templates
   async getTemplates(userId: string, templateType?: string) {
     await setUserContext(userId)
+    const sql = await initSql()
     if (templateType) {
       return await sql`
         SELECT * FROM document_templates 
@@ -156,6 +185,7 @@ export const db = {
   // User Settings
   async getSettings(userId: string) {
     await setUserContext(userId)
+    const sql = await initSql()
     const result = await sql`
       SELECT * FROM user_settings WHERE user_id = ${userId}
     `
@@ -164,6 +194,7 @@ export const db = {
 
   async updateSettings(userId: string, settings: any) {
     await setUserContext(userId)
+    const sql = await initSql()
     const result = await sql`
       INSERT INTO user_settings (user_id, theme, notifications_enabled, clinic_name, clinic_address, preferences)
       VALUES (${userId}, ${settings.theme}, ${settings.notifications_enabled}, 
@@ -184,6 +215,7 @@ export const db = {
   // Statistics
   async getStats(userId: string) {
     await setUserContext(userId)
+    const sql = await initSql()
     const [appointmentsCount] = await sql`
       SELECT COUNT(*) as count FROM appointments WHERE user_id = ${userId}
     `

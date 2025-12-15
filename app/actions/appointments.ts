@@ -1,6 +1,6 @@
 "use server"
 
-import { sql } from "@/lib/db"
+import { getDb } from "@/lib/db"
 import { cookies } from "next/headers"
 import { verifyToken } from "@/lib/session"
 
@@ -32,6 +32,8 @@ export async function createAppointment(data: {
     if (!user) {
       return { error: "Token inválido" }
     }
+
+    const sql = await getDb()
 
     // Criar registro de atendimento
     const result = await sql`
@@ -125,6 +127,8 @@ export async function getAppointmentHistory(limit = 50, offset = 0) {
       return { error: "Token inválido" }
     }
 
+    const sql = await getDb()
+
     const appointments = await sql`
       SELECT 
         a.id,
@@ -162,6 +166,8 @@ export async function getAppointmentDetails(appointmentId: string) {
     if (!user) {
       return { error: "Token inválido" }
     }
+
+    const sql = await getDb()
 
     const [appointment] = await sql`
       SELECT * FROM appointments

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
-import { sql } from "@/lib/db"
-import { verifySession } from "@/lib/auth"
+import { getDb } from "@/lib/db"
+import { verifySession } from "@/lib/session"
 import { cookies } from "next/headers"
 
 export async function GET() {
@@ -16,6 +16,8 @@ export async function GET() {
     if (!session) {
       return NextResponse.json({ error: "Sessão inválida" }, { status: 401 })
     }
+
+    const sql = await getDb()
 
     const patients = await sql`
       SELECT id, full_name, cpf, date_of_birth, gender, phone, email

@@ -1,8 +1,8 @@
 "use server"
 
 import { cookies } from "next/headers"
-import { verifyToken } from "@/lib/auth"
-import { sql } from "@/lib/db"
+import { verifySession } from "@/lib/session"
+import { getDb } from "@/lib/db"
 
 export async function createPatient(formData: FormData) {
   try {
@@ -13,10 +13,12 @@ export async function createPatient(formData: FormData) {
       return { success: false, error: "Não autenticado" }
     }
 
-    const user = await verifyToken(token)
+    const user = await verifySession(token)
     if (!user) {
       return { success: false, error: "Token inválido" }
     }
+
+    const sql = await getDb()
 
     const fullName = formData.get("fullName") as string
     const cpf = formData.get("cpf") as string
@@ -63,10 +65,12 @@ export async function getPatients() {
       return { success: false, error: "Não autenticado" }
     }
 
-    const user = await verifyToken(token)
+    const user = await verifySession(token)
     if (!user) {
       return { success: false, error: "Token inválido" }
     }
+
+    const sql = await getDb()
 
     const patients = await sql`
       SELECT id, full_name, cpf, date_of_birth, phone, email, insurance_provider
@@ -91,10 +95,12 @@ export async function searchPatients(query: string) {
       return { success: false, error: "Não autenticado" }
     }
 
-    const user = await verifyToken(token)
+    const user = await verifySession(token)
     if (!user) {
       return { success: false, error: "Token inválido" }
     }
+
+    const sql = await getDb()
 
     const patients = await sql`
       SELECT id, full_name, cpf, date_of_birth, phone
