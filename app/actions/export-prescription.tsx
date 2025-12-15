@@ -1,6 +1,6 @@
 "use server"
 
-import { sql } from "@/lib/db"
+import { getDb } from "@/lib/db"
 import { cookies } from "next/headers"
 import { verifySession } from "@/lib/session"
 
@@ -18,6 +18,7 @@ export async function generatePrescriptionPDF(digitalPrescriptionId: string) {
       return { error: "Sessão inválida" }
     }
 
+    const sql = await getDb()
     const userId = session.id
 
     // Buscar dados da receita digital
@@ -53,13 +54,15 @@ export async function generatePrescriptionPDF(digitalPrescriptionId: string) {
       pdfUrl: `data:text/html;base64,${Buffer.from(html).toString("base64")}`,
     }
   } catch (error) {
-    console.error("[v0] Error generating prescription PDF:", error)
+    console.error("Error generating prescription PDF:", error)
     return { error: "Erro ao gerar PDF" }
   }
 }
 
 export async function validatePrescription(validationToken: string) {
   try {
+    const sql = await getDb()
+
     // Buscar receita pelo token de validação (não precisa de autenticação)
     const [prescription] = await sql`
       SELECT 
@@ -130,7 +133,7 @@ export async function validatePrescription(validationToken: string) {
       },
     }
   } catch (error) {
-    console.error("[v0] Error validating prescription:", error)
+    console.error("Error validating prescription:", error)
     return { error: "Erro ao validar receita" }
   }
 }
@@ -160,7 +163,6 @@ function generatePrescriptionHTML(prescription: any, medications: any[]) {
     .field-label { font-size: 9px; color: #666; display: block; margin-bottom: 2px; }
     .field-value { font-size: 12px; font-weight: 500; }
     .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; }
-    .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; }
     .medication { background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 10px; border-left: 4px solid #2DD4BF; }
     .medication-name { font-size: 14px; font-weight: bold; color: #0A2342; margin-bottom: 8px; }
     .medication-details { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; font-size: 11px; }

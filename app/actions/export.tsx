@@ -1,6 +1,6 @@
 "use server"
 
-import { sql } from "@/lib/db"
+import { getDb } from "@/lib/db"
 import { cookies } from "next/headers"
 import { verifySession } from "@/lib/session"
 
@@ -17,6 +17,8 @@ export async function exportAppointmentPDF(appointmentId: string) {
     if (!user) {
       return { success: false, error: "Sessão inválida" }
     }
+
+    const sql = await getDb()
 
     // Buscar dados do atendimento
     const [appointment] = await sql`
@@ -68,6 +70,8 @@ export async function exportAppointmentExcel(appointmentId: string) {
     if (!user) {
       return { success: false, error: "Sessão inválida" }
     }
+
+    const sql = await getDb()
 
     const [appointment] = await sql`
       SELECT 
