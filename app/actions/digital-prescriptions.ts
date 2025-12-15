@@ -60,8 +60,12 @@ export async function createDigitalPrescription(data: {
 
     const doctor = userResult[0]
 
-    // Criar prescrição médica
     const validityDays = data.validityDays || 30
+    const validUntilDate = new Date()
+    validUntilDate.setDate(validUntilDate.getDate() + validityDays)
+    const validUntilStr = validUntilDate.toISOString().split("T")[0]
+
+    // Criar prescrição médica
     const prescriptionResult = await sql`
       INSERT INTO medical_prescriptions 
        (patient_id, user_id, prescription_date, cid10_code, cid10_description, 
@@ -76,7 +80,7 @@ export async function createDigitalPrescription(data: {
          ${data.cid11Description || null}, 
          ${data.clinicalIndication || null}, 
          ${data.notes || null},
-         CURRENT_DATE + INTERVAL '${validityDays} days', 
+         ${validUntilStr}::date, 
          'pending_signature'
        )
        RETURNING id
@@ -92,7 +96,7 @@ export async function createDigitalPrescription(data: {
           duration, quantity, administration_instructions, special_warnings)
          VALUES (
            ${prescriptionId}, 
-           ${med.medicationId}, 
+           ${med.medicationId || null}, 
            ${med.medicationName}, 
            ${med.dosage}, 
            ${med.frequency}, 
@@ -105,12 +109,9 @@ export async function createDigitalPrescription(data: {
     }
 
     // Verificar se há substâncias controladas
-    const hasControlled = data.medications.some((med) => data.prescriptionType?.includes("controlled"))
+    const hasControlled = data.prescriptionType?.includes("controlled") || false
 
     // Criar receita digital
-    const validUntil = new Date()
-    validUntil.setDate(validUntil.getDate() + (data.validityDays || 30))
-
     const digitalPrescriptionResult = await sql`
       INSERT INTO digital_prescriptions 
        (prescription_id, patient_id, user_id, doctor_name, doctor_crm, doctor_crm_uf, 
@@ -127,8 +128,8 @@ export async function createDigitalPrescription(data: {
          ${patient.full_name}, 
          ${patient.cpf}, 
          ${patient.date_of_birth}, 
-         ${data.validityDays || 30}, 
-         ${validUntil.toISOString().split("T")[0]}, 
+         ${validityDays}, 
+         ${validUntilStr}::date, 
          ${hasControlled}, 
          ${data.prescriptionType || "simple"}, 
          'pending_signature'
@@ -217,27 +218,27 @@ export async function getDigitalPrescriptions() {
       return { error: "Sessão inválida" }
     }
 
-    const result = await sql`
+    const prescriptions = await sql`
       SELECT 
-        dp.*,
-        json_agg(
-          json_build_object(
-            'medication_name', pi.medication_name,
-            'dosage', pi.dosage,
-            'frequency', pi.frequency,
-            'duration', pi.duration,
-            'quantity', pi.quantity
-          )
-        ) as medications
+        dp.*
        FROM digital_prescriptions dp
-       JOIN medical_prescriptions mp ON dp.prescription_id = mp.id
-       JOIN prescription_items pi ON mp.id = pi.prescription_id
        WHERE dp.user_id = ${session.userId}
-       GROUP BY dp.id
        ORDER BY dp.created_at DESC
     `
 
-    return { prescriptions: result }
+    // Fetch medications separately for each prescription
+    const prescriptionsWithMeds = await Promise.all(
+      prescriptions.map(async (dp: any) => {
+        const items = await sql`
+          SELECT pi.medication_name, pi.dosage, pi.frequency, pi.duration, pi.quantity
+          FROM prescription_items pi
+          WHERE pi.prescription_id = ${dp.prescription_id}
+        `
+        return { ...dp, medications: items }
+      }),
+    )
+
+    return { prescriptions: prescriptionsWithMeds }
   } catch (error) {
     console.error("[v0] Error fetching prescriptions:", error)
     return { error: "Erro ao buscar receitas" }
@@ -276,12 +277,10 @@ export async function renewDigitalPrescription(originalPrescriptionId: string) {
     // Buscar medicamentos da receita original
     const medsResult = await sql`
       SELECT pi.* FROM prescription_items pi
-       JOIN medical_prescriptions mp ON pi.prescription_id = mp.id
-       JOIN digital_prescriptions dp ON mp.id = dp.prescription_id
-       WHERE dp.id = ${originalPrescriptionId}
+       WHERE pi.prescription_id = ${original.prescription_id}
     `
 
-    const medications = medsResult.map((med) => ({
+    const medications = medsResult.map((med: any) => ({
       medicationId: med.medication_id,
       medicationName: med.medication_name,
       dosage: med.dosage,

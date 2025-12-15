@@ -4,7 +4,7 @@ import { generatePDFGuiaTISS, generateExcelGuiaTISS } from "@/lib/export-pdf"
 import { cookies } from "next/headers"
 import { verifySession } from "@/lib/auth"
 
-export async function exportAppointmentPDF(appointmentId: number) {
+export async function exportAppointmentPDF(appointmentId: string) {
   try {
     const cookieStore = await cookies()
     const token = cookieStore.get("session")?.value
@@ -31,7 +31,7 @@ export async function exportAppointmentPDF(appointmentId: number) {
   }
 }
 
-export async function exportAppointmentExcel(appointmentId: number) {
+export async function exportAppointmentExcel(appointmentId: string) {
   try {
     const cookieStore = await cookies()
     const token = cookieStore.get("session")?.value

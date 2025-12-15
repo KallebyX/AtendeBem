@@ -7,7 +7,7 @@ import { useState } from "react"
 import { useToast } from "@/hooks/use-toast"
 
 interface ExportButtonsProps {
-  appointmentId: number
+  appointmentId: string
   variant?: "default" | "outline"
   size?: "default" | "sm" | "lg"
 }

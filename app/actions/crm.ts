@@ -1,10 +1,8 @@
 "use server"
 
-import { neon } from "@neondatabase/serverless"
+import { sql } from "@/lib/db"
 import { verifySession } from "@/lib/auth"
 import { cookies } from "next/headers"
-
-const sql = neon(process.env.DATABASE_URL!)
 
 export async function getPatientsList() {
   const cookieStore = await cookies()
@@ -56,10 +54,12 @@ export async function getPatientDetails(patientId: string) {
 
   try {
     // Dados do paciente
-    const [patient] = await sql`
+    const patientResult = await sql`
       SELECT * FROM patients 
       WHERE id = ${patientId} AND user_id = ${session.userId}
     `
+
+    const patient = patientResult[0]
 
     if (!patient) {
       return { success: false, error: "Paciente não encontrado" }
@@ -139,15 +139,16 @@ export async function getFinancialDashboard() {
 
   try {
     // Receita total
-    const [totalRevenue] = await sql`
+    const totalRevenueResult = await sql`
       SELECT COALESCE(SUM(amount), 0) as total
       FROM payments
       WHERE user_id = ${session.userId}
       AND status = 'completed'
     `
+    const totalRevenue = totalRevenueResult[0]
 
     // Receita do mês atual
-    const [monthRevenue] = await sql`
+    const monthRevenueResult = await sql`
       SELECT COALESCE(SUM(amount), 0) as total
       FROM payments
       WHERE user_id = ${session.userId}
@@ -155,31 +156,35 @@ export async function getFinancialDashboard() {
       AND EXTRACT(MONTH FROM payment_date) = EXTRACT(MONTH FROM CURRENT_DATE)
       AND EXTRACT(YEAR FROM payment_date) = EXTRACT(YEAR FROM CURRENT_DATE)
     `
+    const monthRevenue = monthRevenueResult[0]
 
     // Consultas agendadas
-    const [scheduledCount] = await sql`
+    const scheduledCountResult = await sql`
       SELECT COUNT(*) as count
       FROM appointments_schedule
       WHERE user_id = ${session.userId}
       AND status = 'scheduled'
       AND appointment_date >= NOW()
     `
+    const scheduledCount = scheduledCountResult[0]
 
     // Total de pacientes ativos
-    const [activePatients] = await sql`
+    const activePatientsResult = await sql`
       SELECT COUNT(*) as count
       FROM patients
       WHERE user_id = ${session.userId}
       AND is_active = true
     `
+    const activePatients = activePatientsResult[0]
 
     // Pagamentos pendentes
-    const [pendingPayments] = await sql`
+    const pendingPaymentsResult = await sql`
       SELECT COALESCE(SUM(value), 0) as total
       FROM appointments_schedule
       WHERE user_id = ${session.userId}
       AND payment_status = 'pending'
     `
+    const pendingPayments = pendingPaymentsResult[0]
 
     // Receita por mês (últimos 6 meses)
     const monthlyRevenue = await sql`
@@ -211,11 +216,11 @@ export async function getFinancialDashboard() {
     return {
       success: true,
       metrics: {
-        totalRevenue: totalRevenue.total,
-        monthRevenue: monthRevenue.total,
-        scheduledCount: scheduledCount.count,
-        activePatients: activePatients.count,
-        pendingPayments: pendingPayments.total,
+        totalRevenue: Number(totalRevenue.total) || 0,
+        monthRevenue: Number(monthRevenue.total) || 0,
+        scheduledCount: Number(scheduledCount.count) || 0,
+        activePatients: Number(activePatients.count) || 0,
+        pendingPayments: Number(pendingPayments.total) || 0,
       },
       monthlyRevenue,
       topPatients,
@@ -239,19 +244,20 @@ export async function createSchedule(data: any) {
   }
 
   try {
-    const [schedule] = await sql`
+    const scheduleResult = await sql`
       INSERT INTO appointments_schedule (
         user_id, patient_id, appointment_date, duration_minutes,
-        appointment_type, value, payment_method, notes
+        appointment_type, value, payment_method, notes, status
       ) VALUES (
         ${session.userId}, ${data.patient_id}, ${data.appointment_date},
         ${data.duration_minutes || 60}, ${data.appointment_type},
-        ${data.value || null}, ${data.payment_method || null}, ${data.notes || null}
+        ${data.value || null}, ${data.payment_method || null}, ${data.notes || null},
+        'scheduled'
       )
       RETURNING *
     `
 
-    return { success: true, schedule }
+    return { success: true, schedule: scheduleResult[0] }
   } catch (error: any) {
     return { success: false, error: error.message }
   }
@@ -271,7 +277,7 @@ export async function addPatientExam(data: any) {
   }
 
   try {
-    const [exam] = await sql`
+    const examResult = await sql`
       INSERT INTO patient_exams (
         patient_id, user_id, exam_type, exam_name, exam_date,
         laboratory, observations, status
@@ -283,7 +289,103 @@ export async function addPatientExam(data: any) {
       RETURNING *
     `
 
-    return { success: true, exam }
+    return { success: true, exam: examResult[0] }
+  } catch (error: any) {
+    return { success: false, error: error.message }
+  }
+}
+
+export async function createPatient(data: {
+  fullName: string
+  cpf: string
+  dateOfBirth: string
+  gender: string
+  phone?: string
+  email?: string
+  address?: string
+  city?: string
+  state?: string
+  cep?: string
+  insuranceProvider?: string
+  insuranceNumber?: string
+  bloodType?: string
+  allergies?: string
+  chronicConditions?: string
+  emergencyContactName?: string
+  emergencyContactPhone?: string
+}) {
+  const cookieStore = await cookies()
+  const sessionCookie = cookieStore.get("session")
+
+  if (!sessionCookie) {
+    return { success: false, error: "Não autenticado" }
+  }
+
+  const session = await verifySession(sessionCookie.value)
+  if (!session || !session.userId) {
+    return { success: false, error: "Sessão inválida" }
+  }
+
+  try {
+    const result = await sql`
+      INSERT INTO patients (
+        user_id, full_name, cpf, date_of_birth, gender, phone, email,
+        address, city, state, cep, insurance_provider, insurance_number,
+        blood_type, allergies, chronic_conditions, emergency_contact_name,
+        emergency_contact_phone
+      ) VALUES (
+        ${session.userId}, ${data.fullName}, ${data.cpf}, ${data.dateOfBirth}::date, 
+        ${data.gender}, ${data.phone || null}, ${data.email || null},
+        ${data.address || null}, ${data.city || null}, ${data.state || null}, 
+        ${data.cep || null}, ${data.insuranceProvider || null}, ${data.insuranceNumber || null},
+        ${data.bloodType || null}, ${data.allergies || null}, ${data.chronicConditions || null},
+        ${data.emergencyContactName || null}, ${data.emergencyContactPhone || null}
+      )
+      RETURNING id, full_name, cpf
+    `
+
+    return { success: true, patient: result[0] }
+  } catch (error: any) {
+    return { success: false, error: error.message }
+  }
+}
+
+export async function getSchedules(startDate?: string, endDate?: string) {
+  const cookieStore = await cookies()
+  const sessionCookie = cookieStore.get("session")
+
+  if (!sessionCookie) {
+    return { success: false, error: "Não autenticado" }
+  }
+
+  const session = await verifySession(sessionCookie.value)
+  if (!session || !session.userId) {
+    return { success: false, error: "Sessão inválida" }
+  }
+
+  try {
+    let schedules
+    if (startDate && endDate) {
+      schedules = await sql`
+        SELECT s.*, p.full_name as patient_name, p.phone as patient_phone
+        FROM appointments_schedule s
+        LEFT JOIN patients p ON s.patient_id = p.id
+        WHERE s.user_id = ${session.userId}
+        AND s.appointment_date >= ${startDate}::date
+        AND s.appointment_date <= ${endDate}::date
+        ORDER BY s.appointment_date ASC
+      `
+    } else {
+      schedules = await sql`
+        SELECT s.*, p.full_name as patient_name, p.phone as patient_phone
+        FROM appointments_schedule s
+        LEFT JOIN patients p ON s.patient_id = p.id
+        WHERE s.user_id = ${session.userId}
+        ORDER BY s.appointment_date ASC
+      `
+    }
+
+    return { success: true, schedules }
   } catch (error: any) {
     return { success: false, error: error.message }
   }

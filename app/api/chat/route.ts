@@ -1,9 +1,14 @@
-import { consumeStream, convertToModelMessages, streamText, type UIMessage } from "ai"
+import { streamText, convertToCoreMessages } from "ai"
+import { createGoogleGenerativeAI } from "@ai-sdk/google"
 
 export const maxDuration = 30
 
+const google = createGoogleGenerativeAI({
+  apiKey: "AIzaSyBsqcoBnsZjg_SfAMxkAmMxu-qR5nLK9bw",
+})
+
 export async function POST(req: Request) {
-  const { messages }: { messages: UIMessage[] } = await req.json()
+  const { messages } = await req.json()
 
   const systemPrompt = `Você é um assistente virtual do AtendeBem, uma plataforma que ajuda profissionais de saúde a gerenciar atendimentos e documentação médica.
 
@@ -22,25 +27,13 @@ IMPORTANTE:
 
 Mantenha respostas objetivas e úteis, sempre com tom profissional mas acessível.`
 
-  const prompt = convertToModelMessages([
-    { role: "system", parts: [{ type: "text", text: systemPrompt }] },
-    ...messages,
-  ])
-
   const result = streamText({
-    model: "google/gemini-2.5-flash-image",
-    prompt,
-    maxOutputTokens: 2000,
+    model: google("gemini-2.0-flash"),
+    system: systemPrompt,
+    messages: convertToCoreMessages(messages),
+    maxTokens: 2000,
     temperature: 0.7,
-    abortSignal: req.signal,
   })
 
-  return result.toUIMessageStreamResponse({
-    onFinish: async ({ isAborted }) => {
-      if (isAborted) {
-        console.log("[v0] Chat request aborted by user")
-      }
-    },
-    consumeSseStream: consumeStream,
-  })
+  return result.toUIMessageStreamResponse()
 }

@@ -67,19 +67,21 @@ export async function createAppointment(data: {
       await sql`
         INSERT INTO procedures (
           appointment_id,
-          tuss_code,
+          user_id,
+          procedure_code,
           procedure_name,
-          laterality,
-          location,
-          status
+          patient_name,
+          patient_cpf,
+          procedure_date
         )
         VALUES (
           ${appointmentId},
+          ${user.id},
           ${proc.code},
           ${proc.friendlyName},
-          ${proc.laterality || null},
-          ${proc.location || null},
-          'completed'
+          ${data.patientName},
+          ${data.patientCpf || null},
+          NOW()
         )
       `
     }
@@ -91,7 +93,7 @@ export async function createAppointment(data: {
         entity_type,
         entity_id,
         action,
-        changes
+        details
       )
       VALUES (
         ${user.id},
