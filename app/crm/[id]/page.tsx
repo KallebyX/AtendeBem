@@ -4,16 +4,54 @@ import { NavigationHeader } from "@/components/navigation-header"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { User, Calendar, FileText, Activity, DollarSign, Plus, Download } from "lucide-react"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
+import { User, Calendar, FileText, Activity, DollarSign, Plus, X, Edit, Trash2 } from "lucide-react"
 import { useEffect, useState } from "react"
-import { getPatientDetails } from "@/app/actions/crm"
-import { useParams } from "next/navigation"
+import { getPatientDetails, createSchedule, addExam, updatePatient, deletePatient } from "@/app/actions/crm"
+import { useParams, useRouter } from "next/navigation"
 
 export default function PatientDetailPage() {
   const params = useParams()
+  const router = useRouter()
   const patientId = params.id as string
   const [data, setData] = useState<any>(null)
   const [loading, setLoading] = useState(true)
+
+  const [showScheduleModal, setShowScheduleModal] = useState(false)
+  const [showExamModal, setShowExamModal] = useState(false)
+  const [showEditModal, setShowEditModal] = useState(false)
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState("")
+
+  const [scheduleForm, setScheduleForm] = useState({
+    date: "",
+    time: "09:00",
+    type: "consulta",
+    duration: "60",
+    value: "",
+    paymentMethod: "",
+    notes: "",
+  })
+
+  const [examForm, setExamForm] = useState({
+    examName: "",
+    examType: "laboratorial",
+    examDate: "",
+    laboratory: "",
+    notes: "",
+  })
+
+  const [editForm, setEditForm] = useState({
+    full_name: "",
+    phone: "",
+    email: "",
+    address: "",
+    allergies: "",
+    chronic_conditions: "",
+  })
 
   useEffect(() => {
     loadPatientData()
@@ -24,8 +62,142 @@ export default function PatientDetailPage() {
     const result = await getPatientDetails(patientId)
     if (result.success) {
       setData(result)
+      if (result.patient) {
+        setEditForm({
+          full_name: result.patient.full_name || "",
+          phone: result.patient.phone || "",
+          email: result.patient.email || "",
+          address: result.patient.address || "",
+          allergies: result.patient.allergies || "",
+          chronic_conditions: result.patient.chronic_conditions || "",
+        })
+      }
     }
     setLoading(false)
+  }
+
+  const handleCreateSchedule = async () => {
+    if (!scheduleForm.date || !scheduleForm.time) {
+      setError("Data e horário são obrigatórios")
+      return
+    }
+
+    setSaving(true)
+    setError("")
+
+    try {
+      const appointmentDateTime = new Date(scheduleForm.date)
+      const [hours, minutes] = scheduleForm.time.split(":")
+      appointmentDateTime.setHours(Number.parseInt(hours), Number.parseInt(minutes), 0, 0)
+
+      const result = await createSchedule({
+        patient_id: patientId,
+        appointment_date: appointmentDateTime.toISOString(),
+        duration_minutes: Number.parseInt(scheduleForm.duration) || 60,
+        appointment_type: scheduleForm.type,
+        notes: scheduleForm.notes || null,
+        value: scheduleForm.value ? Number.parseFloat(scheduleForm.value) : null,
+        payment_method: scheduleForm.paymentMethod || null,
+      })
+
+      if (result.success) {
+        await loadPatientData()
+        setShowScheduleModal(false)
+        setScheduleForm({
+          date: "",
+          time: "09:00",
+          type: "consulta",
+          duration: "60",
+          value: "",
+          paymentMethod: "",
+          notes: "",
+        })
+      } else {
+        setError(result.error || "Erro ao criar agendamento")
+      }
+    } catch (err: any) {
+      setError(err.message || "Erro ao criar agendamento")
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleAddExam = async () => {
+    if (!examForm.examName || !examForm.examDate) {
+      setError("Nome do exame e data são obrigatórios")
+      return
+    }
+
+    setSaving(true)
+    setError("")
+
+    try {
+      const result = await addExam({
+        patient_id: patientId,
+        exam_name: examForm.examName,
+        exam_type: examForm.examType,
+        exam_date: examForm.examDate,
+        laboratory: examForm.laboratory || null,
+        notes: examForm.notes || null,
+      })
+
+      if (result.success) {
+        await loadPatientData()
+        setShowExamModal(false)
+        setExamForm({
+          examName: "",
+          examType: "laboratorial",
+          examDate: "",
+          laboratory: "",
+          notes: "",
+        })
+      } else {
+        setError(result.error || "Erro ao adicionar exame")
+      }
+    } catch (err: any) {
+      setError(err.message || "Erro ao adicionar exame")
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleUpdatePatient = async () => {
+    setSaving(true)
+    setError("")
+
+    try {
+      const result = await updatePatient(patientId, editForm)
+
+      if (result.success) {
+        await loadPatientData()
+        setShowEditModal(false)
+      } else {
+        setError(result.error || "Erro ao atualizar paciente")
+      }
+    } catch (err: any) {
+      setError(err.message || "Erro ao atualizar paciente")
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleDeletePatient = async () => {
+    setSaving(true)
+    setError("")
+
+    try {
+      const result = await deletePatient(patientId)
+
+      if (result.success) {
+        router.push("/crm")
+      } else {
+        setError(result.error || "Erro ao excluir paciente")
+      }
+    } catch (err: any) {
+      setError(err.message || "Erro ao excluir paciente")
+    } finally {
+      setSaving(false)
+    }
   }
 
   if (loading) {
@@ -62,7 +234,7 @@ export default function PatientDetailPage() {
         {/* Header do Paciente */}
         <Card className="rounded-3xl border-border">
           <CardContent className="p-6">
-            <div className="flex items-start justify-between">
+            <div className="flex items-start justify-between flex-wrap gap-4">
               <div className="flex items-start gap-4">
                 <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center">
                   <User className="w-8 h-8 text-primary" />
@@ -84,12 +256,20 @@ export default function PatientDetailPage() {
                 </div>
               </div>
 
-              <div className="flex gap-2">
-                <Button variant="outline" className="rounded-xl bg-transparent">
-                  <Download className="w-4 h-4 mr-2" />
-                  Exportar
+              <div className="flex gap-2 flex-wrap">
+                <Button variant="outline" className="rounded-xl bg-transparent" onClick={() => setShowEditModal(true)}>
+                  <Edit className="w-4 h-4 mr-2" />
+                  Editar
                 </Button>
-                <Button className="rounded-xl">
+                <Button
+                  variant="outline"
+                  className="rounded-xl bg-transparent text-red-600 hover:text-red-700 hover:bg-red-50"
+                  onClick={() => setShowDeleteModal(true)}
+                >
+                  <Trash2 className="w-4 h-4 mr-2" />
+                  Excluir
+                </Button>
+                <Button className="rounded-xl" onClick={() => setShowScheduleModal(true)}>
                   <Plus className="w-4 h-4 mr-2" />
                   Novo Agendamento
                 </Button>
@@ -97,7 +277,7 @@ export default function PatientDetailPage() {
             </div>
 
             {/* Métricas Rápidas */}
-            <div className="grid grid-cols-4 gap-4 mt-6">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
               <div className="p-4 rounded-2xl bg-accent/50">
                 <p className="text-sm text-muted-foreground">Consultas</p>
                 <p className="text-2xl font-bold">{appointments?.length || 0}</p>
@@ -120,7 +300,7 @@ export default function PatientDetailPage() {
 
         {/* Tabs */}
         <Tabs defaultValue="history" className="space-y-6">
-          <TabsList className="rounded-2xl">
+          <TabsList className="rounded-2xl flex-wrap h-auto gap-1">
             <TabsTrigger value="history" className="rounded-xl">
               <Activity className="w-4 h-4 mr-2" />
               Histórico Médico
@@ -229,7 +409,7 @@ export default function PatientDetailPage() {
                                 : "bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300"
                             }`}
                           >
-                            {apt.status}
+                            {apt.status === "completed" ? "Concluído" : apt.status}
                           </span>
                         </div>
                       </div>
@@ -269,7 +449,7 @@ export default function PatientDetailPage() {
                                 : "bg-gray-100 text-gray-700 dark:bg-gray-900 dark:text-gray-300"
                             }`}
                           >
-                            {rx.status}
+                            {rx.status === "active" ? "Ativa" : rx.status}
                           </span>
                         </div>
                       </div>
@@ -285,7 +465,7 @@ export default function PatientDetailPage() {
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <CardTitle>Exames</CardTitle>
-                  <Button className="rounded-xl">
+                  <Button className="rounded-xl" onClick={() => setShowExamModal(true)}>
                     <Plus className="w-4 h-4 mr-2" />
                     Adicionar Exame
                   </Button>
@@ -357,7 +537,7 @@ export default function PatientDetailPage() {
                                 : "bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300"
                             }`}
                           >
-                            {schedule.payment_status}
+                            {schedule.payment_status === "paid" ? "Pago" : "Pendente"}
                           </span>
                         </div>
                       ))}
@@ -392,7 +572,7 @@ export default function PatientDetailPage() {
                                   : "bg-gray-100 text-gray-700 dark:bg-gray-900 dark:text-gray-300"
                               }`}
                             >
-                              {payment.status}
+                              {payment.status === "completed" ? "Concluído" : payment.status}
                             </span>
                           </div>
                         </div>
@@ -405,6 +585,303 @@ export default function PatientDetailPage() {
           </TabsContent>
         </Tabs>
       </main>
+
+      {showScheduleModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <Card className="w-full max-w-md rounded-3xl max-h-[90vh] overflow-y-auto">
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle>Novo Agendamento</CardTitle>
+              <Button variant="ghost" size="icon" onClick={() => setShowScheduleModal(false)} className="rounded-xl">
+                <X className="w-4 h-4" />
+              </Button>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {error && <div className="p-3 rounded-xl bg-red-500/10 text-red-500 text-sm">{error}</div>}
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Data *</Label>
+                  <Input
+                    type="date"
+                    value={scheduleForm.date}
+                    onChange={(e) => setScheduleForm({ ...scheduleForm, date: e.target.value })}
+                    className="rounded-xl"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Horário *</Label>
+                  <Input
+                    type="time"
+                    value={scheduleForm.time}
+                    onChange={(e) => setScheduleForm({ ...scheduleForm, time: e.target.value })}
+                    className="rounded-xl"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Tipo de Consulta</Label>
+                <select
+                  value={scheduleForm.type}
+                  onChange={(e) => setScheduleForm({ ...scheduleForm, type: e.target.value })}
+                  className="w-full h-10 px-3 rounded-xl border border-input bg-background"
+                >
+                  <option value="consulta">Consulta</option>
+                  <option value="retorno">Retorno</option>
+                  <option value="exame">Exame</option>
+                  <option value="procedimento">Procedimento</option>
+                  <option value="teleconsulta">Teleconsulta</option>
+                </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Duração</Label>
+                  <select
+                    value={scheduleForm.duration}
+                    onChange={(e) => setScheduleForm({ ...scheduleForm, duration: e.target.value })}
+                    className="w-full h-10 px-3 rounded-xl border border-input bg-background"
+                  >
+                    <option value="30">30 minutos</option>
+                    <option value="45">45 minutos</option>
+                    <option value="60">1 hora</option>
+                    <option value="90">1h30</option>
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Valor (R$)</Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    value={scheduleForm.value}
+                    onChange={(e) => setScheduleForm({ ...scheduleForm, value: e.target.value })}
+                    placeholder="0,00"
+                    className="rounded-xl"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Forma de Pagamento</Label>
+                <select
+                  value={scheduleForm.paymentMethod}
+                  onChange={(e) => setScheduleForm({ ...scheduleForm, paymentMethod: e.target.value })}
+                  className="w-full h-10 px-3 rounded-xl border border-input bg-background"
+                >
+                  <option value="">Selecione</option>
+                  <option value="dinheiro">Dinheiro</option>
+                  <option value="pix">PIX</option>
+                  <option value="cartao_credito">Cartão de Crédito</option>
+                  <option value="cartao_debito">Cartão de Débito</option>
+                  <option value="plano_saude">Plano de Saúde</option>
+                </select>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Observações</Label>
+                <Textarea
+                  value={scheduleForm.notes}
+                  onChange={(e) => setScheduleForm({ ...scheduleForm, notes: e.target.value })}
+                  placeholder="Observações opcionais"
+                  className="rounded-xl"
+                />
+              </div>
+
+              <Button onClick={handleCreateSchedule} className="w-full rounded-2xl" disabled={saving}>
+                {saving ? "Agendando..." : "Agendar Consulta"}
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {showExamModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <Card className="w-full max-w-md rounded-3xl max-h-[90vh] overflow-y-auto">
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle>Adicionar Exame</CardTitle>
+              <Button variant="ghost" size="icon" onClick={() => setShowExamModal(false)} className="rounded-xl">
+                <X className="w-4 h-4" />
+              </Button>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {error && <div className="p-3 rounded-xl bg-red-500/10 text-red-500 text-sm">{error}</div>}
+
+              <div className="space-y-2">
+                <Label>Nome do Exame *</Label>
+                <Input
+                  value={examForm.examName}
+                  onChange={(e) => setExamForm({ ...examForm, examName: e.target.value })}
+                  placeholder="Ex: Hemograma Completo"
+                  className="rounded-xl"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Tipo</Label>
+                  <select
+                    value={examForm.examType}
+                    onChange={(e) => setExamForm({ ...examForm, examType: e.target.value })}
+                    className="w-full h-10 px-3 rounded-xl border border-input bg-background"
+                  >
+                    <option value="laboratorial">Laboratorial</option>
+                    <option value="imagem">Imagem</option>
+                    <option value="cardiologico">Cardiológico</option>
+                    <option value="outros">Outros</option>
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Data *</Label>
+                  <Input
+                    type="date"
+                    value={examForm.examDate}
+                    onChange={(e) => setExamForm({ ...examForm, examDate: e.target.value })}
+                    className="rounded-xl"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Laboratório</Label>
+                <Input
+                  value={examForm.laboratory}
+                  onChange={(e) => setExamForm({ ...examForm, laboratory: e.target.value })}
+                  placeholder="Nome do laboratório"
+                  className="rounded-xl"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label>Observações</Label>
+                <Textarea
+                  value={examForm.notes}
+                  onChange={(e) => setExamForm({ ...examForm, notes: e.target.value })}
+                  placeholder="Observações opcionais"
+                  className="rounded-xl"
+                />
+              </div>
+
+              <Button onClick={handleAddExam} className="w-full rounded-2xl" disabled={saving}>
+                {saving ? "Adicionando..." : "Adicionar Exame"}
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {showEditModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <Card className="w-full max-w-md rounded-3xl max-h-[90vh] overflow-y-auto">
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle>Editar Paciente</CardTitle>
+              <Button variant="ghost" size="icon" onClick={() => setShowEditModal(false)} className="rounded-xl">
+                <X className="w-4 h-4" />
+              </Button>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {error && <div className="p-3 rounded-xl bg-red-500/10 text-red-500 text-sm">{error}</div>}
+
+              <div className="space-y-2">
+                <Label>Nome Completo</Label>
+                <Input
+                  value={editForm.full_name}
+                  onChange={(e) => setEditForm({ ...editForm, full_name: e.target.value })}
+                  className="rounded-xl"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Telefone</Label>
+                  <Input
+                    value={editForm.phone}
+                    onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
+                    className="rounded-xl"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>E-mail</Label>
+                  <Input
+                    type="email"
+                    value={editForm.email}
+                    onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
+                    className="rounded-xl"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Endereço</Label>
+                <Input
+                  value={editForm.address}
+                  onChange={(e) => setEditForm({ ...editForm, address: e.target.value })}
+                  className="rounded-xl"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label>Alergias</Label>
+                <Textarea
+                  value={editForm.allergies}
+                  onChange={(e) => setEditForm({ ...editForm, allergies: e.target.value })}
+                  className="rounded-xl"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label>Condições Crônicas</Label>
+                <Textarea
+                  value={editForm.chronic_conditions}
+                  onChange={(e) => setEditForm({ ...editForm, chronic_conditions: e.target.value })}
+                  className="rounded-xl"
+                />
+              </div>
+
+              <Button onClick={handleUpdatePatient} className="w-full rounded-2xl" disabled={saving}>
+                {saving ? "Salvando..." : "Salvar Alterações"}
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {showDeleteModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <Card className="w-full max-w-sm rounded-3xl">
+            <CardHeader>
+              <CardTitle className="text-red-600">Excluir Paciente</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {error && <div className="p-3 rounded-xl bg-red-500/10 text-red-500 text-sm">{error}</div>}
+
+              <p className="text-muted-foreground">
+                Tem certeza que deseja excluir o paciente <strong>{patient.full_name}</strong>? Esta ação não pode ser
+                desfeita.
+              </p>
+
+              <div className="flex gap-3">
+                <Button
+                  variant="outline"
+                  onClick={() => setShowDeleteModal(false)}
+                  className="flex-1 rounded-xl"
+                  disabled={saving}
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  variant="destructive"
+                  onClick={handleDeletePatient}
+                  className="flex-1 rounded-xl"
+                  disabled={saving}
+                >
+                  {saving ? "Excluindo..." : "Excluir"}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
     </div>
   )
 }

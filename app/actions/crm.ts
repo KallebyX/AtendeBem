@@ -316,7 +316,7 @@ export async function addPatientExam(data: any) {
       ) VALUES (
         ${data.patient_id}, ${userId}, ${data.exam_type},
         ${data.exam_name}, ${data.exam_date}, ${data.laboratory || null},
-        ${data.observations || null}, ${data.status || "requested"}
+        ${data.observations || null}, 'requested'
       )
       RETURNING *
     `
@@ -517,6 +517,135 @@ export async function recordPayment(data: {
     `
 
     return { success: true, payment: paymentResult[0] }
+  } catch (error: any) {
+    return { success: false, error: error.message }
+  }
+}
+
+export async function addExam(data: {
+  patient_id: string
+  exam_name: string
+  exam_type: string
+  exam_date: string
+  laboratory?: string | null
+  notes?: string | null
+}) {
+  const cookieStore = await cookies()
+  const sessionCookie = cookieStore.get("session")
+
+  if (!sessionCookie) {
+    return { success: false, error: "Não autenticado" }
+  }
+
+  const session = await verifySession(sessionCookie.value)
+  if (!session || !session.id) {
+    return { success: false, error: "Sessão inválida" }
+  }
+
+  const userId = session.id
+
+  try {
+    const sql = await getDb()
+    const examResult = await sql`
+      INSERT INTO patient_exams (
+        patient_id, user_id, exam_type, exam_name, exam_date,
+        laboratory, observations, status
+      ) VALUES (
+        ${data.patient_id}, ${userId}, ${data.exam_type},
+        ${data.exam_name}, ${data.exam_date}::date, ${data.laboratory || null},
+        ${data.notes || null}, 'pendente'
+      )
+      RETURNING *
+    `
+
+    return { success: true, exam: examResult[0] }
+  } catch (error: any) {
+    return { success: false, error: error.message }
+  }
+}
+
+export async function updatePatient(
+  patientId: string,
+  data: {
+    full_name?: string
+    phone?: string
+    email?: string
+    address?: string
+    allergies?: string
+    chronic_conditions?: string
+  },
+) {
+  const cookieStore = await cookies()
+  const sessionCookie = cookieStore.get("session")
+
+  if (!sessionCookie) {
+    return { success: false, error: "Não autenticado" }
+  }
+
+  const session = await verifySession(sessionCookie.value)
+  if (!session || !session.id) {
+    return { success: false, error: "Sessão inválida" }
+  }
+
+  const userId = session.id
+
+  try {
+    const sql = await getDb()
+    const result = await sql`
+      UPDATE patients SET
+        full_name = COALESCE(${data.full_name || null}, full_name),
+        phone = COALESCE(${data.phone || null}, phone),
+        email = COALESCE(${data.email || null}, email),
+        address = COALESCE(${data.address || null}, address),
+        allergies = ${data.allergies || null},
+        chronic_conditions = ${data.chronic_conditions || null},
+        updated_at = NOW()
+      WHERE id = ${patientId} AND user_id = ${userId}
+      RETURNING *
+    `
+
+    if (result.length === 0) {
+      return { success: false, error: "Paciente não encontrado" }
+    }
+
+    return { success: true, patient: result[0] }
+  } catch (error: any) {
+    return { success: false, error: error.message }
+  }
+}
+
+export async function deletePatient(patientId: string) {
+  const cookieStore = await cookies()
+  const sessionCookie = cookieStore.get("session")
+
+  if (!sessionCookie) {
+    return { success: false, error: "Não autenticado" }
+  }
+
+  const session = await verifySession(sessionCookie.value)
+  if (!session || !session.id) {
+    return { success: false, error: "Sessão inválida" }
+  }
+
+  const userId = session.id
+
+  try {
+    const sql = await getDb()
+
+    // Soft delete - just mark as inactive
+    const result = await sql`
+      UPDATE patients SET
+        is_active = false,
+        updated_at = NOW()
+      WHERE id = ${patientId} AND user_id = ${userId}
+      RETURNING id
+    `
+
+    if (result.length === 0) {
+      return { success: false, error: "Paciente não encontrado" }
+    }
+
+    return { success: true }
   } catch (error: any) {
     return { success: false, error: error.message }
   }

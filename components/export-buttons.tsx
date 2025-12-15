@@ -2,7 +2,7 @@
 
 import { Button } from "@/components/ui/button"
 import { Download, FileSpreadsheet, Loader2 } from "lucide-react"
-import { exportAppointmentPDF, exportAppointmentExcel } from "@/app/actions/export"
+import { exportAppointmentPDF, exportAppointmentExcel } from "@/app/actions/export.tsx"
 import { useState } from "react"
 import { useToast } from "@/hooks/use-toast"
 
