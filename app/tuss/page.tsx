@@ -7,34 +7,34 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Search, FileDown, Filter } from "lucide-react"
 import {
-  searchTUSSComplete,
-  TUSS_CATEGORIES,
-  TUSS_SPECIALTIES,
-  TOTAL_TUSS_PROCEDURES,
-  type TUSSProcedureComplete,
+  tussProcedures,
+  searchTUSS,
+  tussStats,
+  tussGroups,
+  type TUSSProcedure,
 } from "@/lib/tuss-complete"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 export default function TUSSPage() {
   const [searchQuery, setSearchQuery] = useState("")
-  const [selectedCategory, setSelectedCategory] = useState<string>("all")
-  const [selectedSpecialty, setSelectedSpecialty] = useState<string>("all")
-  const [results, setResults] = useState<TUSSProcedureComplete[]>([])
+  const [selectedGroup, setSelectedGroup] = useState<string>("all")
+  const [results, setResults] = useState<TUSSProcedure[]>([])
 
   const handleSearch = () => {
-    const filtered = searchTUSSComplete(searchQuery, {
-      category: selectedCategory === "all" ? undefined : selectedCategory,
-      specialty: selectedSpecialty === "all" ? undefined : selectedSpecialty,
-      limit: 50,
-    })
+    let filtered = searchTUSS(searchQuery, 100)
+    
+    if (selectedGroup !== "all") {
+      filtered = filtered.filter(p => p.group === selectedGroup)
+    }
+    
     setResults(filtered)
   }
 
   const handleExport = () => {
     const csv = [
-      "Código,Descrição,Categoria,Especialidade,Valor",
+      "Código,Descrição,Grupo,Capítulo,CBOS",
       ...results.map(
-        (r) => `${r.code},"${r.description}","${r.category || ""}","${r.specialty || ""}","${r.value || ""}"`,
+        (r) => `${r.code},"${r.description}","${r.group || ""}","${r.chapter || ""}","${r.cbos || ""}"`,
       ),
     ].join("\n")
 
@@ -57,41 +57,24 @@ export default function TUSSPage() {
         <div className="space-y-2">
           <h1 className="text-3xl md:text-4xl font-bold text-gray-900">Tabela TUSS Completa</h1>
           <p className="text-muted-foreground">
-            Busque entre {TOTAL_TUSS_PROCEDURES.toLocaleString("pt-BR")} procedimentos médicos
+            Busque entre {tussStats.total.toLocaleString("pt-BR")} procedimentos médicos
           </p>
         </div>
 
         {/* Filters */}
         <Card className="p-4 md:p-6 space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
-              <label className="text-sm font-medium">Categoria</label>
-              <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+              <label className="text-sm font-medium">Grupo</label>
+              <Select value={selectedGroup} onValueChange={setSelectedGroup}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Todas as categorias" />
+                  <SelectValue placeholder="Todos os grupos" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Todas</SelectItem>
-                  {TUSS_CATEGORIES.map((cat) => (
-                    <SelectItem key={cat} value={cat}>
-                      {cat}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Especialidade</label>
-              <Select value={selectedSpecialty} onValueChange={setSelectedSpecialty}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Todas as especialidades" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todas</SelectItem>
-                  {TUSS_SPECIALTIES.map((spec) => (
-                    <SelectItem key={spec} value={spec}>
-                      {spec}
+                  <SelectItem value="all">Todos</SelectItem>
+                  {tussGroups.map((group) => (
+                    <SelectItem key={group} value={group}>
+                      {group}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -130,8 +113,8 @@ export default function TUSSPage() {
             </div>
 
             <div className="space-y-3 max-h-[600px] overflow-y-auto">
-              {results.map((proc) => (
-                <div key={proc.code} className="border rounded-lg p-4 hover:bg-gray-50 transition-colors">
+              {results.map((proc, index) => (
+                <div key={`${proc.code}-${index}`} className="border rounded-lg p-4 hover:bg-gray-50 transition-colors">
                   <div className="flex flex-col md:flex-row justify-between gap-3">
                     <div className="flex-1 space-y-2">
                       <div className="flex items-start gap-3">
@@ -141,24 +124,18 @@ export default function TUSSPage() {
                         <p className="font-medium text-sm md:text-base">{proc.description}</p>
                       </div>
                       <div className="flex flex-wrap gap-2">
-                        {proc.category && (
+                        {proc.group && (
                           <Badge variant="secondary" className="text-xs">
-                            {proc.category}
+                            {proc.group}
                           </Badge>
                         )}
-                        {proc.specialty && (
+                        {proc.cbos && proc.cbos !== "-" && (
                           <Badge variant="outline" className="text-xs">
-                            {proc.specialty}
+                            CBOS: {proc.cbos}
                           </Badge>
                         )}
                       </div>
                     </div>
-                    {proc.value && (
-                      <div className="text-right shrink-0">
-                        <p className="text-sm text-muted-foreground">Valor Ref.</p>
-                        <p className="font-semibold text-lg">R$ {proc.value}</p>
-                      </div>
-                    )}
                   </div>
                 </div>
               ))}

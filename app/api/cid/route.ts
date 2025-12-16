@@ -1,42 +1,42 @@
 import { NextResponse } from "next/server"
-import { cidData, searchCID, getCIDByCode, getCIDStats, getCIDByCategory } from "@/lib/cid-complete"
+import { cid10Codes, searchCID10, findCID10ByCode, cid10Stats, getCID10ByChapter } from "@/lib/cid-complete"
 
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url)
     const search = searchParams.get("search") || ""
     const code = searchParams.get("code") || ""
-    const category = searchParams.get("category") || ""
+    const chapter = searchParams.get("chapter") || ""
     const limit = parseInt(searchParams.get("limit") || "50")
     const stats = searchParams.get("stats") === "true"
 
     // Retornar estatísticas
     if (stats) {
-      return NextResponse.json({ stats: getCIDStats() })
+      return NextResponse.json({ stats: cid10Stats })
     }
 
     // Buscar por código específico
     if (code) {
-      const cid = getCIDByCode(code)
+      const cid = findCID10ByCode(code)
       if (cid) {
         return NextResponse.json({ cid })
       }
       return NextResponse.json({ error: "CID não encontrado" }, { status: 404 })
     }
 
-    // Buscar por categoria
-    if (category) {
-      const results = getCIDByCategory(category)
+    // Buscar por capítulo
+    if (chapter) {
+      const results = getCID10ByChapter(chapter)
       return NextResponse.json({ 
         cids: results.slice(0, limit),
         total: results.length,
-        category
+        chapter
       })
     }
 
     // Buscar por termo
     if (search && search.length >= 2) {
-      const results = searchCID(search, limit)
+      const results = searchCID10(search, limit)
       return NextResponse.json({ 
         cids: results,
         total: results.length,
@@ -45,10 +45,10 @@ export async function GET(request: Request) {
     }
 
     // Retornar primeiros registros se não houver busca
-    const firstItems = cidData.slice(0, limit)
+    const firstItems = cid10Codes.slice(0, limit)
     return NextResponse.json({ 
       cids: firstItems,
-      total: cidData.length,
+      total: cid10Codes.length,
       message: "Use o parâmetro 'search' para buscar códigos CID"
     })
   } catch (error) {

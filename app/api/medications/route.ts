@@ -1,36 +1,26 @@
 import { NextResponse } from "next/server"
-import { medicationsData, searchMedications, getMedicationByName, getMedicationsStats, getMedicationsByCategory } from "@/lib/medications-data"
+import { MEDICATIONS_DATABASE, searchMedications, getMedicationsByForm, medicationsStats } from "@/lib/medications-data"
 
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url)
     const search = searchParams.get("search") || ""
-    const name = searchParams.get("name") || ""
-    const category = searchParams.get("category") || ""
+    const form = searchParams.get("form") || ""
     const limit = parseInt(searchParams.get("limit") || "50")
     const stats = searchParams.get("stats") === "true"
 
     // Retornar estatísticas
     if (stats) {
-      return NextResponse.json({ stats: getMedicationsStats() })
+      return NextResponse.json({ stats: medicationsStats })
     }
 
-    // Buscar por nome específico
-    if (name) {
-      const medication = getMedicationByName(name)
-      if (medication) {
-        return NextResponse.json({ medication })
-      }
-      return NextResponse.json({ error: "Medicamento não encontrado" }, { status: 404 })
-    }
-
-    // Buscar por categoria
-    if (category) {
-      const results = getMedicationsByCategory(category)
+    // Buscar por forma farmacêutica
+    if (form) {
+      const results = getMedicationsByForm(form)
       return NextResponse.json({ 
         medications: results.slice(0, limit),
         total: results.length,
-        category
+        form
       })
     }
 
@@ -45,10 +35,10 @@ export async function GET(request: Request) {
     }
 
     // Retornar primeiros registros se não houver busca
-    const firstItems = medicationsData.slice(0, limit)
+    const firstItems = MEDICATIONS_DATABASE.slice(0, limit)
     return NextResponse.json({ 
       medications: firstItems,
-      total: medicationsData.length,
+      total: MEDICATIONS_DATABASE.length,
       message: "Use o parâmetro 'search' para buscar medicamentos"
     })
   } catch (error) {

@@ -27,7 +27,7 @@ import Link from "next/link"
 import { cn } from "@/lib/utils"
 import { appointmentContexts, urgencyLevels, lateralityOptions, locationOptions } from "@/lib/tuss-data"
 import { createAppointment } from "@/app/actions/appointments"
-import { searchTUSSComplete, TUSS_CATEGORIES, TUSS_SPECIALTIES, type TUSSProcedureComplete } from "@/lib/tuss-complete"
+import { searchTUSS, tussGroups, type TUSSProcedure } from "@/lib/tuss-complete"
 
 type AppointmentType = "consulta" | "retorno" | "procedimento" | "exame"
 
@@ -40,18 +40,15 @@ export default function NovoAtendimentoPage() {
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedCategory, setSelectedCategory] = useState<string>("all")
   const [selectedSpecialty, setSelectedSpecialty] = useState<string>("all")
-  const [selectedProcedures, setSelectedProcedures] = useState<TUSSProcedureComplete[]>([])
+  const [selectedProcedures, setSelectedProcedures] = useState<TUSSProcedure[]>([])
   const [procedureDetails, setProcedureDetails] = useState<Record<string, any>>({})
   const [showTussCodes, setShowTussCodes] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [patientName, setPatientName] = useState("")
 
-  const filteredProcedures = searchTUSSComplete(searchQuery, {
-    category: selectedCategory === "all" ? undefined : selectedCategory,
-    specialty: selectedSpecialty === "all" ? undefined : selectedSpecialty,
-  })
+  const filteredProcedures = searchTUSS(searchQuery, 50)
 
-  const handleProcedureToggle = (proc: TUSSProcedureComplete) => {
+  const handleProcedureToggle = (proc: TUSSProcedure) => {
     if (selectedProcedures.find((p) => p.code === proc.code)) {
       setSelectedProcedures(selectedProcedures.filter((p) => p.code !== proc.code))
     } else {
@@ -70,8 +67,7 @@ export default function NovoAtendimentoPage() {
       // Validar que todos procedimentos com requisitos obrigatórios foram preenchidos
       return selectedProcedures.every((proc) => {
         const details = procedureDetails[proc.code] || {}
-        if (proc.requiresLaterality && !details.laterality) return false
-        if (proc.requiresLocation && !details.location) return false
+        // Laterality and location are optional
         return true
       })
     }
@@ -90,7 +86,7 @@ export default function NovoAtendimentoPage() {
         urgency,
         procedures: selectedProcedures.map((proc) => ({
           code: proc.code,
-          friendlyName: proc.friendlyName,
+          friendlyName: proc.description,
           laterality: procedureDetails[proc.code]?.laterality,
           location: procedureDetails[proc.code]?.location,
         })),
@@ -240,27 +236,15 @@ export default function NovoAtendimentoPage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">Todas</SelectItem>
-                    {TUSS_CATEGORIES.map((cat) => (
-                      <SelectItem key={cat} value={cat}>
-                        {cat}
+                    {tussGroups.map((group) => (
+                      <SelectItem key={group} value={group}>
+                        {group}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
 
-                <Select value={selectedSpecialty} onValueChange={setSelectedSpecialty}>
-                  <SelectTrigger className="h-12 rounded-3xl">
-                    <SelectValue placeholder="Todas as especialidades" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Todas</SelectItem>
-                    {TUSS_SPECIALTIES.map((spec) => (
-                      <SelectItem key={spec} value={spec}>
-                        {spec}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                
               </div>
 
               {/* Search */}
@@ -307,11 +291,11 @@ export default function NovoAtendimentoPage() {
                           )}
                         </div>
                         <div className="flex-1 space-y-1">
-                          <p className="font-semibold">{proc.friendlyName}</p>
+                          <p className="font-semibold">{proc.description}</p>
                           <p className="text-sm text-muted-foreground">{proc.description}</p>
                           <div className="flex flex-wrap gap-2 mt-2">
                             <Badge variant="outline" className="text-xs">
-                              {proc.subcategory}
+                              {proc.group}
                             </Badge>
                             {proc.requiresAuth && (
                               <Badge variant="secondary" className="text-xs">
@@ -355,9 +339,9 @@ export default function NovoAtendimentoPage() {
                 {selectedProcedures.map((proc) => (
                   <Card key={proc.code} className="rounded-3xl border-border">
                     <CardContent className="p-6 space-y-4">
-                      <h3 className="font-semibold text-lg">{proc.friendlyName}</h3>
+                      <h3 className="font-semibold text-lg">{proc.description}</h3>
 
-                      {proc.requiresLaterality && (
+                      {true && (
                         <div>
                           <label className="text-sm font-medium mb-3 block">Localização</label>
                           <div className="flex flex-wrap gap-2">
@@ -385,7 +369,7 @@ export default function NovoAtendimentoPage() {
                         </div>
                       )}
 
-                      {proc.requiresLocation && (
+                      {true && (
                         <div>
                           <label className="text-sm font-medium mb-3 block">Onde foi realizado?</label>
                           <div className="flex flex-wrap gap-2">
@@ -466,7 +450,7 @@ export default function NovoAtendimentoPage() {
                         <div key={proc.code} className="flex items-start gap-2">
                           <Check className="w-5 h-5 text-secondary flex-shrink-0 mt-0.5" />
                           <div className="flex-1">
-                            <p className="font-medium">{proc.friendlyName}</p>
+                            <p className="font-medium">{proc.description}</p>
                             {procedureDetails[proc.code] && (
                               <div className="flex gap-2 mt-1">
                                 {procedureDetails[proc.code].laterality && (
@@ -506,7 +490,7 @@ export default function NovoAtendimentoPage() {
                     <div className="mt-4 pt-4 border-t border-border space-y-2">
                       {selectedProcedures.map((proc) => (
                         <div key={proc.code} className="flex justify-between text-sm">
-                          <span className="text-muted-foreground">{proc.friendlyName}</span>
+                          <span className="text-muted-foreground">{proc.description}</span>
                           <span className="font-mono font-medium">{proc.code}</span>
                         </div>
                       ))}

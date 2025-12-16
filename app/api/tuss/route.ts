@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { tussData, searchTUSS, getTUSSByCode, getTUSSStats } from "@/lib/tuss-complete"
+import { tussProcedures, searchTUSS, findTUSSByCode, tussStats } from "@/lib/tuss-complete"
 
 export async function GET(request: Request) {
   try {
@@ -11,12 +11,12 @@ export async function GET(request: Request) {
 
     // Retornar estatísticas
     if (stats) {
-      return NextResponse.json({ stats: getTUSSStats() })
+      return NextResponse.json({ stats: tussStats })
     }
 
     // Buscar por código específico
     if (code) {
-      const procedure = getTUSSByCode(code)
+      const procedure = findTUSSByCode(code)
       if (procedure) {
         return NextResponse.json({ procedure })
       }
@@ -34,10 +34,10 @@ export async function GET(request: Request) {
     }
 
     // Retornar primeiros registros se não houver busca
-    const firstItems = tussData.slice(0, limit)
+    const firstItems = tussProcedures.slice(0, limit)
     return NextResponse.json({ 
       procedures: firstItems,
-      total: tussData.length,
+      total: tussProcedures.length,
       message: "Use o parâmetro 'search' para buscar procedimentos"
     })
   } catch (error) {
