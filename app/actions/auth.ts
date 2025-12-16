@@ -1,11 +1,92 @@
 "use server"
 
-import { auth } from "@/lib/auth"
-import { createSession, verifySession } from "@/lib/session"
+import { createSession, verifySession, hashPassword, verifyPassword } from "@/lib/session"
 import { setSessionCookie, clearSessionCookie } from "@/lib/session-cookies"
 import { redirect } from "next/navigation"
 import { cookies } from "next/headers"
 import { getDb } from "@/lib/db"
+
+async function registerUser(data: {
+  name: string
+  email: string
+  password: string
+  crm: string
+  crm_uf: string
+  specialty: string
+}) {
+  const sql = await getDb()
+
+  // Check if user already exists
+  const existingUser = await sql`
+    SELECT id FROM users WHERE email = ${data.email.toLowerCase()}
+  `
+
+  if (existingUser.length > 0) {
+    throw new Error("Email já cadastrado")
+  }
+
+  // Hash password
+  const hashedPassword = await hashPassword(data.password)
+
+  // Create user
+  const result = await sql`
+    INSERT INTO users (
+      name, email, password_hash, crm, crm_uf, specialty
+    )
+    VALUES (
+      ${data.name},
+      ${data.email.toLowerCase()},
+      ${hashedPassword},
+      ${data.crm},
+      ${data.crm_uf},
+      ${data.specialty}
+    )
+    RETURNING id, name, email, crm, crm_uf, specialty
+  `
+
+  return result[0]
+}
+
+async function loginUser(email: string, password: string) {
+  const sql = await getDb()
+
+  // Find user
+  const users = await sql`
+    SELECT id, name, email, password_hash, crm, crm_uf, specialty 
+    FROM users 
+    WHERE email = ${email.toLowerCase()} AND is_active = true
+  `
+
+  if (users.length === 0) {
+    throw new Error("Email ou senha incorretos")
+  }
+
+  const user = users[0]
+
+  // Verify password
+  const isValidPassword = await verifyPassword(password, user.password_hash)
+
+  if (!isValidPassword) {
+    throw new Error("Email ou senha incorretos")
+  }
+
+  // Update last login
+  await sql`
+    UPDATE users 
+    SET last_login = NOW() 
+    WHERE id = ${user.id}
+  `
+
+  // Return user without password hash
+  return {
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    crm: user.crm,
+    crm_uf: user.crm_uf,
+    specialty: user.specialty,
+  }
+}
 
 export async function registerAction(formData: FormData) {
   try {
@@ -14,7 +95,7 @@ export async function registerAction(formData: FormData) {
       email: formData.get("email") as string,
       password: formData.get("password") as string,
       crm: formData.get("crm") as string,
-      crm_uf: formData.get("uf") as string, // Changed from uf to crm_uf to match database schema
+      crm_uf: formData.get("uf") as string,
       specialty: formData.get("specialty") as string,
     }
 
@@ -27,8 +108,7 @@ export async function registerAction(formData: FormData) {
       return { error: "A senha deve ter no mínimo 6 caracteres" }
     }
 
-    // Register user
-    const user = await auth.register(data)
+    const user = await registerUser(data)
 
     // Create session
     const token = await createSession(user)
@@ -50,8 +130,7 @@ export async function loginAction(formData: FormData) {
       return { error: "Email e senha são obrigatórios" }
     }
 
-    // Login user
-    const user = await auth.login(email, password)
+    const user = await loginUser(email, password)
 
     // Create session
     const token = await createSession(user)
@@ -129,7 +208,7 @@ export async function updateUserProfile(data: {
 
     // Check if email is already in use by another user
     const existingUser = await sql`
-      SELECT id FROM users WHERE email = ${data.email} AND id != ${session.id}
+      SELECT id FROM users WHERE email = ${data.email.toLowerCase()} AND id != ${session.id}
     `
 
     if (existingUser.length > 0) {
@@ -143,7 +222,7 @@ export async function updateUserProfile(data: {
         crm = ${data.crm},
         crm_uf = ${data.crm_uf},
         specialty = ${data.specialty},
-        email = ${data.email},
+        email = ${data.email.toLowerCase()},
         updated_at = NOW()
       WHERE id = ${session.id}
     `
