@@ -362,6 +362,10 @@ export async function createPatient(data: {
 
   try {
     const sql = await getDb()
+    
+    // Log para debug
+    console.log('[createPatient] Creating patient:', data.fullName, 'for user:', userId)
+    
     const result = await sql`
       INSERT INTO patients (
         user_id, full_name, cpf, date_of_birth, gender, phone, email,
