@@ -2,7 +2,7 @@
 
 import { getDb } from "@/lib/db"
 import { cookies } from "next/headers"
-import { verifySession } from "@/lib/session"
+import { verifyToken } from "@/lib/session"
 
 export async function exportAppointmentPDF(appointmentId: string) {
   try {
@@ -13,47 +13,39 @@ export async function exportAppointmentPDF(appointmentId: string) {
       return { success: false, error: "Não autenticado" }
     }
 
-    const user = await verifySession(token)
+    const user = await verifyToken(token)
     if (!user) {
-      return { success: false, error: "Sessão inválida" }
+      return { success: false, error: "Token inválido" }
     }
 
     const sql = await getDb()
 
     // Buscar dados do atendimento
     const [appointment] = await sql`
-      SELECT 
-        a.*,
-        u.name as doctor_name,
-        u.crm,
-        u.crm_uf,
-        u.specialty
-      FROM appointments a
-      JOIN users u ON a.user_id = u.id
-      WHERE a.id = ${appointmentId}
+      SELECT * FROM appointments
+      WHERE id = ${appointmentId} AND user_id = ${user.id}
     `
 
     if (!appointment) {
       return { success: false, error: "Atendimento não encontrado" }
     }
 
-    // Buscar procedimentos
     const procedures = await sql`
       SELECT * FROM procedures
       WHERE appointment_id = ${appointmentId}
-      ORDER BY created_at ASC
     `
 
-    const html = generatePDFHTML(appointment, procedures)
+    // Gerar HTML formatado para PDF
+    const html = generateTISSHTML({
+      appointment,
+      procedures,
+      user,
+    })
 
-    return {
-      success: true,
-      html,
-      filename: `guia-tiss-${appointmentId}-${Date.now()}.pdf`,
-    }
-  } catch (error: any) {
-    console.error("Erro ao gerar PDF:", error)
-    return { success: false, error: error.message }
+    return { success: true, html }
+  } catch (error) {
+    console.error("[v0] Error exporting PDF:", error)
+    return { success: false, error: "Erro ao gerar PDF" }
   }
 }
 
@@ -66,23 +58,16 @@ export async function exportAppointmentExcel(appointmentId: string) {
       return { success: false, error: "Não autenticado" }
     }
 
-    const user = await verifySession(token)
+    const user = await verifyToken(token)
     if (!user) {
-      return { success: false, error: "Sessão inválida" }
+      return { success: false, error: "Token inválido" }
     }
 
     const sql = await getDb()
 
     const [appointment] = await sql`
-      SELECT 
-        a.*,
-        u.name as doctor_name,
-        u.crm,
-        u.crm_uf,
-        u.specialty
-      FROM appointments a
-      JOIN users u ON a.user_id = u.id
-      WHERE a.id = ${appointmentId}
+      SELECT * FROM appointments
+      WHERE id = ${appointmentId} AND user_id = ${user.id}
     `
 
     if (!appointment) {
@@ -92,32 +77,31 @@ export async function exportAppointmentExcel(appointmentId: string) {
     const procedures = await sql`
       SELECT * FROM procedures
       WHERE appointment_id = ${appointmentId}
-      ORDER BY created_at ASC
     `
 
     const data = {
       guia: {
-        registroANS: "000000",
-        numeroGuia: appointmentId,
+        registroANS: user.ans_code || "000000",
+        numeroGuia: `G${appointmentId.slice(0, 8).toUpperCase()}`,
         dataAtendimento: new Date(appointment.appointment_date).toLocaleDateString("pt-BR"),
       },
       beneficiario: {
         numeroCarteira: appointment.patient_cpf || "N/A",
         nome: appointment.patient_name,
-        cns: "-",
+        cns: appointment.patient_cpf || "N/A",
       },
       prestador: {
-        codigo: "-",
-        nome: appointment.doctor_name,
-        crm: appointment.crm,
-        uf: appointment.crm_uf,
-        cbos: "225125",
+        codigo: user.professional_code || "000000",
+        nome: user.name,
+        crm: user.crm || "N/A",
+        uf: user.crm_state || "SP",
+        cbos: user.cbos_code || "225125",
       },
-      procedimentos: procedures.map((proc: any) => ({
-        data: new Date(proc.procedure_date || proc.created_at).toLocaleDateString("pt-BR"),
+      procedimentos: procedures.map((p: any) => ({
+        data: new Date(p.procedure_date).toLocaleDateString("pt-BR"),
         tabela: "TUSS",
-        codigo: proc.procedure_code || "-",
-        descricao: proc.procedure_name,
+        codigo: p.procedure_code,
+        descricao: p.procedure_name,
         quantidade: 1,
       })),
       observacoes: appointment.observations || "",
@@ -126,197 +110,270 @@ export async function exportAppointmentExcel(appointmentId: string) {
     return {
       success: true,
       data,
-      filename: `guia-tiss-${appointmentId}-${Date.now()}.xlsx`,
+      filename: `TISS_${appointmentId.slice(0, 8)}_${Date.now()}.xlsx`,
     }
-  } catch (error: any) {
-    console.error("Erro ao gerar Excel:", error)
-    return { success: false, error: error.message }
+  } catch (error) {
+    console.error("[v0] Error exporting Excel:", error)
+    return { success: false, error: "Erro ao gerar Excel" }
   }
 }
 
-function generatePDFHTML(appointment: any, procedures: any[]): string {
+function generateTISSHTML(data: { appointment: any; procedures: any[]; user: any }): string {
+  const { appointment, procedures, user } = data
+
   return `
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Guia de Consulta TISS - ${appointment.id}</title>
+  <title>Guia TISS - ${appointment.patient_name}</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: Arial, sans-serif; font-size: 11px; padding: 20mm; background: white; color: #000; }
-    .guia { width: 100%; max-width: 210mm; margin: 0 auto; border: 2px solid #000; }
-    .header { background: #e8e8e8; padding: 8px; border-bottom: 2px solid #000; text-align: center; font-weight: bold; font-size: 14px; }
-    .section { border-bottom: 1px solid #000; }
-    .section-title { background: #f5f5f5; padding: 4px 8px; font-weight: bold; font-size: 10px; border-bottom: 1px solid #ccc; }
-    .row { display: flex; border-bottom: 1px solid #ccc; }
-    .field { flex: 1; padding: 4px 8px; border-right: 1px solid #ccc; min-height: 30px; }
-    .field:last-child { border-right: none; }
-    .field-label { font-size: 8px; color: #666; display: block; margin-bottom: 2px; }
-    .field-value { font-size: 11px; font-weight: 500; }
-    table { width: 100%; border-collapse: collapse; }
-    table td, table th { border: 1px solid #000; padding: 4px; text-align: left; font-size: 10px; }
-    table th { background: #f5f5f5; font-weight: bold; }
-    .signature-area { margin-top: 40px; padding: 20px; }
-    .signature-line { border-top: 1px solid #000; width: 300px; margin: 40px auto 0; padding-top: 8px; text-align: center; }
-    @media print { body { padding: 0; } .guia { border: none; } }
+    body { 
+      font-family: 'Segoe UI', Arial, sans-serif; 
+      padding: 40px; 
+      background: #fff;
+      color: #333;
+    }
+    .container { max-width: 800px; margin: 0 auto; }
+    .header { 
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 30px;
+      border-radius: 12px 12px 0 0;
+      margin-bottom: 0;
+    }
+    .header h1 { font-size: 28px; margin-bottom: 8px; }
+    .header p { opacity: 0.9; font-size: 14px; }
+    .content { 
+      border: 2px solid #e5e7eb;
+      border-top: none;
+      border-radius: 0 0 12px 12px;
+      padding: 30px;
+      background: #fafafa;
+    }
+    .section { 
+      background: white;
+      padding: 20px; 
+      margin-bottom: 20px; 
+      border-radius: 8px;
+      border: 1px solid #e5e7eb;
+    }
+    .section-title { 
+      font-size: 16px;
+      font-weight: 600;
+      color: #667eea;
+      margin-bottom: 16px;
+      padding-bottom: 8px;
+      border-bottom: 2px solid #667eea;
+    }
+    .info-grid { 
+      display: grid; 
+      grid-template-columns: repeat(2, 1fr); 
+      gap: 16px; 
+    }
+    .info-item { }
+    .info-label { 
+      font-size: 11px;
+      text-transform: uppercase;
+      color: #6b7280;
+      font-weight: 600;
+      margin-bottom: 4px;
+      letter-spacing: 0.5px;
+    }
+    .info-value { 
+      font-size: 14px;
+      color: #111827;
+      font-weight: 500;
+    }
+    .procedures-table { 
+      width: 100%; 
+      border-collapse: collapse; 
+      margin-top: 12px;
+    }
+    .procedures-table th { 
+      background: #f3f4f6;
+      padding: 12px;
+      text-align: left;
+      font-size: 12px;
+      font-weight: 600;
+      color: #374151;
+      border-bottom: 2px solid #e5e7eb;
+    }
+    .procedures-table td { 
+      padding: 12px;
+      border-bottom: 1px solid #e5e7eb;
+      font-size: 13px;
+    }
+    .procedures-table tr:last-child td { border-bottom: none; }
+    .procedures-table tr:hover { background: #f9fafb; }
+    .footer { 
+      margin-top: 30px;
+      padding-top: 20px;
+      border-top: 2px solid #e5e7eb;
+      text-align: center;
+      color: #6b7280;
+      font-size: 12px;
+    }
+    .badge { 
+      display: inline-block;
+      background: #dbeafe;
+      color: #1e40af;
+      padding: 4px 12px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    @media print {
+      body { padding: 20px; }
+      .header { border-radius: 8px 8px 0 0; }
+      .content { border-radius: 0 0 8px 8px; }
+    }
   </style>
 </head>
 <body>
-  <div class="guia">
-    <div class="header">GUIA DE CONSULTA - PADRÃO TISS</div>
+  <div class="container">
+    <div class="header">
+      <h1>📋 Guia de Consulta TISS</h1>
+      <p>Padrão TISS - Troca de Informações na Saúde Suplementar</p>
+    </div>
     
-    <div class="section">
-      <div class="section-title">1 - Registro ANS</div>
-      <div class="row">
-        <div class="field">
-          <span class="field-label">Número de Registro na ANS</span>
-          <span class="field-value">000000</span>
+    <div class="content">
+      <!-- Dados da Guia -->
+      <div class="section">
+        <div class="section-title">📄 Dados da Guia</div>
+        <div class="info-grid">
+          <div class="info-item">
+            <div class="info-label">Registro ANS</div>
+            <div class="info-value">${user.ans_code || "000000"}</div>
+          </div>
+          <div class="info-item">
+            <div class="info-label">Número da Guia</div>
+            <div class="info-value">G${appointment.id.slice(0, 8).toUpperCase()}</div>
+          </div>
+          <div class="info-item">
+            <div class="info-label">Data do Atendimento</div>
+            <div class="info-value">${new Date(appointment.appointment_date).toLocaleDateString("pt-BR", {
+              day: "2-digit",
+              month: "long",
+              year: "numeric",
+              hour: "2-digit",
+              minute: "2-digit",
+            })}</div>
+          </div>
+          <div class="info-item">
+            <div class="info-label">Tipo de Atendimento</div>
+            <div class="info-value"><span class="badge">${appointment.appointment_type}</span></div>
+          </div>
         </div>
       </div>
-    </div>
 
-    <div class="section">
-      <div class="section-title">2 - Dados do Beneficiário</div>
-      <div class="row">
-        <div class="field" style="flex: 2;">
-          <span class="field-label">2.1 - Número da Carteira</span>
-          <span class="field-value">${appointment.patient_cpf || "N/A"}</span>
-        </div>
-        <div class="field">
-          <span class="field-label">2.2 - Validade da Carteira</span>
-          <span class="field-value">-</span>
+      <!-- Dados do Beneficiário -->
+      <div class="section">
+        <div class="section-title">👤 Dados do Beneficiário</div>
+        <div class="info-grid">
+          <div class="info-item">
+            <div class="info-label">Nome Completo</div>
+            <div class="info-value">${appointment.patient_name}</div>
+          </div>
+          <div class="info-item">
+            <div class="info-label">CPF</div>
+            <div class="info-value">${appointment.patient_cpf || "Não informado"}</div>
+          </div>
+          ${
+            appointment.patient_age
+              ? `
+          <div class="info-item">
+            <div class="info-label">Idade</div>
+            <div class="info-value">${appointment.patient_age} anos</div>
+          </div>
+          `
+              : ""
+          }
+          ${
+            appointment.patient_gender
+              ? `
+          <div class="info-item">
+            <div class="info-label">Sexo</div>
+            <div class="info-value">${appointment.patient_gender === "M" ? "Masculino" : "Feminino"}</div>
+          </div>
+          `
+              : ""
+          }
         </div>
       </div>
-      <div class="row">
-        <div class="field" style="flex: 3;">
-          <span class="field-label">2.3 - Nome</span>
-          <span class="field-value">${appointment.patient_name}</span>
-        </div>
-        <div class="field">
-          <span class="field-label">2.4 - Cartão Nacional de Saúde</span>
-          <span class="field-value">-</span>
-        </div>
-      </div>
-    </div>
 
-    <div class="section">
-      <div class="section-title">3 - Dados do Contratado</div>
-      <div class="row">
-        <div class="field">
-          <span class="field-label">3.1 - Código na Operadora</span>
-          <span class="field-value">-</span>
-        </div>
-        <div class="field" style="flex: 2;">
-          <span class="field-label">3.2 - Nome do Contratado</span>
-          <span class="field-value">${appointment.doctor_name}</span>
+      <!-- Dados do Prestador -->
+      <div class="section">
+        <div class="section-title">⚕️ Dados do Prestador</div>
+        <div class="info-grid">
+          <div class="info-item">
+            <div class="info-label">Nome do Profissional</div>
+            <div class="info-value">${user.name}</div>
+          </div>
+          <div class="info-item">
+            <div class="info-label">CRM</div>
+            <div class="info-value">${user.crm || "N/A"} - ${user.crm_state || "SP"}</div>
+          </div>
+          <div class="info-item">
+            <div class="info-label">Especialidade</div>
+            <div class="info-value">${appointment.specialty || user.specialty || "Clínica Geral"}</div>
+          </div>
+          <div class="info-item">
+            <div class="info-label">Código CBOS</div>
+            <div class="info-value">${user.cbos_code || "225125"}</div>
+          </div>
         </div>
       </div>
-    </div>
 
-    <div class="section">
-      <div class="section-title">4 - Dados da Consulta</div>
-      <div class="row">
-        <div class="field">
-          <span class="field-label">4.1 - Data do Atendimento</span>
-          <span class="field-value">${new Date(appointment.appointment_date).toLocaleDateString("pt-BR")}</span>
-        </div>
-        <div class="field">
-          <span class="field-label">4.2 - Hora Inicial</span>
-          <span class="field-value">${new Date(appointment.appointment_date).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</span>
-        </div>
-        <div class="field">
-          <span class="field-label">4.3 - Hora Final</span>
-          <span class="field-value">-</span>
-        </div>
-      </div>
-      <div class="row">
-        <div class="field">
-          <span class="field-label">4.4 - Tipo de Consulta</span>
-          <span class="field-value">${appointment.appointment_type}</span>
-        </div>
-        <div class="field" style="flex: 2;">
-          <span class="field-label">4.5 - Especialidade</span>
-          <span class="field-value">${appointment.specialty}</span>
-        </div>
-      </div>
-    </div>
-
-    <div class="section">
-      <div class="section-title">5 - Procedimentos e Exames Realizados</div>
-      <table>
-        <thead>
-          <tr>
-            <th style="width: 15%;">5.1 - Data</th>
-            <th style="width: 10%;">5.2 - Tabela</th>
-            <th style="width: 15%;">5.3 - Código</th>
-            <th style="width: 50%;">5.4 - Descrição</th>
-            <th style="width: 10%;">5.5 - Qtde</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${procedures
-            .map(
-              (proc: any) => `
+      <!-- Procedimentos Realizados -->
+      <div class="section">
+        <div class="section-title">🏥 Procedimentos Realizados</div>
+        <table class="procedures-table">
+          <thead>
             <tr>
-              <td>${new Date(proc.procedure_date || proc.created_at).toLocaleDateString("pt-BR")}</td>
-              <td>TUSS</td>
-              <td>${proc.procedure_code || "-"}</td>
-              <td>${proc.procedure_name}</td>
-              <td>1</td>
+              <th>Data</th>
+              <th>Tabela</th>
+              <th>Código</th>
+              <th>Descrição do Procedimento</th>
+              <th style="text-align: center;">Qtd</th>
             </tr>
-          `,
-            )
-            .join("")}
-        </tbody>
-      </table>
-    </div>
-
-    <div class="section">
-      <div class="section-title">6 - Identificação do Profissional Executante</div>
-      <div class="row">
-        <div class="field" style="flex: 2;">
-          <span class="field-label">6.1 - Nome do Profissional</span>
-          <span class="field-value">${appointment.doctor_name}</span>
-        </div>
-        <div class="field">
-          <span class="field-label">6.2 - Conselho Profissional</span>
-          <span class="field-value">CRM</span>
-        </div>
+          </thead>
+          <tbody>
+            ${procedures
+              .map(
+                (proc) => `
+              <tr>
+                <td>${new Date(proc.procedure_date).toLocaleDateString("pt-BR")}</td>
+                <td>TUSS</td>
+                <td style="font-family: monospace; font-weight: 600;">${proc.procedure_code}</td>
+                <td>${proc.procedure_name}</td>
+                <td style="text-align: center;">1</td>
+              </tr>
+            `,
+              )
+              .join("")}
+          </tbody>
+        </table>
       </div>
-      <div class="row">
-        <div class="field">
-          <span class="field-label">6.3 - Número no Conselho</span>
-          <span class="field-value">${appointment.crm}</span>
-        </div>
-        <div class="field">
-          <span class="field-label">6.4 - UF</span>
-          <span class="field-value">${appointment.crm_uf}</span>
-        </div>
-        <div class="field">
-          <span class="field-label">6.5 - Código CBO</span>
-          <span class="field-value">225125</span>
-        </div>
-      </div>
-    </div>
 
-    ${
-      appointment.observations
-        ? `
-    <div class="section">
-      <div class="section-title">7 - Observações</div>
-      <div class="field" style="min-height: 60px;">
-        <span class="field-value">${appointment.observations}</span>
+      ${
+        appointment.observations
+          ? `
+      <!-- Observações -->
+      <div class="section">
+        <div class="section-title">📝 Observações</div>
+        <p style="font-size: 14px; line-height: 1.6; color: #374151;">${appointment.observations}</p>
       </div>
-    </div>
-    `
-        : ""
-    }
+      `
+          : ""
+      }
 
-    <div class="signature-area">
-      <div class="signature-line">
-        ${appointment.doctor_name}<br>
-        CRM ${appointment.crm}-${appointment.crm_uf}
+      <div class="footer">
+        <p><strong>AtendeBem</strong> - Sistema de Gestão em Saúde</p>
+        <p>Documento gerado em ${new Date().toLocaleString("pt-BR")}</p>
+        <p style="margin-top: 8px; font-size: 11px;">Este documento segue o padrão TISS versão 4.0 da ANS</p>
       </div>
     </div>
   </div>
