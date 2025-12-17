@@ -516,7 +516,8 @@ Fluxo geral:
 │  ┌────────────────────────────────────────────────────────────────────┐     │
 │  │  • Audit Logs imutáveis                                             │     │
 │  │  • SIEM Integration (Security Information & Event Management)       │     │
-│  │  • Alertas de anomalia                                              │     │
+│  │  • Backup automático criptografado (AWS S3 + S3 Glacier, SSE-KMS    │     │
+│  │    com AES-256 e rotação automática de chaves KMS)                  │     │
 │  │  • Backup automático criptografado                                  │     │
 │  └────────────────────────────────────────────────────────────────────┘     │
 │                                                                              │
