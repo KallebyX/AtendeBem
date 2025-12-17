@@ -342,7 +342,22 @@ ALTER TABLE patients ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON patients
     USING (tenant_id = current_setting('app.current_tenant')::UUID)
     WITH CHECK (tenant_id = current_setting('app.current_tenant')::UUID);
-```
+
+#### 5.1.1 Estabelecimento seguro do contexto do tenant
+
+O parâmetro de sessão `app.current_tenant` é o **único** insumo usado pelo banco para isolar os dados entre organizações. Por isso, seu valor é sempre definido **no backend**, a partir do usuário autenticado, e **nunca** é consumido diretamente de headers, query params ou body enviados pelo cliente.
+
+Fluxo geral:
+
+1. O usuário autentica na API (por exemplo, via JWT ou sessão) e o backend resolve:
+   - o `user_id` autenticado; e
+   - a lista de `tenant_id` aos quais o usuário tem acesso.
+2. A cada requisição, o backend determina o `tenant_id` ativo (por exemplo, a partir do token ou de uma seleção de clínica previamente salva), **valida** se o usuário realmente tem permissão para esse tenant e, só então, define o contexto de tenant na conexão com o banco.
+3. O contexto é definido usando comando de sessão transacional, por exemplo:
+
+   ```sql
+   -- Executado pelo backend no início da transação / requisição
+   SET LOCAL app.current_tenant = $1; -- $1 = UUID já validado pelo backend
 
 ### 5.2 Hierarquia de Acesso
 
