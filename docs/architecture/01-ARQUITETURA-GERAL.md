@@ -122,7 +122,7 @@ O **AtendeBem** é uma plataforma SaaS (Software as a Service) de gestão comple
 │ • ANS (TISS)        │      │ • WhatsApp Business │      │ • OpenAI GPT-4      │
 │ • Google Calendar   │      │ • SendGrid (Email)  │      │ • Claude (Anthropic)│
 │ • Receita Federal   │      │ • FCM (Push)        │      │ • Med-PaLM 2        │
-│ • CFM (CRM)         │      │ • WebSocket (Real)  │      │ • Vertex AI         │
+│ • CFM               │      │ • WebSocket (Real)  │      │ • Vertex AI         │
 └─────────────────────┘      └─────────────────────┘      └─────────────────────┘
 ```
 
