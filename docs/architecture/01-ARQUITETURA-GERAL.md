@@ -158,7 +158,7 @@ O **AtendeBem** é uma plataforma SaaS (Software as a Service) de gestão comple
 │ │ MÓDULOS CLÍNICOS    │   │   MÓDULOS ADMINISTRATIVOS       │   │ MÓDULOS FINANCEIROS │    │
 │ ├─────────────────────┤   ├─────────────────────────────────┤   ├─────────────────────┤    │
 │ │ • Odontograma       │   │ • Agenda/Calendário             │   │ • Faturamento       │    │
-│ │ • Cálculo Gestacional │ │ • CRM Pacientes                 │   │ • TISS/ANS          │    │
+│ │ • Cálculo Gestacional│   │ • CRM Pacientes                 │   │ • TISS/ANS          │    │
 │ │ • Curva Crescimento │   │ • Profissionais                 │   │ • Orçamentos        │    │
 │ │ • Prescrição Óculos │   │ • Telemedicina                  │   │ • Recibos           │    │
 │ │ • Pacotes Sessões   │   │ • Pesquisa Satisfação           │   │ • Repasses          │    │
