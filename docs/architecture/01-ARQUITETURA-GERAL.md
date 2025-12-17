@@ -41,7 +41,7 @@ O **AtendeBem** é uma plataforma SaaS (Software as a Service) de gestão comple
 │  5. AUDITORIA TOTAL - Toda ação gera log com timestamp e identificação      │
 │  6. MULTI-TENANT - Isolamento completo de dados entre organizações          │
 │  7. OFFLINE-FIRST - Funcionalidades críticas operam sem internet via        │
-│     Service Workers, sincronização em background e cache local              │
+│     Service Workers, sincronização local e resolução de conflitos           │
 │  8. API-FIRST - Todo módulo expõe APIs RESTful documentadas com             │
 │     versionamento explícito, política de depreciação e compatibilidade      │
 │     retroativa para integrações críticas                                    │
@@ -109,8 +109,8 @@ O **AtendeBem** é uma plataforma SaaS (Software as a Service) de gestão comple
 │  │                              DATA LAYER                                            │     │
 │  ├──────────────────┬──────────────────┬──────────────────┬──────────────────────────┤     │
 │  │   PostgreSQL     │   Redis          │   AWS S3         │   Elasticsearch          │     │
-│  │   (NeonDB)       │   (Cache/Queue)  │   (Storage)      │   (Search/Logs)          │     │
-│  │   Row-Level Sec  │   Session Store  │   HIPAA Compliant│   Audit Trail            │     │
+│  │   (NeonDB)       │   (Cache/Queue)  │   (Cript. & LGPD)│   Audit Trail            │     │
+│  │   Row-Level Sec  │   Session Store  │   Backup S3 Glacier│                        │     │
 │  └──────────────────┴──────────────────┴──────────────────┴──────────────────────────┘     │
 │                                                                                             │
 └─────────────────────────────────────────────────────────────────────────────────────────────┘
@@ -124,9 +124,8 @@ O **AtendeBem** é uma plataforma SaaS (Software as a Service) de gestão comple
 │ • VIDaaS (Assinatura Digital) │      │ • Twilio (SMS)      │      │ • Google Gemini     │
 │ • ANS (TISS)        │      │ • WhatsApp Business │      │ • OpenAI GPT-4      │
 │ • Google Calendar   │      │ • SendGrid (Email)  │      │ • Claude (Anthropic)│
-│ • Receita Federal   │      │ • FCM (Push)        │      │ • Med-PaLM 2        │
+│ • Receita Federal   │      │ • FCM (Push)        │      │ • Med-PaLM 2 (fut.) │
 │ • CFM               │      │ • WebSocket (Real)  │      │ • Vertex AI         │
-│                     │      │                     │      │ • Med-PaLM 2 (*)    │
 └─────────────────────┘      └─────────────────────┘      └─────────────────────┘
 ```
 
@@ -235,6 +234,11 @@ frontend:
   validation: Zod
   charts: Recharts
   icons: Lucide React
+  offline:
+    - Service Workers (Workbox)
+    - IndexedDB (local storage)
+    - Background Sync API
+    - Conflict resolution (last-write-wins com timestamps)
 
 # BACKEND
 backend:
@@ -291,14 +295,14 @@ integrations:
     - Google Gemini (primary)
     - OpenAI GPT-4 (fallback)
     - Claude Sonnet (analysis)
-    - Med-PaLM 2 (planned - requires Google Cloud Healthcare API license)
+    - Med-PaLM 2 (futuro - requer licenciamento específico Google Health)
   signature: VIDaaS (ICP-Brasil)
   payments: PagSeguro (primário - Brasil) / Stripe (pagamentos internacionais)
 
 # REAL-TIME
 realtime:
   websocket: Socket.io
-  webrtc: Daily.co (primário) / LiveKit (fallback)
+  webrtc: Daily.co (primary) / LiveKit (fallback)
   push: Firebase Cloud Messaging
 ```
 
@@ -389,7 +393,62 @@ Dessa forma, mesmo em cenários com alto volume e reuso intenso de conexões, o 
 - não é diretamente controlado pelo cliente; e
 - é corretamente isolado por transação, impedindo acesso cruzado entre tenants.
 
-### 5.2 Hierarquia de Acesso
+#### 5.1.1 Estabelecimento seguro do contexto do tenant
+
+O parâmetro de sessão `app.current_tenant` é o **único** insumo usado pelo banco para isolar os dados entre organizações. Por isso, seu valor é sempre definido **no backend**, a partir do usuário autenticado, e **nunca** é consumido diretamente de headers, query params ou body enviados pelo cliente.
+
+Fluxo geral:
+
+1. O usuário autentica na API (por exemplo, via JWT ou sessão) e o backend resolve:
+   - o `user_id` autenticado; e
+   - a lista de `tenant_id` aos quais o usuário tem acesso.
+2. A cada requisição, o backend determina o `tenant_id` ativo (por exemplo, a partir do token ou de uma seleção de clínica previamente salva), **valida** se o usuário realmente tem permissão para esse tenant e, só então, define o contexto de tenant na conexão com o banco.
+3. O contexto é definido usando comando de sessão transacional, por exemplo:
+
+   ```sql
+   -- Executado pelo backend no início da transação / requisição
+   SET LOCAL app.current_tenant = $1; -- $1 = UUID já validado pelo backend
+   ```
+
+4. Como `SET LOCAL` é limitado ao escopo da transação, o valor de `app.current_tenant` é automaticamente descartado ao final da transação, evitando vazamento de contexto entre requisições distintas em um pool de conexões.
+
+Considerações sobre segurança e pooling:
+
+- O cliente **não** controla `app.current_tenant`: mesmo que envie um `tenant_id` em headers ou corpo da requisição, esse valor só é utilizado após validações de autorização no backend; o comando `SET LOCAL` sempre usa o valor resultante dessa validação.
+- Em ambientes com pool de conexões, o backend:
+  - sempre executa `SET LOCAL app.current_tenant = ...` no início de cada transação/requisição; e
+  - garante que a transação é finalizada (COMMIT/ROLLBACK), de forma que o contexto de tenant é limpo antes da conexão retornar ao pool.
+- O banco de dados pode ser configurado para **não permitir** que usuários de aplicação arbitrariamente façam `SET` de outros parâmetros sensíveis, restringindo o que pode ser alterado na sessão.
+
+Dessa forma, mesmo em cenários com alto volume e reuso intenso de conexões, o valor de `current_setting('app.current_tenant')` utilizado pelas políticas RLS:
+
+- é derivado de um contexto autenticado e autorizado;
+- não é diretamente controlado pelo cliente; e
+- é corretamente isolado por transação, impedindo acesso cruzado entre tenants.
+
+### 5.2 Controle de Concorrência de Registros Clínicos
+
+Em um ambiente multi-tenant de saúde, múltiplos profissionais podem acessar e atualizar simultaneamente o mesmo paciente ou prontuário (ex.: recepção, médico, enfermagem). Para evitar perda de dados e inconsistências, o AtendeBem adota **controle de concorrência otimista** sobre os principais registros clínicos e administrativos.
+
+- Tabelas críticas (ex.: `patients`, `appointments`, `clinical_notes`, `prescriptions`) possuem uma coluna de **versão** (ex.: `lock_version` ou equivalente), atualizada a cada modificação bem-sucedida.
+- As operações de atualização (`UPDATE`) incluem a versão atual do registro na cláusula `WHERE`. Se nenhuma linha for atualizada (versão divergente), o backend interpreta isso como **conflito de concorrência**.
+- Em caso de conflito, a API retorna um erro de conflito (ex.: `409 Conflict`), e o cliente pode:
+  - Recarregar o registro atualizado;
+  - Exibir ao usuário as diferenças entre a versão editada e a versão persistida;
+  - Permitir que o usuário decida entre manter suas alterações, mesclar manualmente ou descartar.
+
+Para fluxos de negócio mais sensíveis a inconsistências (ex.: fechamento de contas, conciliação financeira ou atualização em massa de agenda), podem ser utilizados:
+
+- **Transações de banco de dados** envolvendo múltiplas tabelas, garantindo atomicidade;
+- **Bloqueios de linha (pessimistas)** de curta duração (ex.: `SELECT ... FOR UPDATE`) para seções críticas, sempre limitados a janelas transacionais pequenas para não degradar a experiência de outros usuários.
+
+Em todos os casos, o objetivo é:
+
+- Preservar a **integridade clínica e legal** do prontuário;
+- Evitar que atualizações silenciosas sobreponham dados inseridos por outro profissional;
+- Garantir rastreabilidade por meio de histórico de alterações e trilhas de auditoria.
+
+### 5.3 Hierarquia de Acesso
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -419,7 +478,7 @@ Dessa forma, mesmo em cenários com alto volume e reuso intenso de conexões, o 
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-### 5.3 Modelo de Planos
+### 5.4 Modelo de Planos
 
 | Plano | Profissionais | Pacientes | Storage | Módulos |
 |-------|---------------|-----------|---------|---------|
@@ -502,6 +561,69 @@ Dessa forma, mesmo em cenários com alto volume e reuso intenso de conexões, o 
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
+### 6.3 Arquitetura Offline-First
+
+O AtendeBem implementa capacidades offline para funcionalidades críticas, permitindo que profissionais de saúde continuem trabalhando mesmo sem conectividade à internet. Esta é uma característica essencial para clínicas em áreas com conexão instável ou durante atendimentos externos.
+
+#### 6.3.1 Camadas de Offline
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                        ARQUITETURA OFFLINE-FIRST                             │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  CAMADA 1 - SERVICE WORKER (Workbox)                                         │
+│  ┌────────────────────────────────────────────────────────────────────┐     │
+│  │  • Cache de assets estáticos (HTML, CSS, JS, imagens)              │     │
+│  │  • Cache de API responses (estratégia network-first)               │     │
+│  │  • Background Sync para requisições falhadas                       │     │
+│  └────────────────────────────────────────────────────────────────────┘     │
+│                                      │                                       │
+│  CAMADA 2 - ARMAZENAMENTO LOCAL      ▼                                       │
+│  ┌────────────────────────────────────────────────────────────────────┐     │
+│  │  • IndexedDB: dados de pacientes, prontuários, agendamentos        │     │
+│  │  • LocalStorage: preferências de usuário, sessão                   │     │
+│  │  • Cache API: responses HTTP                                       │     │
+│  └────────────────────────────────────────────────────────────────────┘     │
+│                                      │                                       │
+│  CAMADA 3 - SINCRONIZAÇÃO            ▼                                       │
+│  ┌────────────────────────────────────────────────────────────────────┐     │
+│  │  • Detecção automática de conectividade                            │     │
+│  │  • Fila de sincronização (operações pendentes)                     │     │
+│  │  • Resolução de conflitos: last-write-wins com timestamps          │     │
+│  │  • Indicadores visuais de status (online/offline/syncing)          │     │
+│  └────────────────────────────────────────────────────────────────────┘     │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+#### 6.3.2 Funcionalidades Disponíveis Offline
+
+- **Consulta de Prontuários:** visualização de prontuários previamente carregados
+- **Anamnese:** preenchimento de formulários de anamnese
+- **Prescrições:** criação de prescrições (sincronizadas quando online)
+- **Agendamento:** visualização da agenda local
+- **Notas Clínicas:** registro de observações e evolução clínica
+
+#### 6.3.3 Estratégia de Sincronização
+
+1. **Conexão Restaurada:** Service Worker detecta volta da conectividade
+2. **Fila de Operações:** processa operações pendentes em ordem cronológica
+3. **Detecção de Conflitos:** compara timestamps locais vs servidor
+4. **Resolução:**
+   - Sem conflito: aplica mudanças locais no servidor
+   - Com conflito: last-write-wins (prioriza timestamp mais recente)
+   - Conflitos críticos: notifica usuário para resolução manual
+5. **Validação:** verifica integridade após sincronização
+
+#### 6.3.4 Limitações e Considerações
+
+- Assinatura digital (VIDaaS) requer conectividade
+- Envio de TISS para convênios requer conectividade
+- Telemedicina requer conectividade
+- Dados sincronizados são validados contra políticas RLS do servidor
+- Limite de armazenamento IndexedDB: ~50MB por origem (varia por navegador)
+
 ---
 
 ## 7. ARQUITETURA DE SEGURANÇA
@@ -520,19 +642,19 @@ Dessa forma, mesmo em cenários com alto volume e reuso intenso de conexões, o 
 │  │  • Rate Limiting adaptativo (por usuário/tenant + limites por IP)  │     │
 │  │  • HTTPS Only (TLS 1.3)                                             │     │
 │  │  • HSTS Preload                                                     │     │
+│  │  • Validação de input no API Gateway (Zod schemas)                 │     │
 │  └────────────────────────────────────────────────────────────────────┘     │
 │                                      │                                       │
 │  CAMADA 2 - APLICAÇÃO                ▼                                       │
 │  ┌────────────────────────────────────────────────────────────────────┐     │
 │  │  • JWT com RS256 (Access + Refresh Tokens)                          │     │
-│  │  • Refresh token rotation (rotação automática a cada uso)          │     │
-│  │  • Token storage: HttpOnly cookies para refresh, memória para access│     │
-│  │  • Revogação centralizada via blacklist em Redis                   │     │
+│  │    - Access Token: 15 min TTL                                       │     │
+│  │    - Refresh Token: 7 dias, rotação automática, httpOnly cookie    │     │
+│  │    - Revogação via blacklist em Redis                               │     │
 │  │  • CSRF Protection                                                  │     │
 │  │  • XSS Prevention (Content Security Policy)                         │     │
 │  │  • SQL Injection Prevention (Prepared Statements)                   │     │
-│  │  • Input Validation (Zod)                                           │     │
-│  │  • API Gateway validation (request sanitization)                   │     │
+│  │  • Input Validation (Zod em todas as camadas)                       │     │
 │  └────────────────────────────────────────────────────────────────────┘     │
 │                                      │                                       │
 │  CAMADA 3 - DADOS                    ▼                                       │
@@ -542,15 +664,15 @@ Dessa forma, mesmo em cenários com alto volume e reuso intenso de conexões, o 
 │  │  • Encryption in Transit (TLS 1.3)                                  │     │
 │  │  • Password Hashing (Argon2id)                                      │     │
 │  │  • PII Encryption (dados sensíveis)                                 │     │
+│  │  • Backup automático criptografado (AWS S3 + S3 Glacier, SSE-KMS    │     │
+│  │    com AES-256 e rotação automática de chaves KMS)                  │     │
 │  └────────────────────────────────────────────────────────────────────┘     │
 │                                      │                                       │
 │  CAMADA 4 - AUDITORIA                ▼                                       │
 │  ┌────────────────────────────────────────────────────────────────────┐     │
 │  │  • Audit Logs imutáveis                                             │     │
 │  │  • SIEM Integration (Security Information & Event Management)       │     │
-│  │  • Backup automático criptografado (AWS S3 + S3 Glacier, SSE-KMS    │     │
-│  │    com AES-256 e rotação automática de chaves KMS)                  │     │
-│  │  • Backup automático criptografado                                  │     │
+│  │  • Alertas de anomalia                                              │     │
 │  └────────────────────────────────────────────────────────────────────┘     │
 │                                                                              │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -685,6 +807,64 @@ Dessa forma, mesmo em cenários com alto volume e reuso intenso de conexões, o 
 | **Storage** | Ilimitado | S3 + NeonDB |
 | **Backup RTO** | < 1 hora | Point-in-time recovery |
 | **Backup RPO** | < 5 minutos | Continuous backup |
+
+### 8.3 Plano de Recuperação de Desastres (DR)
+
+Esta seção descreve como os objetivos de disponibilidade, RTO (< 1 hora) e RPO (< 5 minutos) são atendidos na prática, considerando cenários de falha parcial e desastres regionais.
+
+#### 8.3.1 Escopo e Objetivos
+
+- **Escopo:** indisponibilidade de região de cloud, corrupção de dados, falha crítica de infraestrutura, incidentes de segurança que exijam restauração de ambiente.
+- **RTO Global (Recuperação de Serviço):** < 1 hora para restabelecer o serviço em uma região saudável.
+- **RPO Global (Perda Máxima de Dados):** < 5 minutos entre o último ponto consistente e o momento do incidente.
+
+#### 8.3.2 Estratégia de Redundância Geográfica
+
+- **Aplicação:** implantação em múltiplas regiões de cloud, com distribuição de tráfego via DNS/edge (anycast) e balanceadores regionais.
+- **Banco de Dados Transacional (NeonDB):**
+  - Replicação assíncrona entre regiões, com **read replicas** em regiões secundárias.
+  - **Point-in-time recovery (PITR)** habilitado com retenção contínua de logs para suportar o RPO definido.
+- **Armazenamento de Arquivos (S3 ou equivalente):**
+  - Buckets configurados com **replicação cross-region** para região secundária.
+  - Versionamento habilitado para proteção contra deleção/acesso indevido.
+
+#### 8.3.3 Backups e Retenção
+
+- **Backups automáticos** de banco de dados:
+  - Full diário com retenção de, no mínimo, 30 dias.
+  - Log de transações contínuo para suporte a PITR.
+- **Backups de configuração/infrequentemente alterados** (infra-as-code, parâmetros de ambiente, secrets criptografados):
+  - Armazenados em repositórios redundantes e cofres de segredo na região primária e secundária.
+- **Testes periódicos de restauração:**
+  - Simulações trimestrais de recovery em ambiente isolado para validar integridade dos backups e tempo de recuperação.
+
+#### 8.3.4 Procedimentos de Failover
+
+- **Falha parcial (serviços não críticos):**
+  - Failover automático via orquestrador/serverless (reimplante em zona/região saudável).
+  - Escalonamento para SRE/DevOps para validação pós-failover.
+- **Falha total da região primária:**
+  1. **Detecção:** alerta de indisponibilidade regional por observabilidade (ver Seção 9).
+  2. **Decisão:** comitê de incidente (SRE + Segurança + Negócio) confirma ativação de DR.
+  3. **Ativação da Região Secundária:**
+     - Promover réplica de banco de dados a **primária** na região secundária.
+     - Apontar DNS/edge para a região secundária.
+     - Validar saúde dos serviços críticos (login, agendamento, prontuário, faturamento).
+  4. **Comunicação:** notificar clientes e stakeholders sobre o incidente, status e janela estimada.
+- **Retorno à Região Primária (Failback):**
+  - Planejado em janela de baixa demanda, com replicação e validação de dados da região secundária para a primária antes da troca.
+
+#### 8.3.5 Segurança e Conformidade em DR
+
+- Todos os backups são **criptografados em repouso** e em trânsito.
+- Acesso a dados de backup é restrito por **princípio do menor privilégio**, auditado e registrado.
+- Procedimentos de DR mantêm conformidade com **LGPD** e requisitos de saúde (sigilo médico, prontuário).
+
+#### 8.3.6 Testes e Manutenção do Plano
+
+- **Revisão anual** do plano de DR ou a cada mudança arquitetural relevante.
+- **Execução de exercícios de mesa (tabletop)** e simulações técnicas para treinar a equipe.
+- Registro pós-incidente (post-mortem) com lições aprendidas e ajustes no plano.
 
 ---
 
