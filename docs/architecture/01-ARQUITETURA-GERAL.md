@@ -116,7 +116,7 @@ O **AtendeBem** é uma plataforma SaaS (Software as a Service) de gestão comple
 ┌─────────────────────┐      ┌─────────────────────┐      ┌─────────────────────┐
 │   EXTERNAL APIS     │      │   MESSAGING         │      │   AI/ML             │
 ├─────────────────────┤      ├─────────────────────┤      ├─────────────────────┤
-│ • VIDaaS (Assinat.) │      │ • Twilio (SMS)      │      │ • Google Gemini     │
+│ • VIDaaS (Assinatura Digital) │      │ • Twilio (SMS)      │      │ • Google Gemini     │
 │ • ANS (TISS)        │      │ • WhatsApp Business │      │ • OpenAI GPT-4      │
 │ • Google Calendar   │      │ • SendGrid (Email)  │      │ • Claude (Anthropic)│
 │ • Receita Federal   │      │ • FCM (Push)        │      │ • Med-PaLM 2        │
