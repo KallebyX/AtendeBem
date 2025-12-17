@@ -161,7 +161,7 @@ O **AtendeBem** é uma plataforma SaaS (Software as a Service) de gestão comple
 │ │ • Prescrição Óculos │   │ • Telemedicina                  │   │ • Recibos           │    │
 │ │ • Pacotes Sessões   │   │ • Pesquisa Satisfação           │   │ • Repasses          │    │
 │ │ • Tratamentos       │   │ • Notificações                  │   │ • Glosas            │    │
-│ │ • Prescrição Hosp.  │   │ • Documentos/Cloud              │   │ • Relatórios        │    │
+│ │ • Prescrição Hospitalar │   │ • Documentos/Cloud              │   │ • Relatórios        │    │
 │ └─────────────────────┘   └─────────────────────────────────┘   └─────────────────────┘    │
 │                                          │                                                  │
 │   ┌──────────────────────────────────────┼──────────────────────────────────────────┐      │
