@@ -287,7 +287,7 @@ integrations:
 # REAL-TIME
 realtime:
   websocket: Socket.io
-  webrtc: Daily.co / LiveKit
+  webrtc: Daily.co (primary) / LiveKit (fallback)
   push: Firebase Cloud Messaging
 ```
 
