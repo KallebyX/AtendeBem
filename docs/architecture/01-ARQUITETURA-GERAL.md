@@ -340,7 +340,8 @@ CREATE TABLE tenants (
 ALTER TABLE patients ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY tenant_isolation ON patients
-    USING (tenant_id = current_setting('app.current_tenant')::UUID);
+    USING (tenant_id = current_setting('app.current_tenant')::UUID)
+    WITH CHECK (tenant_id = current_setting('app.current_tenant')::UUID);
 ```
 
 ### 5.2 Hierarquia de Acesso
