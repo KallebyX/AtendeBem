@@ -161,12 +161,12 @@ O **AtendeBem** é uma plataforma SaaS (Software as a Service) de gestão comple
 │ │ MÓDULOS CLÍNICOS    │   │   MÓDULOS ADMINISTRATIVOS       │   │ MÓDULOS FINANCEIROS │    │
 │ ├─────────────────────┤   ├─────────────────────────────────┤   ├─────────────────────┤    │
 │ │ • Odontograma       │   │ • Agenda/Calendário             │   │ • Faturamento       │    │
-│ │ • Cálculo Gestacional │ │ • CRM Pacientes                 │   │ • TISS/ANS          │    │
+│ │ • Cálculo Gestacional │  │ • CRM Pacientes                 │   │ • TISS/ANS          │    │
 │ │ • Curva Crescimento │   │ • Profissionais                 │   │ • Orçamentos        │    │
 │ │ • Prescrição Óculos │   │ • Telemedicina                  │   │ • Recibos           │    │
 │ │ • Pacotes Sessões   │   │ • Pesquisa Satisfação           │   │ • Repasses          │    │
 │ │ • Tratamentos       │   │ • Notificações                  │   │ • Glosas            │    │
-│ │ • Prescrição Hospitalar │   │ • Documentos/Cloud              │   │ • Relatórios        │    │
+│ │ • Prescrição Hospitalar│   │ • Documentos/Cloud              │   │ • Relatórios        │    │
 │ └─────────────────────┘   └─────────────────────────────────┘   └─────────────────────┘    │
 │                                          │                                                  │
 │   ┌──────────────────────────────────────┼──────────────────────────────────────────┐      │
@@ -359,7 +359,39 @@ ALTER TABLE patients ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON patients
     USING (tenant_id = current_setting('app.current_tenant')::UUID)
     WITH CHECK (tenant_id = current_setting('app.current_tenant')::UUID);
-```
+
+#### 5.1.1 Estabelecimento seguro do contexto do tenant
+
+O parâmetro de sessão `app.current_tenant` é o **único** insumo usado pelo banco para isolar os dados entre organizações. Por isso, seu valor é sempre definido **no backend**, a partir do usuário autenticado, e **nunca** é consumido diretamente de headers, query params ou body enviados pelo cliente.
+
+Fluxo geral:
+
+1. O usuário autentica na API (por exemplo, via JWT ou sessão) e o backend resolve:
+   - o `user_id` autenticado; e
+   - a lista de `tenant_id` aos quais o usuário tem acesso.
+2. A cada requisição, o backend determina o `tenant_id` ativo (por exemplo, a partir do token ou de uma seleção de clínica previamente salva), **valida** se o usuário realmente tem permissão para esse tenant e, só então, define o contexto de tenant na conexão com o banco.
+3. O contexto é definido usando comando de sessão transacional, por exemplo:
+
+   ```sql
+   -- Executado pelo backend no início da transação / requisição
+   SET LOCAL app.current_tenant = $1; -- $1 = UUID já validado pelo backend
+   ```
+
+4. Como `SET LOCAL` é limitado ao escopo da transação, o valor de `app.current_tenant` é automaticamente descartado ao final da transação, evitando vazamento de contexto entre requisições distintas em um pool de conexões.
+
+Considerações sobre segurança e pooling:
+
+- O cliente **não** controla `app.current_tenant`: mesmo que envie um `tenant_id` em headers ou corpo da requisição, esse valor só é utilizado após validações de autorização no backend; o comando `SET LOCAL` sempre usa o valor resultante dessa validação.
+- Em ambientes com pool de conexões, o backend:
+  - sempre executa `SET LOCAL app.current_tenant = ...` no início de cada transação/requisição; e
+  - garante que a transação é finalizada (COMMIT/ROLLBACK), de forma que o contexto de tenant é limpo antes da conexão retornar ao pool.
+- O banco de dados pode ser configurado para **não permitir** que usuários de aplicação arbitrariamente façam `SET` de outros parâmetros sensíveis, restringindo o que pode ser alterado na sessão.
+
+Dessa forma, mesmo em cenários com alto volume e reuso intenso de conexões, o valor de `current_setting('app.current_tenant')` utilizado pelas políticas RLS:
+
+- é derivado de um contexto autenticado e autorizado;
+- não é diretamente controlado pelo cliente; e
+- é corretamente isolado por transação, impedindo acesso cruzado entre tenants.
 
 #### 5.1.1 Estabelecimento seguro do contexto do tenant
 
