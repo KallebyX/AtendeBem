@@ -40,8 +40,11 @@ O **AtendeBem** é uma plataforma SaaS (Software as a Service) de gestão comple
 │     respeitando obrigações legais de retenção em saúde                      │
 │  5. AUDITORIA TOTAL - Toda ação gera log com timestamp e identificação      │
 │  6. MULTI-TENANT - Isolamento completo de dados entre organizações          │
-│  7. OFFLINE-FIRST - Funcionalidades críticas operam sem internet            │
-│  8. API-FIRST - Todo módulo expõe APIs RESTful documentadas                 │
+│  7. OFFLINE-FIRST - Funcionalidades críticas operam sem internet via        │
+│     Service Workers, sincronização em background e cache local              │
+│  8. API-FIRST - Todo módulo expõe APIs RESTful documentadas com             │
+│     versionamento explícito, política de depreciação e compatibilidade      │
+│     retroativa para integrações críticas                                    │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -123,6 +126,7 @@ O **AtendeBem** é uma plataforma SaaS (Software as a Service) de gestão comple
 │ • Google Calendar   │      │ • SendGrid (Email)  │      │ • Claude (Anthropic)│
 │ • Receita Federal   │      │ • FCM (Push)        │      │ • Med-PaLM 2        │
 │ • CFM               │      │ • WebSocket (Real)  │      │ • Vertex AI         │
+│                     │      │                     │      │ • Med-PaLM 2 (*)    │
 └─────────────────────┘      └─────────────────────┘      └─────────────────────┘
 ```
 
@@ -158,12 +162,12 @@ O **AtendeBem** é uma plataforma SaaS (Software as a Service) de gestão comple
 │ │ MÓDULOS CLÍNICOS    │   │   MÓDULOS ADMINISTRATIVOS       │   │ MÓDULOS FINANCEIROS │    │
 │ ├─────────────────────┤   ├─────────────────────────────────┤   ├─────────────────────┤    │
 │ │ • Odontograma       │   │ • Agenda/Calendário             │   │ • Faturamento       │    │
-│ │ • Cálculo Gestacional│   │ • CRM Pacientes                 │   │ • TISS/ANS          │    │
+│ │ • Cálculo Gestacional │  │ • CRM Pacientes                 │   │ • TISS/ANS          │    │
 │ │ • Curva Crescimento │   │ • Profissionais                 │   │ • Orçamentos        │    │
 │ │ • Prescrição Óculos │   │ • Telemedicina                  │   │ • Recibos           │    │
 │ │ • Pacotes Sessões   │   │ • Pesquisa Satisfação           │   │ • Repasses          │    │
 │ │ • Tratamentos       │   │ • Notificações                  │   │ • Glosas            │    │
-│ │ • Prescrição Hospitalar │   │ • Documentos/Cloud              │   │ • Relatórios        │    │
+│ │ • Prescrição Hospitalar│   │ • Documentos/Cloud              │   │ • Relatórios        │    │
 │ └─────────────────────┘   └─────────────────────────────────┘   └─────────────────────┘    │
 │                                          │                                                  │
 │   ┌──────────────────────────────────────┼──────────────────────────────────────────┐      │
@@ -273,7 +277,13 @@ security:
 
 # INTEGRATIONS
 integrations:
-  sms: Twilio / Zenvia
+  sms:
+    primary: Twilio (internacional)
+    regional:
+      br: Zenvia (preferencial para números brasileiros)
+    failover:
+      strategy: "fallback automático entre Twilio e Zenvia em caso de indisponibilidade do provedor primário"
+      notes: "políticas de roteamento/failover detalhadas no runbook de notificações críticas"
   whatsapp: WhatsApp Business API
   email: SendGrid
   calendar: Google Calendar API
@@ -281,13 +291,14 @@ integrations:
     - Google Gemini (primary)
     - OpenAI GPT-4 (fallback)
     - Claude Sonnet (analysis)
+    - Med-PaLM 2 (planned - requires Google Cloud Healthcare API license)
   signature: VIDaaS (ICP-Brasil)
-  payments: Stripe / PagSeguro
+  payments: PagSeguro (primário - Brasil) / Stripe (pagamentos internacionais)
 
 # REAL-TIME
 realtime:
   websocket: Socket.io
-  webrtc: Daily.co (primary) / LiveKit (fallback)
+  webrtc: Daily.co (primário) / LiveKit (fallback)
   push: Firebase Cloud Messaging
 ```
 
@@ -360,6 +371,23 @@ Fluxo geral:
    ```sql
    -- Executado pelo backend no início da transação / requisição
    SET LOCAL app.current_tenant = $1; -- $1 = UUID já validado pelo backend
+   ```
+
+4. Como `SET LOCAL` é limitado ao escopo da transação, o valor de `app.current_tenant` é automaticamente descartado ao final da transação, evitando vazamento de contexto entre requisições distintas em um pool de conexões.
+
+Considerações sobre segurança e pooling:
+
+- O cliente **não** controla `app.current_tenant`: mesmo que envie um `tenant_id` em headers ou corpo da requisição, esse valor só é utilizado após validações de autorização no backend; o comando `SET LOCAL` sempre usa o valor resultante dessa validação.
+- Em ambientes com pool de conexões, o backend:
+  - sempre executa `SET LOCAL app.current_tenant = ...` no início de cada transação/requisição; e
+  - garante que a transação é finalizada (COMMIT/ROLLBACK), de forma que o contexto de tenant é limpo antes da conexão retornar ao pool.
+- O banco de dados pode ser configurado para **não permitir** que usuários de aplicação arbitrariamente façam `SET` de outros parâmetros sensíveis, restringindo o que pode ser alterado na sessão.
+
+Dessa forma, mesmo em cenários com alto volume e reuso intenso de conexões, o valor de `current_setting('app.current_tenant')` utilizado pelas políticas RLS:
+
+- é derivado de um contexto autenticado e autorizado;
+- não é diretamente controlado pelo cliente; e
+- é corretamente isolado por transação, impedindo acesso cruzado entre tenants.
 
 ### 5.2 Hierarquia de Acesso
 
@@ -489,7 +517,7 @@ Fluxo geral:
 │  ┌────────────────────────────────────────────────────────────────────┐     │
 │  │  • Cloudflare WAF (Web Application Firewall)                       │     │
 │  │  • DDoS Protection                                                  │     │
-│  │  • Rate Limiting (100 req/min por IP)                               │     │
+│  │  • Rate Limiting adaptativo (por usuário/tenant + limites por IP)  │     │
 │  │  • HTTPS Only (TLS 1.3)                                             │     │
 │  │  • HSTS Preload                                                     │     │
 │  └────────────────────────────────────────────────────────────────────┘     │
@@ -497,10 +525,14 @@ Fluxo geral:
 │  CAMADA 2 - APLICAÇÃO                ▼                                       │
 │  ┌────────────────────────────────────────────────────────────────────┐     │
 │  │  • JWT com RS256 (Access + Refresh Tokens)                          │     │
+│  │  • Refresh token rotation (rotação automática a cada uso)          │     │
+│  │  • Token storage: HttpOnly cookies para refresh, memória para access│     │
+│  │  • Revogação centralizada via blacklist em Redis                   │     │
 │  │  • CSRF Protection                                                  │     │
 │  │  • XSS Prevention (Content Security Policy)                         │     │
 │  │  • SQL Injection Prevention (Prepared Statements)                   │     │
 │  │  • Input Validation (Zod)                                           │     │
+│  │  • API Gateway validation (request sanitization)                   │     │
 │  └────────────────────────────────────────────────────────────────────┘     │
 │                                      │                                       │
 │  CAMADA 3 - DADOS                    ▼                                       │
@@ -568,7 +600,7 @@ Fluxo geral:
 │                                                                              │
 │  9. NÃO DISCRIMINAÇÃO                                                        │
 │     • Tratamento igual de dados                                              │
-│     • Sem profiling discriminatório                                          │
+│     • Sem perfilamento discriminatório                                       │
 │                                                                              │
 │  10. RESPONSABILIZAÇÃO                                                       │
 │      • DPO (Data Protection Officer) designado                               │
