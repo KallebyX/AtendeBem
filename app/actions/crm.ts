@@ -3,6 +3,7 @@
 import { getDb } from "@/lib/db"
 import { verifySession } from "@/lib/session"
 import { cookies } from "next/headers"
+import { ensureTablesExist } from "@/lib/db-init"
 
 export async function getPatientsList() {
   const cookieStore = await cookies()
@@ -20,6 +21,9 @@ export async function getPatientsList() {
   const userId = session.id
 
   try {
+    // Garantir que as tabelas existam
+    await ensureTablesExist()
+    
     const sql = await getDb()
     const patients = await sql`
       SELECT 
@@ -361,6 +365,9 @@ export async function createPatient(data: {
   const userId = session.id
 
   try {
+    // Garantir que as tabelas existam
+    await ensureTablesExist()
+    
     const sql = await getDb()
     
     // Log para debug
