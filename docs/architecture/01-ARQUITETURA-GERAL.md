@@ -35,7 +35,9 @@ O **AtendeBem** é uma plataforma SaaS (Software as a Service) de gestão comple
 │  1. PRONTUÁRIO É O NÚCLEO - Todas as funcionalidades orbitam o prontuário   │
 │  2. ZERO TRUST - Validação em cada camada, nunca confiar em inputs          │
 │  3. LGPD BY DESIGN - Privacidade e proteção de dados desde a concepção      │
-│  4. IMUTABILIDADE - Registros clínicos nunca são deletados, só versionados  │
+│  4. IMUTABILIDADE - Registros clínicos nunca são deletados, só versionados, │
+│     com atendimento a pedidos de eliminação via anonimização/restrição,     │
+│     respeitando obrigações legais de retenção em saúde                      │
 │  5. AUDITORIA TOTAL - Toda ação gera log com timestamp e identificação      │
 │  6. MULTI-TENANT - Isolamento completo de dados entre organizações          │
 │  7. OFFLINE-FIRST - Funcionalidades críticas operam sem internet            │
