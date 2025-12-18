@@ -138,7 +138,7 @@ export async function loginAction(formData: FormData) {
 
     // Create session
     const token = await createSession(user)
-    console.log("[v0] Session token created")
+    console.log("[v0] Session token created, length:", token.length)
 
     await setSessionCookie(token)
     console.log("[v0] Session cookie set successfully")

@@ -26,11 +26,11 @@ export default function LoginPage() {
     const formData = new FormData(e.currentTarget)
     const result = await loginAction(formData)
 
-    if (result.error) {
+    if (result?.error) {
       setError(result.error)
       setLoading(false)
-    } else {
-      router.push("/dashboard")
+    } else if (result?.success) {
+      window.location.href = "/dashboard"
     }
   }
 

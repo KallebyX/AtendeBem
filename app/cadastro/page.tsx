@@ -34,11 +34,11 @@ export default function CadastroPage() {
 
     const result = await registerAction(formData)
 
-    if (result.error) {
+    if (result?.error) {
       setError(result.error)
       setLoading(false)
-    } else {
-      router.push("/dashboard")
+    } else if (result?.success) {
+      window.location.href = "/dashboard"
     }
   }
 
