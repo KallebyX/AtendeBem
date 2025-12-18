@@ -169,4 +169,3 @@ INSERT INTO contract_templates (id, name, description, contract_type, content, i
   true,
   NULL
 );
-

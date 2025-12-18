@@ -1,8 +1,8 @@
-'use server'
+"use server"
 
-import { verifyToken } from '@/lib/session'
-import { cookies } from 'next/headers'
-import { getDb } from '@/lib/db'
+import { verifyToken } from "@/lib/session"
+import { cookies } from "next/headers"
+import { getDb } from "@/lib/db"
 
 /**
  * MOD-FAT: Ações do Dashboard Financeiro
@@ -41,19 +41,19 @@ export interface DREData {
  */
 export async function getFinancialMetrics(
   startDate?: string,
-  endDate?: string
+  endDate?: string,
 ): Promise<{ error?: string; data?: FinancialMetrics }> {
   try {
     const cookieStore = await cookies()
-    const token = cookieStore.get('session')?.value
+    const token = cookieStore.get("session")?.value
 
     if (!token) {
-      return { error: 'Não autenticado' }
+      return { error: "Não autenticado" }
     }
 
     const user = await verifyToken(token)
     if (!user) {
-      return { error: 'Sessão inválida' }
+      return { error: "Sessão inválida" }
     }
 
     const db = await getDb()
@@ -64,7 +64,8 @@ export async function getFinancialMetrics(
     const end = endDate || new Date().toISOString()
 
     // 1. Receitas totais (pagamentos recebidos)
-    const revenueQuery = await db.query(`
+    const revenueQuery = await db.query(
+      `
       SELECT 
         COALESCE(SUM(amount), 0) as total
       FROM payments
@@ -72,28 +73,34 @@ export async function getFinancialMetrics(
         AND status = 'paid'
         AND payment_date >= $2::timestamptz 
         AND payment_date <= $3::timestamptz
-    `, [userId, start, end])
+    `,
+      [userId, start, end],
+    )
 
-    const totalRevenue = parseFloat(revenueQuery.rows[0]?.total || 0)
+    const totalRevenue = Number.parseFloat(revenueQuery.rows[0]?.total || 0)
 
     // 2. Despesas (podem vir de uma tabela expenses futura)
     // Por ora, vamos calcular despesas como % da receita (exemplo)
     const totalExpenses = totalRevenue * 0.35 // 35% de custo operacional estimado
 
     // 3. Pagamentos pendentes
-    const pendingQuery = await db.query(`
+    const pendingQuery = await db.query(
+      `
       SELECT 
         COALESCE(SUM(amount), 0) as total
       FROM payments
       WHERE user_id = $1 
         AND status = 'pending'
         AND created_at >= $2::timestamptz
-    `, [userId, start])
+    `,
+      [userId, start],
+    )
 
-    const pendingPayments = parseFloat(pendingQuery.rows[0]?.total || 0)
+    const pendingPayments = Number.parseFloat(pendingQuery.rows[0]?.total || 0)
 
     // 4. Faturamento mensal (últimos 12 meses)
-    const monthlyQuery = await db.query(`
+    const monthlyQuery = await db.query(
+      `
       SELECT 
         TO_CHAR(payment_date, 'YYYY-MM') as month,
         COALESCE(SUM(amount), 0) as revenue
@@ -105,16 +112,19 @@ export async function getFinancialMetrics(
       GROUP BY TO_CHAR(payment_date, 'YYYY-MM')
       ORDER BY month DESC
       LIMIT 12
-    `, [userId, start, end])
+    `,
+      [userId, start, end],
+    )
 
-    const monthlyRevenue = monthlyQuery.rows.map(row => ({
+    const monthlyRevenue = monthlyQuery.rows.map((row) => ({
       month: row.month,
-      revenue: parseFloat(row.revenue),
-      expenses: parseFloat(row.revenue) * 0.35 // Estimativa
+      revenue: Number.parseFloat(row.revenue),
+      expenses: Number.parseFloat(row.revenue) * 0.35, // Estimativa
     }))
 
     // 5. Top procedimentos por receita
-    const topProceduresQuery = await db.query(`
+    const topProceduresQuery = await db.query(
+      `
       SELECT 
         p.tuss_code,
         p.tuss_name,
@@ -129,16 +139,19 @@ export async function getFinancialMetrics(
       GROUP BY p.tuss_code, p.tuss_name
       ORDER BY revenue DESC
       LIMIT 10
-    `, [userId, start, end])
+    `,
+      [userId, start, end],
+    )
 
-    const topProcedures = topProceduresQuery.rows.map(row => ({
+    const topProcedures = topProceduresQuery.rows.map((row) => ({
       name: row.tuss_name || row.tuss_code,
-      count: parseInt(row.count),
-      revenue: parseFloat(row.revenue)
+      count: Number.parseInt(row.count),
+      revenue: Number.parseFloat(row.revenue),
     }))
 
     // 6. Métodos de pagamento
-    const paymentMethodsQuery = await db.query(`
+    const paymentMethodsQuery = await db.query(
+      `
       SELECT 
         payment_method,
         COUNT(*) as count,
@@ -150,16 +163,19 @@ export async function getFinancialMetrics(
         AND payment_date <= $3::timestamptz
       GROUP BY payment_method
       ORDER BY total DESC
-    `, [userId, start, end])
+    `,
+      [userId, start, end],
+    )
 
-    const paymentMethods = paymentMethodsQuery.rows.map(row => ({
-      method: row.payment_method || 'Não especificado',
-      count: parseInt(row.count),
-      total: parseFloat(row.total)
+    const paymentMethods = paymentMethodsQuery.rows.map((row) => ({
+      method: row.payment_method || "Não especificado",
+      count: Number.parseInt(row.count),
+      total: Number.parseFloat(row.total),
     }))
 
     // 7. Receita por especialidade (do usuário)
-    const specialtyQuery = await db.query(`
+    const specialtyQuery = await db.query(
+      `
       SELECT 
         u.specialty,
         COALESCE(SUM(pay.amount), 0) as revenue
@@ -170,11 +186,13 @@ export async function getFinancialMetrics(
         AND pay.payment_date >= $2::timestamptz
         AND pay.payment_date <= $3::timestamptz
       GROUP BY u.specialty
-    `, [userId, start, end])
+    `,
+      [userId, start, end],
+    )
 
-    const revenueBySpecialty = specialtyQuery.rows.map(row => ({
-      specialty: row.specialty || 'Não especificado',
-      revenue: parseFloat(row.revenue)
+    const revenueBySpecialty = specialtyQuery.rows.map((row) => ({
+      specialty: row.specialty || "Não especificado",
+      revenue: Number.parseFloat(row.revenue),
     }))
 
     return {
@@ -187,11 +205,11 @@ export async function getFinancialMetrics(
         monthlyRevenue: monthlyRevenue.reverse(), // Ordem cronológica
         topProcedures,
         paymentMethods,
-        revenueBySpecialty
-      }
+        revenueBySpecialty,
+      },
     }
   } catch (error: any) {
-    console.error('Erro ao buscar métricas financeiras:', error)
+    console.error("Erro ao buscar métricas financeiras:", error)
     return { error: error.message }
   }
 }
@@ -199,21 +217,18 @@ export async function getFinancialMetrics(
 /**
  * Gerar DRE (Demonstração do Resultado do Exercício)
  */
-export async function generateDRE(
-  year: number,
-  month?: number
-): Promise<{ error?: string; data?: DREData }> {
+export async function generateDRE(year: number, month?: number): Promise<{ error?: string; data?: DREData }> {
   try {
     const cookieStore = await cookies()
-    const token = cookieStore.get('session')?.value
+    const token = cookieStore.get("session")?.value
 
     if (!token) {
-      return { error: 'Não autenticado' }
+      return { error: "Não autenticado" }
     }
 
     const user = await verifyToken(token)
     if (!user) {
-      return { error: 'Sessão inválida' }
+      return { error: "Sessão inválida" }
     }
 
     const db = await getDb()
@@ -227,7 +242,7 @@ export async function generateDRE(
     if (month) {
       start = new Date(year, month - 1, 1)
       end = new Date(year, month, 0, 23, 59, 59)
-      periodLabel = `${month.toString().padStart(2, '0')}/${year}`
+      periodLabel = `${month.toString().padStart(2, "0")}/${year}`
     } else {
       start = new Date(year, 0, 1)
       end = new Date(year, 11, 31, 23, 59, 59)
@@ -235,16 +250,19 @@ export async function generateDRE(
     }
 
     // Receita operacional (pagamentos recebidos)
-    const revenueQuery = await db.query(`
+    const revenueQuery = await db.query(
+      `
       SELECT COALESCE(SUM(amount), 0) as total
       FROM payments
       WHERE user_id = $1
         AND status = 'paid'
         AND payment_date >= $2::timestamptz
         AND payment_date <= $3::timestamptz
-    `, [userId, start.toISOString(), end.toISOString()])
+    `,
+      [userId, start.toISOString(), end.toISOString()],
+    )
 
-    const operatingRevenue = parseFloat(revenueQuery.rows[0]?.total || 0)
+    const operatingRevenue = Number.parseFloat(revenueQuery.rows[0]?.total || 0)
 
     // Custos diretos (exemplo: 15% da receita)
     const directCosts = operatingRevenue * 0.15
@@ -253,7 +271,7 @@ export async function generateDRE(
     const grossProfit = operatingRevenue - directCosts
 
     // Despesas operacionais (exemplo: 20% da receita)
-    const operatingExpenses = operatingRevenue * 0.20
+    const operatingExpenses = operatingRevenue * 0.2
 
     // EBITDA
     const ebitda = grossProfit - operatingExpenses
@@ -289,11 +307,11 @@ export async function generateDRE(
         financialResult,
         profitBeforeTaxes,
         taxes,
-        netProfit
-      }
+        netProfit,
+      },
     }
   } catch (error: any) {
-    console.error('Erro ao gerar DRE:', error)
+    console.error("Erro ao gerar DRE:", error)
     return { error: error.message }
   }
 }
@@ -302,27 +320,27 @@ export async function generateDRE(
  * Exportar relatório financeiro (CSV ou PDF)
  */
 export async function exportFinancialReport(
-  format: 'csv' | 'pdf',
+  format: "csv" | "pdf",
   startDate: string,
-  endDate: string
+  endDate: string,
 ): Promise<{ error?: string; data?: { url: string } }> {
   try {
     const cookieStore = await cookies()
-    const token = cookieStore.get('session')?.value
+    const token = cookieStore.get("session")?.value
 
     if (!token) {
-      return { error: 'Não autenticado' }
+      return { error: "Não autenticado" }
     }
 
     const user = await verifyToken(token)
     if (!user) {
-      return { error: 'Sessão inválida' }
+      return { error: "Sessão inválida" }
     }
 
     // Buscar métricas
     const metrics = await getFinancialMetrics(startDate, endDate)
     if (metrics.error || !metrics.data) {
-      return { error: metrics.error || 'Erro ao buscar dados' }
+      return { error: metrics.error || "Erro ao buscar dados" }
     }
 
     // Gerar URL temporária para download (API route)
@@ -330,16 +348,347 @@ export async function exportFinancialReport(
       format,
       startDate,
       endDate,
-      token
+      token,
     })
 
     return {
       data: {
-        url: `/api/export-financial?${params.toString()}`
-      }
+        url: `/api/export-financial?${params.toString()}`,
+      },
     }
   } catch (error: any) {
-    console.error('Erro ao exportar relatório:', error)
+    console.error("Erro ao exportar relatório:", error)
+    return { error: error.message }
+  }
+}
+
+/**
+ * Buscar métricas do dashboard financeiro
+ */
+export async function getDashboardMetrics() {
+  try {
+    const cookieStore = await cookies()
+    const token = cookieStore.get("session")?.value
+
+    if (!token) {
+      return { error: "Não autenticado" }
+    }
+
+    const user = await verifyToken(token)
+    if (!user) {
+      return { error: "Sessão inválida" }
+    }
+
+    const db = await getDb()
+    const userId = user.id
+
+    // Últimos 30 dias
+    const thirtyDaysAgo = new Date()
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+
+    const revenueQuery = await db`
+      SELECT COALESCE(SUM(value), 0) as total
+      FROM appointments_schedule
+      WHERE user_id = ${userId}
+        AND payment_status = 'paid'
+        AND appointment_date >= ${thirtyDaysAgo.toISOString()}
+    `
+
+    const pendingQuery = await db`
+      SELECT COALESCE(SUM(value), 0) as total
+      FROM appointments_schedule
+      WHERE user_id = ${userId}
+        AND payment_status = 'pending'
+    `
+
+    const appointmentsQuery = await db`
+      SELECT COUNT(*) as total
+      FROM appointments_schedule
+      WHERE user_id = ${userId}
+        AND appointment_date >= ${thirtyDaysAgo.toISOString()}
+    `
+
+    return {
+      data: {
+        totalRevenue: Number.parseFloat(revenueQuery[0]?.total || 0),
+        pendingRevenue: Number.parseFloat(pendingQuery[0]?.total || 0),
+        totalAppointments: Number.parseInt(appointmentsQuery[0]?.total || 0),
+        averageTicket:
+          Number.parseFloat(revenueQuery[0]?.total || 0) / Number.parseInt(appointmentsQuery[0]?.total || 1),
+      },
+    }
+  } catch (error: any) {
+    console.error("Erro ao buscar métricas do dashboard:", error)
+    return { error: error.message }
+  }
+}
+
+/**
+ * Buscar transações financeiras
+ */
+export async function getFinancialTransactions(filters?: {
+  startDate?: string
+  endDate?: string
+  status?: string
+  paymentMethod?: string
+}) {
+  try {
+    const cookieStore = await cookies()
+    const token = cookieStore.get("session")?.value
+
+    if (!token) {
+      return { error: "Não autenticado" }
+    }
+
+    const user = await verifyToken(token)
+    if (!user) {
+      return { error: "Sessão inválida" }
+    }
+
+    const db = await getDb()
+    const userId = user.id
+
+    let query = `
+      SELECT 
+        a.id,
+        a.appointment_date as date,
+        p.full_name as patient_name,
+        a.value as amount,
+        a.payment_method,
+        a.payment_status as status,
+        a.notes as description
+      FROM appointments_schedule a
+      LEFT JOIN patients p ON a.patient_id = p.id
+      WHERE a.user_id = $1
+        AND a.value > 0
+    `
+
+    const params: any[] = [userId]
+    let paramIndex = 2
+
+    if (filters?.startDate) {
+      query += ` AND a.appointment_date >= $${paramIndex}`
+      params.push(filters.startDate)
+      paramIndex++
+    }
+
+    if (filters?.endDate) {
+      query += ` AND a.appointment_date <= $${paramIndex}`
+      params.push(filters.endDate)
+      paramIndex++
+    }
+
+    if (filters?.status) {
+      query += ` AND a.payment_status = $${paramIndex}`
+      params.push(filters.status)
+      paramIndex++
+    }
+
+    if (filters?.paymentMethod) {
+      query += ` AND a.payment_method = $${paramIndex}`
+      params.push(filters.paymentMethod)
+      paramIndex++
+    }
+
+    query += " ORDER BY a.appointment_date DESC LIMIT 100"
+
+    const result = await db.query(query, params)
+
+    return {
+      data: result.rows.map((row) => ({
+        id: row.id,
+        date: row.date,
+        patientName: row.patient_name || "Não especificado",
+        amount: Number.parseFloat(row.amount),
+        paymentMethod: row.payment_method || "Não especificado",
+        status: row.status,
+        description: row.description,
+      })),
+    }
+  } catch (error: any) {
+    console.error("Erro ao buscar transações:", error)
+    return { error: error.message }
+  }
+}
+
+/**
+ * Atualizar status de transação
+ */
+export async function updateTransactionStatus(transactionId: string, status: string) {
+  try {
+    const cookieStore = await cookies()
+    const token = cookieStore.get("session")?.value
+
+    if (!token) {
+      return { error: "Não autenticado" }
+    }
+
+    const user = await verifyToken(token)
+    if (!user) {
+      return { error: "Sessão inválida" }
+    }
+
+    const db = await getDb()
+
+    await db`
+      UPDATE appointments_schedule
+      SET payment_status = ${status},
+          updated_at = NOW()
+      WHERE id = ${transactionId}
+        AND user_id = ${user.id}
+    `
+
+    return { success: true }
+  } catch (error: any) {
+    console.error("Erro ao atualizar status:", error)
+    return { error: error.message }
+  }
+}
+
+/**
+ * Buscar categorias de receita
+ */
+export async function getRevenueCategories() {
+  try {
+    const cookieStore = await cookies()
+    const token = cookieStore.get("session")?.value
+
+    if (!token) {
+      return { error: "Não autenticado" }
+    }
+
+    const user = await verifyToken(token)
+    if (!user) {
+      return { error: "Sessão inválida" }
+    }
+
+    const db = await getDb()
+
+    const result = await db`
+      SELECT 
+        appointment_type as category,
+        COUNT(*) as count,
+        COALESCE(SUM(value), 0) as total
+      FROM appointments_schedule
+      WHERE user_id = ${user.id}
+        AND payment_status = 'paid'
+      GROUP BY appointment_type
+      ORDER BY total DESC
+    `
+
+    return {
+      data: result.map((row) => ({
+        category: row.category || "Outros",
+        count: Number.parseInt(row.count),
+        total: Number.parseFloat(row.total),
+      })),
+    }
+  } catch (error: any) {
+    console.error("Erro ao buscar categorias:", error)
+    return { error: error.message }
+  }
+}
+
+/**
+ * Buscar métodos de pagamento
+ */
+export async function getPaymentMethods() {
+  try {
+    const cookieStore = await cookies()
+    const token = cookieStore.get("session")?.value
+
+    if (!token) {
+      return { error: "Não autenticado" }
+    }
+
+    const user = await verifyToken(token)
+    if (!user) {
+      return { error: "Sessão inválida" }
+    }
+
+    const db = await getDb()
+
+    const result = await db`
+      SELECT 
+        payment_method,
+        COUNT(*) as count,
+        COALESCE(SUM(value), 0) as total
+      FROM appointments_schedule
+      WHERE user_id = ${user.id}
+        AND payment_status = 'paid'
+        AND payment_method IS NOT NULL
+      GROUP BY payment_method
+      ORDER BY total DESC
+    `
+
+    return {
+      data: result.map((row) => ({
+        method: row.payment_method,
+        count: Number.parseInt(row.count),
+        total: Number.parseFloat(row.total),
+      })),
+    }
+  } catch (error: any) {
+    console.error("Erro ao buscar métodos de pagamento:", error)
+    return { error: error.message }
+  }
+}
+
+/**
+ * Criar transação financeira
+ */
+export async function createFinancialTransaction(data: {
+  patientId?: string
+  amount: number
+  paymentMethod: string
+  status: string
+  description?: string
+  date: string
+}) {
+  try {
+    const cookieStore = await cookies()
+    const token = cookieStore.get("session")?.value
+
+    if (!token) {
+      return { error: "Não autenticado" }
+    }
+
+    const user = await verifyToken(token)
+    if (!user) {
+      return { error: "Sessão inválida" }
+    }
+
+    const db = await getDb()
+
+    const result = await db`
+      INSERT INTO appointments_schedule (
+        user_id,
+        patient_id,
+        appointment_date,
+        value,
+        payment_method,
+        payment_status,
+        notes,
+        status
+      ) VALUES (
+        ${user.id},
+        ${data.patientId || null},
+        ${data.date},
+        ${data.amount},
+        ${data.paymentMethod},
+        ${data.status},
+        ${data.description || null},
+        'completed'
+      )
+      RETURNING id
+    `
+
+    return {
+      success: true,
+      data: { id: result[0].id },
+    }
+  } catch (error: any) {
+    console.error("Erro ao criar transação:", error)
     return { error: error.message }
   }
 }

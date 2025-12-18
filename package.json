@@ -4,11 +4,11 @@
   "private": true,
   "scripts": {
     "build": "next build",
+    "db:migrate": "tsx scripts/run-migrations.ts",
     "dev": "next dev",
     "lint": "eslint .",
     "start": "next start",
-    "worker": "tsx lib/worker.ts",
-    "db:migrate": "tsx scripts/run-migrations.ts"
+    "worker": "tsx lib/worker.ts"
   },
   "dependencies": {
     "@ai-sdk/google": "2.0.46",
@@ -63,6 +63,7 @@
     "lucide-react": "^0.454.0",
     "next": "16.0.10",
     "next-themes": "^0.4.6",
+    "qrcode": "1.5.4",
     "react": "19.2.0",
     "react-day-picker": "9.8.0",
     "react-dom": "19.2.0",

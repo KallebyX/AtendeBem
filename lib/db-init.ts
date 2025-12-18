@@ -126,31 +126,40 @@ export async function ensureTablesExist() {
 
   try {
     const sql = await getDb()
-    
+
     // Criar tabelas uma por uma
     await sql.unsafe(CREATE_PATIENTS_TABLE)
     await sql.unsafe(CREATE_APPOINTMENTS_TABLE)
     await sql.unsafe(CREATE_PRESCRIPTIONS_TABLE)
     await sql.unsafe(CREATE_SCHEDULE_TABLE)
-    
+
     // Criar tabelas de IA (múltiplos statements)
-    const aiStatements = CREATE_AI_TABLES.split(';').filter(s => s.trim())
+    const aiStatements = CREATE_AI_TABLES.split(";").filter((s) => s.trim())
     for (const stmt of aiStatements) {
       if (stmt.trim()) {
         await sql.unsafe(stmt)
       }
     }
-    
+
     tablesInitialized = true
-    console.log('[db-init] All tables created successfully')
+    console.log("[db-init] All tables created successfully")
     return { success: true, message: "Tables created successfully" }
   } catch (error: any) {
-    console.error('[db-init] Error creating tables:', error.message)
+    console.error("[db-init] Error creating tables:", error.message)
     // Se o erro for que a tabela já existe, ignorar
-    if (error.message.includes('already exists')) {
+    if (error.message.includes("already exists")) {
       tablesInitialized = true
       return { success: true, message: "Tables already exist" }
     }
     return { success: false, error: error.message }
+  }
+}
+
+export async function setUserContext(userId: string) {
+  try {
+    const sql = await getDb()
+    await sql`SET LOCAL app.current_user_id = ${userId}`
+  } catch (error) {
+    console.error("[db-init] Error setting user context:", error)
   }
 }
