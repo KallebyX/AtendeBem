@@ -9,7 +9,7 @@
    
 2. **MOD-RCB** - Recibos ✅
    - Gerador PDF com jsPDF em [lib/receipt-generator.ts](lib/receipt-generator.ts)
-
+s
 3. **MOD-ANM** - Anamnese ✅
    - Wizard 7 passos em [app/anamnese/page.tsx](app/anamnese/page.tsx)
 
