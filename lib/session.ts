@@ -6,6 +6,7 @@
  */
 
 import { storeRefreshToken, getRefreshToken, deleteRefreshToken } from "./redis"
+import { cookies } from "next/headers"
 
 const JWT_SECRET = process.env.JWT_SECRET || "atendebem-secret-key-change-in-production"
 const ACCESS_TOKEN_EXPIRY = Number.parseInt(process.env.JWT_ACCESS_TOKEN_EXPIRY || "900") // 15 min
@@ -208,6 +209,26 @@ export async function verifySession(token: string): Promise<SessionUser | null> 
 
     return payload.user as SessionUser
   } catch (error) {
+    return null
+  }
+}
+
+/**
+ * Get authenticated user from cookies
+ * Used in server actions and API routes
+ */
+export async function getUserFromToken(): Promise<SessionUser | null> {
+  try {
+    const cookieStore = await cookies()
+    const token = cookieStore.get("session")?.value
+
+    if (!token) {
+      return null
+    }
+
+    return await verifySession(token)
+  } catch (error) {
+    console.error("[v0] Error getting user from token:", error)
     return null
   }
 }

@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Logo } from "@/components/logo"
 import { CheckCircle2, XCircle, AlertCircle, ShieldCheck, Calendar, User, Pill } from "lucide-react"
 import { useParams } from "next/navigation"
-import { validatePrescription } from "@/app/actions/export-prescription"
+import { validatePrescription } from "@/app/actions/digital-prescriptions"
 
 export default function ValidarReceitaPage() {
   const params = useParams()

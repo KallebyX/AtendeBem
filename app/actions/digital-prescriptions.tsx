@@ -1,152 +1,105 @@
 "use server"
 
-import { cookies } from "next/headers"
-import { verifySession } from "@/lib/session"
-import { getDb } from "@/lib/db"
+import { getDb, setUserContext } from "@/lib/db"
+import { getUserFromToken } from "@/lib/session"
+import { revalidatePath } from "next/cache"
 
 export async function createDigitalPrescription(data: {
   patientId: string
   medications: Array<{
-    medicationId?: string
-    medicationName: string
+    medication_name: string
     dosage: string
     frequency: string
     duration: string
-    quantity: number
+    quantity: string
     instructions?: string
-    warnings?: string
   }>
-  cid10Code?: string
-  cid10Description?: string
-  cid11Code?: string
-  cid11Description?: string
   clinicalIndication?: string
-  notes?: string
   validityDays?: number
-  prescriptionType?: "simple" | "controlled_b1" | "controlled_b2" | "special"
 }) {
   try {
-    const cookieStore = await cookies()
-    const token = cookieStore.get("session")?.value
-
-    if (!token) {
+    const user = await getUserFromToken()
+    if (!user) {
       return { error: "Não autenticado" }
     }
 
-    const session = await verifySession(token)
-    if (!session) {
-      return { error: "Sessão inválida" }
-    }
-
-    const userId = session.id
+    await setUserContext(user.id)
     const sql = await getDb()
 
-    // Buscar dados do paciente
-    const patientResult = await sql`
-      SELECT full_name, cpf, date_of_birth 
-      FROM patients 
-      WHERE id = ${data.patientId} AND user_id = ${userId}
+    const validUntil = new Date()
+    validUntil.setDate(validUntil.getDate() + (data.validityDays || 30))
+
+    const validationToken = crypto.randomUUID()
+    const qrCodeData = `${process.env.NEXT_PUBLIC_APP_URL || "https://atendebem.io"}/validar/${validationToken}`
+
+    const prescription = await sql`
+      INSERT INTO digital_prescriptions (
+        user_id,
+        patient_id,
+        medications,
+        clinical_indication,
+        valid_until,
+        validation_token,
+        qr_code_data
+      ) VALUES (
+        ${user.id},
+        ${data.patientId},
+        ${JSON.stringify(data.medications)},
+        ${data.clinicalIndication || null},
+        ${validUntil.toISOString()},
+        ${validationToken},
+        ${qrCodeData}
+      )
+      RETURNING *
     `
 
-    if (patientResult.length === 0) {
-      return { error: "Paciente não encontrado" }
+    revalidatePath("/receitas")
+    return { success: true, prescription: prescription[0] }
+  } catch (error: any) {
+    console.error("[v0] Error creating digital prescription:", error)
+    return { error: error.message || "Erro ao criar receita digital" }
+  }
+}
+
+export async function getDigitalPrescriptions(filters?: { patientId?: string; status?: string }) {
+  try {
+    const user = await getUserFromToken()
+    if (!user) {
+      return { error: "Não autenticado" }
     }
 
-    const patient = patientResult[0]
+    await setUserContext(user.id)
+    const sql = await getDb()
 
-    // Buscar dados do médico
-    const userResult = await sql`
-      SELECT name, crm, crm_uf, specialty 
-      FROM users 
-      WHERE id = ${userId}
+    let query = sql`
+      SELECT 
+        dp.*,
+        p.name as patient_name,
+        p.cpf as patient_cpf
+      FROM digital_prescriptions dp
+      LEFT JOIN patients p ON dp.patient_id = p.id
+      WHERE dp.user_id = ${user.id}
     `
 
-    const doctor = userResult[0]
-
-    const validityDays = data.validityDays || 30
-    const validUntilDate = new Date()
-    validUntilDate.setDate(validUntilDate.getDate() + validityDays)
-    const validUntilStr = validUntilDate.toISOString().split("T")[0]
-
-    // Criar prescrição médica
-    const prescriptionResult = await sql`
-      INSERT INTO medical_prescriptions 
-       (patient_id, user_id, prescription_date, cid10_code, cid10_description, 
-        cid11_code, cid11_description, clinical_indication, notes, valid_until, status)
-       VALUES (
-         ${data.patientId}, 
-         ${userId}, 
-         CURRENT_DATE, 
-         ${data.cid10Code || null}, 
-         ${data.cid10Description || null}, 
-         ${data.cid11Code || null}, 
-         ${data.cid11Description || null}, 
-         ${data.clinicalIndication || null}, 
-         ${data.notes || null},
-         ${validUntilStr}::date, 
-         'pending_signature'
-       )
-       RETURNING id
-    `
-
-    const prescriptionId = prescriptionResult[0].id
-
-    // Inserir itens da prescrição
-    for (const med of data.medications) {
-      await sql`
-        INSERT INTO prescription_items 
-         (prescription_id, medication_name, dosage, frequency, 
-          duration, quantity, administration_instructions, special_warnings)
-         VALUES (
-           ${prescriptionId}, 
-           ${med.medicationName}, 
-           ${med.dosage}, 
-           ${med.frequency}, 
-           ${med.duration}, 
-           ${med.quantity}, 
-           ${med.instructions || null}, 
-           ${med.warnings || null}
-         )
+    if (filters?.patientId) {
+      query = sql`
+        SELECT 
+          dp.*,
+          p.name as patient_name,
+          p.cpf as patient_cpf
+        FROM digital_prescriptions dp
+        LEFT JOIN patients p ON dp.patient_id = p.id
+        WHERE dp.user_id = ${user.id}
+        AND dp.patient_id = ${filters.patientId}
       `
     }
 
-    // Verificar se há substâncias controladas
-    const hasControlled = data.prescriptionType?.includes("controlled") || false
+    const prescriptions = await query
 
-    // Criar receita digital
-    const digitalPrescriptionResult = await sql`
-      INSERT INTO digital_prescriptions 
-       (prescription_id, patient_id, user_id, doctor_name, doctor_crm, doctor_crm_uf, 
-        doctor_specialty, patient_name, patient_cpf, patient_date_of_birth, 
-        validity_days, valid_until, is_controlled_substance, prescription_type, status)
-       VALUES (
-         ${prescriptionId}, 
-         ${data.patientId}, 
-         ${userId}, 
-         ${doctor.name}, 
-         ${doctor.crm}, 
-         ${doctor.crm_uf}, 
-         ${doctor.specialty}, 
-         ${patient.full_name}, 
-         ${patient.cpf}, 
-         ${patient.date_of_birth}, 
-         ${validityDays}, 
-         ${validUntilStr}::date, 
-         ${hasControlled}, 
-         ${data.prescriptionType || "simple"}, 
-         'pending_signature'
-       )
-       RETURNING id, validation_token
-    `
-
-    return {
-      success: true,
-      digitalPrescriptionId: digitalPrescriptionResult[0].id,
-      validationToken: digitalPrescriptionResult[0].validation_token,
-    }
-  } catch (error) {
-    console.error("[v0] Error creating digital prescription:", error)
-    return { error: "Erro ao criar receita digital" }
+    return { success: true, prescriptions }
+  } catch (error: any) {
+    console.error("[v0] Error fetching digital prescriptions:", error)
+    return { error: error.message || "Erro ao buscar receitas digitais" }
   }
 }
 
@@ -158,211 +111,97 @@ export async function signDigitalPrescription(data: {
   digitalSignatureData: string
 }) {
   try {
-    const cookieStore = await cookies()
-    const token = cookieStore.get("session")?.value
-
-    if (!token) {
+    const user = await getUserFromToken()
+    if (!user) {
       return { error: "Não autenticado" }
     }
 
-    const session = await verifySession(token)
-    if (!session) {
-      return { error: "Sessão inválida" }
-    }
-
-    const userId = session.id
+    await setUserContext(user.id)
     const sql = await getDb()
 
-    // Atualizar receita com assinatura digital
+    const signatureTimestamp = new Date().toISOString()
+
     await sql`
-      UPDATE digital_prescriptions 
-       SET is_digitally_signed = true,
-           signature_certificate_serial = ${data.certificateSerial},
-           signature_certificate_issuer = ${data.certificateIssuer},
-           signature_timestamp = CURRENT_TIMESTAMP,
-           signature_hash = ${data.signatureHash},
-           digital_signature_data = ${data.digitalSignatureData},
-           status = 'signed'
-       WHERE id = ${data.digitalPrescriptionId} AND user_id = ${userId}
+      UPDATE digital_prescriptions
+      SET 
+        is_digitally_signed = true,
+        signature_timestamp = ${signatureTimestamp},
+        signature_certificate_serial = ${data.certificateSerial},
+        signature_certificate_issuer = ${data.certificateIssuer},
+        signature_hash = ${data.signatureHash},
+        digital_signature_data = ${data.digitalSignatureData}
+      WHERE id = ${data.digitalPrescriptionId}
+      AND user_id = ${user.id}
     `
 
-    // Registrar log de assinatura
+    revalidatePath("/receitas")
+    return { success: true }
+  } catch (error: any) {
+    console.error("[v0] Error signing digital prescription:", error)
+    return { error: error.message || "Erro ao assinar receita digital" }
+  }
+}
+
+export async function revokeDigitalPrescription(prescriptionId: string, reason: string) {
+  try {
+    const user = await getUserFromToken()
+    if (!user) {
+      return { error: "Não autenticado" }
+    }
+
+    await setUserContext(user.id)
+    const sql = await getDb()
+
+    const revokedAt = new Date().toISOString()
+
     await sql`
-      INSERT INTO digital_signature_logs 
-       (digital_prescription_id, user_id, action, success, certificate_details)
-       VALUES (
-         ${data.digitalPrescriptionId}, 
-         ${userId}, 
-         'sign', 
-         true, 
-         ${JSON.stringify({
-           serial: data.certificateSerial,
-           issuer: data.certificateIssuer,
-         })}
-       )
+      UPDATE digital_prescriptions
+      SET 
+        is_revoked = true,
+        revocation_timestamp = ${revokedAt},
+        revocation_reason = ${reason}
+      WHERE id = ${prescriptionId}
+      AND user_id = ${user.id}
+    `
+
+    revalidatePath("/receitas")
+    return { success: true }
+  } catch (error: any) {
+    console.error("[v0] Error revoking digital prescription:", error)
+    return { error: error.message || "Erro ao revogar receita digital" }
+  }
+}
+
+export async function auditDigitalPrescription(prescriptionId: string, action: string, details?: string) {
+  try {
+    const user = await getUserFromToken()
+    if (!user) {
+      return { error: "Não autenticado" }
+    }
+
+    await setUserContext(user.id)
+    const sql = await getDb()
+
+    await sql`
+      INSERT INTO prescription_audit_log (
+        prescription_id,
+        user_id,
+        action,
+        details,
+        ip_address
+      ) VALUES (
+        ${prescriptionId},
+        ${user.id},
+        ${action},
+        ${details || null},
+        ${null}
+      )
     `
 
     return { success: true }
-  } catch (error) {
-    console.error("[v0] Error signing prescription:", error)
-    return { error: "Erro ao assinar receita" }
-  }
-}
-
-export async function getDigitalPrescriptions() {
-  try {
-    const cookieStore = await cookies()
-    const token = cookieStore.get("session")?.value
-
-    if (!token) {
-      return { error: "Não autenticado" }
-    }
-
-    const session = await verifySession(token)
-    if (!session) {
-      return { error: "Sessão inválida" }
-    }
-
-    const userId = session.id
-    const sql = await getDb()
-
-    const prescriptions = await sql`
-      SELECT 
-        dp.*
-       FROM digital_prescriptions dp
-       WHERE dp.user_id = ${userId}
-       ORDER BY dp.created_at DESC
-    `
-
-    // Fetch medications separately for each prescription
-    const prescriptionsWithMeds = await Promise.all(
-      prescriptions.map(async (dp: any) => {
-        const items = await sql`
-          SELECT pi.medication_name, pi.dosage, pi.frequency, pi.duration, pi.quantity
-          FROM prescription_items pi
-          WHERE pi.prescription_id = ${dp.prescription_id}
-        `
-        return { ...dp, medications: items }
-      }),
-    )
-
-    return { prescriptions: prescriptionsWithMeds }
-  } catch (error) {
-    console.error("[v0] Error fetching prescriptions:", error)
-    return { error: "Erro ao buscar receitas" }
-  }
-}
-
-export async function renewDigitalPrescription(originalPrescriptionId: string) {
-  try {
-    const cookieStore = await cookies()
-    const token = cookieStore.get("session")?.value
-
-    if (!token) {
-      return { error: "Não autenticado" }
-    }
-
-    const session = await verifySession(token)
-    if (!session) {
-      return { error: "Sessão inválida" }
-    }
-
-    const userId = session.id
-    const sql = await getDb()
-
-    // Buscar receita original
-    const originalResult = await sql`
-      SELECT dp.*, mp.patient_id, mp.cid10_code, mp.cid10_description,
-              mp.cid11_code, mp.cid11_description, mp.clinical_indication, mp.notes
-       FROM digital_prescriptions dp
-       JOIN medical_prescriptions mp ON dp.prescription_id = mp.id
-       WHERE dp.id = ${originalPrescriptionId} AND dp.user_id = ${userId}
-    `
-
-    if (originalResult.length === 0) {
-      return { error: "Receita original não encontrada" }
-    }
-
-    const original = originalResult[0]
-
-    // Buscar medicamentos da receita original
-    const medsResult = await sql`
-      SELECT pi.* FROM prescription_items pi
-       WHERE pi.prescription_id = ${original.prescription_id}
-    `
-
-    const medications = medsResult.map((med: any) => ({
-      medicationId: med.medication_id,
-      medicationName: med.medication_name,
-      dosage: med.dosage,
-      frequency: med.frequency,
-      duration: med.duration,
-      quantity: med.quantity,
-      instructions: med.administration_instructions,
-      warnings: med.special_warnings,
-    }))
-
-    // Criar nova receita baseada na original
-    return await createDigitalPrescription({
-      patientId: original.patient_id,
-      medications,
-      cid10Code: original.cid10_code,
-      cid10Description: original.cid10_description,
-      cid11Code: original.cid11_code,
-      cid11Description: original.cid11_description,
-      clinicalIndication: original.clinical_indication,
-      notes: original.notes,
-      validityDays: original.validity_days,
-      prescriptionType: original.prescription_type,
-    })
-  } catch (error) {
-    console.error("[v0] Error renewing prescription:", error)
-    return { error: "Erro ao renovar receita" }
-  }
-}
-
-export async function getDigitalPrescriptionDetails(prescriptionId: string) {
-  try {
-    const cookieStore = await cookies()
-    const token = cookieStore.get("session")?.value
-
-    if (!token) {
-      return { error: "Não autenticado" }
-    }
-
-    const session = await verifySession(token)
-    if (!session) {
-      return { error: "Sessão inválida" }
-    }
-
-    const userId = session.id
-    const sql = await getDb()
-
-    const result = await sql`
-      SELECT dp.*, mp.clinical_indication, mp.cid10_code, mp.cid10_description
-      FROM digital_prescriptions dp
-      LEFT JOIN medical_prescriptions mp ON dp.prescription_id = mp.id
-      WHERE dp.id = ${prescriptionId} AND dp.user_id = ${userId}
-    `
-
-    if (result.length === 0) {
-      return { error: "Receita não encontrada" }
-    }
-
-    const prescription = result[0]
-
-    const items = await sql`
-      SELECT * FROM prescription_items
-      WHERE prescription_id = ${prescription.prescription_id}
-    `
-
-    return {
-      success: true,
-      prescription: { ...prescription, medications: items },
-    }
-  } catch (error) {
-    console.error("[v0] Error fetching prescription details:", error)
-    return { error: "Erro ao buscar receita" }
+  } catch (error: any) {
+    console.error("[v0] Error auditing digital prescription:", error)
+    return { error: error.message || "Erro ao registrar auditoria" }
   }
 }
 
@@ -370,229 +209,233 @@ export async function validatePrescription(validationToken: string) {
   try {
     const sql = await getDb()
 
-    const result = await sql`
+    const prescriptions = await sql`
       SELECT 
         dp.*,
-        mp.cid10_code,
-        mp.cid10_description,
-        mp.clinical_indication,
-        mp.notes
+        p.name as patient_name,
+        p.cpf as patient_cpf,
+        u.name as doctor_name,
+        u.email as doctor_email,
+        u.medical_license as doctor_crm,
+        u.specialty as doctor_specialty
       FROM digital_prescriptions dp
-      LEFT JOIN medical_prescriptions mp ON dp.prescription_id = mp.id
+      LEFT JOIN patients p ON dp.patient_id = p.id
+      LEFT JOIN users u ON dp.user_id = u.id
       WHERE dp.validation_token = ${validationToken}
+      AND dp.is_revoked = false
     `
 
-    if (result.length === 0) {
-      return { error: "Receita não encontrada" }
+    if (prescriptions.length === 0) {
+      return { error: "Receita não encontrada ou foi revogada" }
     }
 
-    const prescription = result[0]
-
-    // Check if expired
+    const prescription = prescriptions[0]
     const isExpired = new Date(prescription.valid_until) < new Date()
-
-    // Fetch medications
-    const items = await sql`
-      SELECT * FROM prescription_items
-      WHERE prescription_id = ${prescription.prescription_id}
-    `
 
     return {
       success: true,
       prescription: {
         ...prescription,
-        medications: items,
         isExpired,
-        patientName: prescription.patient_name,
-        patientCpf: prescription.patient_cpf,
-        doctorName: prescription.doctor_name,
-        doctorCrm: prescription.doctor_crm,
-        doctorCrmUf: prescription.doctor_crm_uf,
-        doctorSpecialty: prescription.doctor_specialty,
-        validUntil: prescription.valid_until,
-        isDigitallySigned: prescription.is_digitally_signed,
-        signatureTimestamp: prescription.signature_timestamp,
-        signatureCertificateIssuer: prescription.signature_certificate_issuer,
+        medications:
+          typeof prescription.medications === "string"
+            ? JSON.parse(prescription.medications)
+            : prescription.medications,
+        doctorCrm: prescription.doctor_crm?.split("-")[0] || "",
+        doctorCrmUf: prescription.doctor_crm?.split("-")[1] || "",
       },
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error("[v0] Error validating prescription:", error)
-    return { error: "Erro ao validar receita" }
+    return { error: error.message || "Erro ao validar receita" }
   }
 }
 
 export async function generatePrescriptionPDF(prescriptionId: string) {
   try {
-    const cookieStore = await cookies()
-    const token = cookieStore.get("session")?.value
-
-    if (!token) {
+    const user = await getUserFromToken()
+    if (!user) {
       return { error: "Não autenticado" }
     }
 
-    const session = await verifySession(token)
-    if (!session) {
-      return { error: "Sessão inválida" }
-    }
-
-    const userId = session.id
+    await setUserContext(user.id)
     const sql = await getDb()
 
-    const result = await sql`
+    const prescriptions = await sql`
       SELECT 
         dp.*,
-        mp.cid10_code,
-        mp.cid10_description,
-        mp.clinical_indication,
-        mp.notes
+        p.name as patient_name,
+        p.cpf as patient_cpf,
+        p.birth_date as patient_birth_date,
+        u.name as doctor_name,
+        u.email as doctor_email,
+        u.medical_license as doctor_crm,
+        u.specialty as doctor_specialty
       FROM digital_prescriptions dp
-      LEFT JOIN medical_prescriptions mp ON dp.prescription_id = mp.id
-      WHERE dp.id = ${prescriptionId} AND dp.user_id = ${userId}
+      LEFT JOIN patients p ON dp.patient_id = p.id
+      LEFT JOIN users u ON dp.user_id = u.id
+      WHERE dp.id = ${prescriptionId}
+      AND dp.user_id = ${user.id}
     `
 
-    if (result.length === 0) {
+    if (prescriptions.length === 0) {
       return { error: "Receita não encontrada" }
     }
 
-    const prescription = result[0]
+    const prescription = prescriptions[0]
+    const medications =
+      typeof prescription.medications === "string" ? JSON.parse(prescription.medications) : prescription.medications
 
-    // Fetch medications
-    const items = await sql`
-      SELECT * FROM prescription_items
-      WHERE prescription_id = ${prescription.prescription_id}
-    `
-
-    // Generate HTML for PDF
     const html = `
       <!DOCTYPE html>
       <html>
       <head>
         <meta charset="UTF-8">
-        <title>Receita Médica Digital</title>
+        <title>Receita Digital - ${prescription.patient_name}</title>
         <style>
-          body {
-            font-family: Arial, sans-serif;
-            padding: 40px;
-            max-width: 800px;
-            margin: 0 auto;
-          }
-          .header {
-            text-align: center;
-            border-bottom: 2px solid #0066cc;
-            padding-bottom: 20px;
-            margin-bottom: 30px;
-          }
-          .section {
-            margin-bottom: 20px;
-          }
-          .section-title {
-            font-weight: bold;
-            color: #0066cc;
-            margin-bottom: 10px;
-          }
-          .medication {
-            border: 1px solid #ddd;
-            padding: 15px;
-            margin-bottom: 10px;
-            border-radius: 5px;
-          }
-          .signature {
-            margin-top: 50px;
-            padding-top: 20px;
-            border-top: 1px solid #ddd;
-            text-align: center;
-          }
+          body { font-family: Arial, sans-serif; padding: 40px; line-height: 1.6; }
+          .header { text-align: center; border-bottom: 3px solid #0ea5e9; padding-bottom: 20px; margin-bottom: 30px; }
+          .header h1 { color: #0ea5e9; margin: 0; }
+          .section { margin-bottom: 20px; }
+          .section h2 { color: #334155; border-bottom: 2px solid #e2e8f0; padding-bottom: 5px; }
+          .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+          .info-item { margin-bottom: 10px; }
+          .info-label { font-weight: bold; color: #64748b; }
+          .medications { margin-top: 20px; }
+          .medication-item { background: #f8fafc; padding: 15px; margin-bottom: 10px; border-left: 4px solid #0ea5e9; }
+          .signature { margin-top: 40px; text-align: center; }
+          .signature-line { border-top: 2px solid #334155; width: 300px; margin: 40px auto 10px; }
+          .qr-code { text-align: center; margin-top: 30px; }
+          @media print { body { padding: 20px; } }
         </style>
       </head>
       <body>
         <div class="header">
           <h1>RECEITA MÉDICA DIGITAL</h1>
-          <p><strong>Assinada Digitalmente - ICP-Brasil</strong></p>
-        </div>
-        
-        <div class="section">
-          <div class="section-title">Médico Prescritor</div>
-          <p><strong>${prescription.doctor_name}</strong></p>
-          <p>CRM: ${prescription.doctor_crm}/${prescription.doctor_crm_uf}</p>
-          ${prescription.doctor_specialty ? `<p>Especialidade: ${prescription.doctor_specialty}</p>` : ""}
+          <p>Documento com validade jurídica - ICP-Brasil</p>
         </div>
 
         <div class="section">
-          <div class="section-title">Paciente</div>
-          <p><strong>${prescription.patient_name}</strong></p>
-          ${prescription.patient_cpf ? `<p>CPF: ${prescription.patient_cpf}</p>` : ""}
-          ${prescription.patient_date_of_birth ? `<p>Data de Nascimento: ${new Date(prescription.patient_date_of_birth).toLocaleDateString("pt-BR")}</p>` : ""}
-        </div>
-
-        ${
-          prescription.cid10_code || prescription.clinical_indication
-            ? `
-        <div class="section">
-          <div class="section-title">Diagnóstico</div>
-          ${prescription.cid10_code ? `<p>CID-10: ${prescription.cid10_code} - ${prescription.cid10_description || ""}</p>` : ""}
-          ${prescription.clinical_indication ? `<p>Indicação Clínica: ${prescription.clinical_indication}</p>` : ""}
-        </div>
-        `
-            : ""
-        }
-
-        <div class="section">
-          <div class="section-title">Medicamentos Prescritos</div>
-          ${items
-            .map(
-              (med: any) => `
-            <div class="medication">
-              <p><strong>${med.medication_name}</strong></p>
-              <p>Dosagem: ${med.dosage}</p>
-              <p>Frequência: ${med.frequency}</p>
-              <p>Duração: ${med.duration}</p>
-              <p>Quantidade: ${med.quantity}</p>
-              ${med.administration_instructions ? `<p>Instruções: ${med.administration_instructions}</p>` : ""}
-              ${med.special_warnings ? `<p><strong>Avisos:</strong> ${med.special_warnings}</p>` : ""}
+          <h2>Dados do Paciente</h2>
+          <div class="info-grid">
+            <div class="info-item">
+              <span class="info-label">Nome:</span> ${prescription.patient_name}
             </div>
-          `,
-            )
-            .join("")}
+            <div class="info-item">
+              <span class="info-label">CPF:</span> ${prescription.patient_cpf || "Não informado"}
+            </div>
+            ${
+              prescription.patient_birth_date
+                ? `
+            <div class="info-item">
+              <span class="info-label">Data de Nascimento:</span> ${new Date(prescription.patient_birth_date).toLocaleDateString("pt-BR")}
+            </div>
+            `
+                : ""
+            }
+          </div>
+        </div>
+
+        <div class="section">
+          <h2>Medicamentos Prescritos</h2>
+          <div class="medications">
+            ${medications
+              .map(
+                (med: any, index: number) => `
+              <div class="medication-item">
+                <strong>${index + 1}. ${med.medication_name}</strong><br>
+                Dosagem: ${med.dosage}<br>
+                Frequência: ${med.frequency}<br>
+                Duração: ${med.duration}<br>
+                Quantidade: ${med.quantity}
+                ${med.instructions ? `<br>Instruções: ${med.instructions}` : ""}
+              </div>
+            `,
+              )
+              .join("")}
+          </div>
         </div>
 
         ${
-          prescription.notes
+          prescription.clinical_indication
             ? `
         <div class="section">
-          <div class="section-title">Observações</div>
-          <p>${prescription.notes}</p>
+          <h2>Indicação Clínica</h2>
+          <p>${prescription.clinical_indication}</p>
         </div>
         `
             : ""
         }
 
         <div class="section">
-          <div class="section-title">Validade</div>
-          <p>Esta receita é válida até ${new Date(prescription.valid_until).toLocaleDateString("pt-BR")}</p>
+          <h2>Dados do Médico</h2>
+          <div class="info-grid">
+            <div class="info-item">
+              <span class="info-label">Nome:</span> ${prescription.doctor_name}
+            </div>
+            <div class="info-item">
+              <span class="info-label">CRM:</span> ${prescription.doctor_crm}
+            </div>
+            ${
+              prescription.doctor_specialty
+                ? `
+            <div class="info-item">
+              <span class="info-label">Especialidade:</span> ${prescription.doctor_specialty}
+            </div>
+            `
+                : ""
+            }
+          </div>
+        </div>
+
+        <div class="section">
+          <h2>Validade e Autenticidade</h2>
+          <div class="info-grid">
+            <div class="info-item">
+              <span class="info-label">Data de Emissão:</span> ${new Date(prescription.created_at).toLocaleDateString("pt-BR")}
+            </div>
+            <div class="info-item">
+              <span class="info-label">Válida até:</span> ${new Date(prescription.valid_until).toLocaleDateString("pt-BR")}
+            </div>
+            ${
+              prescription.is_digitally_signed
+                ? `
+            <div class="info-item">
+              <span class="info-label">Assinatura Digital:</span> Sim - ICP-Brasil
+            </div>
+            <div class="info-item">
+              <span class="info-label">Data da Assinatura:</span> ${new Date(prescription.signature_timestamp).toLocaleDateString("pt-BR")}
+            </div>
+            `
+                : ""
+            }
+          </div>
         </div>
 
         ${
-          prescription.is_digitally_signed
+          prescription.qr_code_data
             ? `
+        <div class="qr-code">
+          <p><strong>Validar Receita:</strong></p>
+          <p>${prescription.qr_code_data}</p>
+          <p style="font-size: 12px; color: #64748b;">Escaneie o QR Code para validar a autenticidade</p>
+        </div>
+        `
+            : ""
+        }
+
         <div class="signature">
-          <p><strong>✓ Documento Assinado Digitalmente</strong></p>
-          <p>Certificado ICP-Brasil</p>
-          <p>Data da Assinatura: ${new Date(prescription.signature_timestamp).toLocaleString("pt-BR")}</p>
-          <p>Token de Validação: ${prescription.validation_token}</p>
-          <p style="font-size: 12px; color: #666;">
-            Valide este documento em: https://atendebem.io/validar/${prescription.validation_token}
-          </p>
+          <div class="signature-line"></div>
+          <p><strong>${prescription.doctor_name}</strong><br>
+          CRM: ${prescription.doctor_crm}</p>
         </div>
-        `
-            : ""
-        }
       </body>
       </html>
     `
 
     return { success: true, html }
-  } catch (error) {
-    console.error("[v0] Error generating PDF:", error)
-    return { error: "Erro ao gerar PDF" }
+  } catch (error: any) {
+    console.error("[v0] Error generating prescription PDF:", error)
+    return { error: error.message || "Erro ao gerar PDF" }
   }
 }
