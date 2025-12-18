@@ -99,6 +99,10 @@ export async function createDigitalPrescription(data: {
           duration, quantity, administration_instructions, special_warnings)
          VALUES (
            ${prescriptionId}, 
+           ${med.medicationName}, 
+           ${med.dosage}, 
+           ${med.frequency}, 
+           ${med.duration}, 
            ${med.quantity}, 
            ${med.instructions || null}, 
            ${med.warnings || null}
@@ -359,5 +363,236 @@ export async function getDigitalPrescriptionDetails(prescriptionId: string) {
   } catch (error) {
     console.error("[v0] Error fetching prescription details:", error)
     return { error: "Erro ao buscar receita" }
+  }
+}
+
+export async function validatePrescription(validationToken: string) {
+  try {
+    const sql = await getDb()
+
+    const result = await sql`
+      SELECT 
+        dp.*,
+        mp.cid10_code,
+        mp.cid10_description,
+        mp.clinical_indication,
+        mp.notes
+      FROM digital_prescriptions dp
+      LEFT JOIN medical_prescriptions mp ON dp.prescription_id = mp.id
+      WHERE dp.validation_token = ${validationToken}
+    `
+
+    if (result.length === 0) {
+      return { error: "Receita não encontrada" }
+    }
+
+    const prescription = result[0]
+
+    // Check if expired
+    const isExpired = new Date(prescription.valid_until) < new Date()
+
+    // Fetch medications
+    const items = await sql`
+      SELECT * FROM prescription_items
+      WHERE prescription_id = ${prescription.prescription_id}
+    `
+
+    return {
+      success: true,
+      prescription: {
+        ...prescription,
+        medications: items,
+        isExpired,
+        patientName: prescription.patient_name,
+        patientCpf: prescription.patient_cpf,
+        doctorName: prescription.doctor_name,
+        doctorCrm: prescription.doctor_crm,
+        doctorCrmUf: prescription.doctor_crm_uf,
+        doctorSpecialty: prescription.doctor_specialty,
+        validUntil: prescription.valid_until,
+        isDigitallySigned: prescription.is_digitally_signed,
+        signatureTimestamp: prescription.signature_timestamp,
+        signatureCertificateIssuer: prescription.signature_certificate_issuer,
+      },
+    }
+  } catch (error) {
+    console.error("[v0] Error validating prescription:", error)
+    return { error: "Erro ao validar receita" }
+  }
+}
+
+export async function generatePrescriptionPDF(prescriptionId: string) {
+  try {
+    const cookieStore = await cookies()
+    const token = cookieStore.get("session")?.value
+
+    if (!token) {
+      return { error: "Não autenticado" }
+    }
+
+    const session = await verifySession(token)
+    if (!session) {
+      return { error: "Sessão inválida" }
+    }
+
+    const userId = session.id
+    const sql = await getDb()
+
+    const result = await sql`
+      SELECT 
+        dp.*,
+        mp.cid10_code,
+        mp.cid10_description,
+        mp.clinical_indication,
+        mp.notes
+      FROM digital_prescriptions dp
+      LEFT JOIN medical_prescriptions mp ON dp.prescription_id = mp.id
+      WHERE dp.id = ${prescriptionId} AND dp.user_id = ${userId}
+    `
+
+    if (result.length === 0) {
+      return { error: "Receita não encontrada" }
+    }
+
+    const prescription = result[0]
+
+    // Fetch medications
+    const items = await sql`
+      SELECT * FROM prescription_items
+      WHERE prescription_id = ${prescription.prescription_id}
+    `
+
+    // Generate HTML for PDF
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="UTF-8">
+        <title>Receita Médica Digital</title>
+        <style>
+          body {
+            font-family: Arial, sans-serif;
+            padding: 40px;
+            max-width: 800px;
+            margin: 0 auto;
+          }
+          .header {
+            text-align: center;
+            border-bottom: 2px solid #0066cc;
+            padding-bottom: 20px;
+            margin-bottom: 30px;
+          }
+          .section {
+            margin-bottom: 20px;
+          }
+          .section-title {
+            font-weight: bold;
+            color: #0066cc;
+            margin-bottom: 10px;
+          }
+          .medication {
+            border: 1px solid #ddd;
+            padding: 15px;
+            margin-bottom: 10px;
+            border-radius: 5px;
+          }
+          .signature {
+            margin-top: 50px;
+            padding-top: 20px;
+            border-top: 1px solid #ddd;
+            text-align: center;
+          }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <h1>RECEITA MÉDICA DIGITAL</h1>
+          <p><strong>Assinada Digitalmente - ICP-Brasil</strong></p>
+        </div>
+        
+        <div class="section">
+          <div class="section-title">Médico Prescritor</div>
+          <p><strong>${prescription.doctor_name}</strong></p>
+          <p>CRM: ${prescription.doctor_crm}/${prescription.doctor_crm_uf}</p>
+          ${prescription.doctor_specialty ? `<p>Especialidade: ${prescription.doctor_specialty}</p>` : ""}
+        </div>
+
+        <div class="section">
+          <div class="section-title">Paciente</div>
+          <p><strong>${prescription.patient_name}</strong></p>
+          ${prescription.patient_cpf ? `<p>CPF: ${prescription.patient_cpf}</p>` : ""}
+          ${prescription.patient_date_of_birth ? `<p>Data de Nascimento: ${new Date(prescription.patient_date_of_birth).toLocaleDateString("pt-BR")}</p>` : ""}
+        </div>
+
+        ${
+          prescription.cid10_code || prescription.clinical_indication
+            ? `
+        <div class="section">
+          <div class="section-title">Diagnóstico</div>
+          ${prescription.cid10_code ? `<p>CID-10: ${prescription.cid10_code} - ${prescription.cid10_description || ""}</p>` : ""}
+          ${prescription.clinical_indication ? `<p>Indicação Clínica: ${prescription.clinical_indication}</p>` : ""}
+        </div>
+        `
+            : ""
+        }
+
+        <div class="section">
+          <div class="section-title">Medicamentos Prescritos</div>
+          ${items
+            .map(
+              (med: any) => `
+            <div class="medication">
+              <p><strong>${med.medication_name}</strong></p>
+              <p>Dosagem: ${med.dosage}</p>
+              <p>Frequência: ${med.frequency}</p>
+              <p>Duração: ${med.duration}</p>
+              <p>Quantidade: ${med.quantity}</p>
+              ${med.administration_instructions ? `<p>Instruções: ${med.administration_instructions}</p>` : ""}
+              ${med.special_warnings ? `<p><strong>Avisos:</strong> ${med.special_warnings}</p>` : ""}
+            </div>
+          `,
+            )
+            .join("")}
+        </div>
+
+        ${
+          prescription.notes
+            ? `
+        <div class="section">
+          <div class="section-title">Observações</div>
+          <p>${prescription.notes}</p>
+        </div>
+        `
+            : ""
+        }
+
+        <div class="section">
+          <div class="section-title">Validade</div>
+          <p>Esta receita é válida até ${new Date(prescription.valid_until).toLocaleDateString("pt-BR")}</p>
+        </div>
+
+        ${
+          prescription.is_digitally_signed
+            ? `
+        <div class="signature">
+          <p><strong>✓ Documento Assinado Digitalmente</strong></p>
+          <p>Certificado ICP-Brasil</p>
+          <p>Data da Assinatura: ${new Date(prescription.signature_timestamp).toLocaleString("pt-BR")}</p>
+          <p>Token de Validação: ${prescription.validation_token}</p>
+          <p style="font-size: 12px; color: #666;">
+            Valide este documento em: https://atendebem.io/validar/${prescription.validation_token}
+          </p>
+        </div>
+        `
+            : ""
+        }
+      </body>
+      </html>
+    `
+
+    return { success: true, html }
+  } catch (error) {
+    console.error("[v0] Error generating PDF:", error)
+    return { error: "Erro ao gerar PDF" }
   }
 }
