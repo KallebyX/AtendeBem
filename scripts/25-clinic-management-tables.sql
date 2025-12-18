@@ -91,6 +91,19 @@ ALTER TABLE clinics ENABLE ROW LEVEL SECURITY;
 ALTER TABLE rooms ENABLE ROW LEVEL SECURITY;
 ALTER TABLE staff_schedules ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS clinics_select ON clinics;
+DROP POLICY IF EXISTS clinics_insert ON clinics;
+DROP POLICY IF EXISTS clinics_update ON clinics;
+DROP POLICY IF EXISTS clinics_delete ON clinics;
+DROP POLICY IF EXISTS rooms_select ON rooms;
+DROP POLICY IF EXISTS rooms_insert ON rooms;
+DROP POLICY IF EXISTS rooms_update ON rooms;
+DROP POLICY IF EXISTS rooms_delete ON rooms;
+DROP POLICY IF EXISTS staff_schedules_select ON staff_schedules;
+DROP POLICY IF EXISTS staff_schedules_insert ON staff_schedules;
+DROP POLICY IF EXISTS staff_schedules_update ON staff_schedules;
+DROP POLICY IF EXISTS staff_schedules_delete ON staff_schedules;
+
 CREATE POLICY clinics_select ON clinics
   FOR SELECT USING (tenant_id IN (SELECT id FROM tenants WHERE id = current_setting('app.current_user_tenant', true)::uuid));
 
@@ -128,6 +141,13 @@ CREATE POLICY staff_schedules_delete ON staff_schedules
   FOR DELETE USING (tenant_id IN (SELECT id FROM tenants WHERE id = current_setting('app.current_user_tenant', true)::uuid));
 
 -- Índices
+DROP INDEX IF EXISTS idx_clinics_tenant;
+DROP INDEX IF EXISTS idx_rooms_clinic;
+DROP INDEX IF EXISTS idx_rooms_status;
+DROP INDEX IF EXISTS idx_staff_schedules_user;
+DROP INDEX IF EXISTS idx_staff_schedules_clinic;
+DROP INDEX IF EXISTS idx_staff_schedules_day;
+
 CREATE INDEX idx_clinics_tenant ON clinics(tenant_id);
 CREATE INDEX idx_rooms_clinic ON rooms(clinic_id);
 CREATE INDEX idx_rooms_status ON rooms(current_status);

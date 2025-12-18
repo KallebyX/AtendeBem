@@ -1,6 +1,5 @@
 CREATE TABLE IF NOT EXISTS tiss_submissions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
   user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   
   -- Identificação
@@ -58,7 +57,7 @@ CREATE TABLE IF NOT EXISTS tiss_submissions (
 
 CREATE TABLE IF NOT EXISTS tiss_guides (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   submission_id UUID REFERENCES tiss_submissions(id) ON DELETE SET NULL,
   
   -- Relação com atendimento
@@ -109,60 +108,12 @@ CREATE TABLE IF NOT EXISTS tiss_guides (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- RLS Policies
-ALTER TABLE tiss_submissions ENABLE ROW LEVEL SECURITY;
-ALTER TABLE tiss_guides ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY tiss_submissions_select ON tiss_submissions
-  FOR SELECT USING (tenant_id IN (SELECT id FROM tenants WHERE id = current_setting('app.current_user_tenant', true)::uuid));
-
-CREATE POLICY tiss_submissions_insert ON tiss_submissions
-  FOR INSERT WITH CHECK (tenant_id IN (SELECT id FROM tenants WHERE id = current_setting('app.current_user_tenant', true)::uuid));
-
-CREATE POLICY tiss_submissions_update ON tiss_submissions
-  FOR UPDATE USING (tenant_id IN (SELECT id FROM tenants WHERE id = current_setting('app.current_user_tenant', true)::uuid));
-
-CREATE POLICY tiss_submissions_delete ON tiss_submissions
-  FOR DELETE USING (tenant_id IN (SELECT id FROM tenants WHERE id = current_setting('app.current_user_tenant', true)::uuid));
-
-CREATE POLICY tiss_guides_select ON tiss_guides
-  FOR SELECT USING (tenant_id IN (SELECT id FROM tenants WHERE id = current_setting('app.current_user_tenant', true)::uuid));
-
-CREATE POLICY tiss_guides_insert ON tiss_guides
-  FOR INSERT WITH CHECK (tenant_id IN (SELECT id FROM tenants WHERE id = current_setting('app.current_user_tenant', true)::uuid));
-
-CREATE POLICY tiss_guides_update ON tiss_guides
-  FOR UPDATE USING (tenant_id IN (SELECT id FROM tenants WHERE id = current_setting('app.current_user_tenant', true)::uuid));
-
-CREATE POLICY tiss_guides_delete ON tiss_guides
-  FOR DELETE USING (tenant_id IN (SELECT id FROM tenants WHERE id = current_setting('app.current_user_tenant', true)::uuid));
-
 -- Índices
-CREATE INDEX idx_tiss_submissions_tenant ON tiss_submissions(tenant_id);
-CREATE INDEX idx_tiss_submissions_status ON tiss_submissions(status);
-CREATE INDEX idx_tiss_submissions_lote ON tiss_submissions(lote_number);
-CREATE INDEX idx_tiss_guides_tenant ON tiss_guides(tenant_id);
-CREATE INDEX idx_tiss_guides_submission ON tiss_guides(submission_id);
-CREATE INDEX idx_tiss_guides_appointment ON tiss_guides(appointment_id);
-CREATE INDEX idx_tiss_guides_patient ON tiss_guides(patient_id);
-CREATE INDEX idx_tiss_guides_payment ON tiss_guides(payment_status);
-
--- Função para gerar número de lote sequencial
-CREATE OR REPLACE FUNCTION generate_tiss_lote_number(tenant_uuid UUID)
-RETURNS TEXT AS $$
-DECLARE
-  lote_count INTEGER;
-  tenant_prefix TEXT;
-BEGIN
-  -- Set search path to ensure tenant_id is available
-  PERFORM set_config('search_path', 'public', false);
-  
-  SELECT COUNT(*) INTO lote_count
-  FROM tiss_submissions
-  WHERE tiss_submissions.tenant_id = tenant_uuid;
-  
-  tenant_prefix := substring(tenant_uuid::text, 1, 8);
-  
-  RETURN 'LOTE-' || tenant_prefix || '-' || LPAD((lote_count + 1)::TEXT, 6, '0');
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+CREATE INDEX IF NOT EXISTS idx_tiss_submissions_user ON tiss_submissions(user_id);
+CREATE INDEX IF NOT EXISTS idx_tiss_submissions_status ON tiss_submissions(status);
+CREATE INDEX IF NOT EXISTS idx_tiss_submissions_lote ON tiss_submissions(lote_number);
+CREATE INDEX IF NOT EXISTS idx_tiss_guides_user ON tiss_guides(user_id);
+CREATE INDEX IF NOT EXISTS idx_tiss_guides_submission ON tiss_guides(submission_id);
+CREATE INDEX IF NOT EXISTS idx_tiss_guides_appointment ON tiss_guides(appointment_id);
+CREATE INDEX IF NOT EXISTS idx_tiss_guides_patient ON tiss_guides(patient_id);
+CREATE INDEX IF NOT EXISTS idx_tiss_guides_payment ON tiss_guides(payment_status);

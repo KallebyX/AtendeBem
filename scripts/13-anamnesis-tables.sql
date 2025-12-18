@@ -6,7 +6,7 @@
 -- =====================================================
 CREATE TABLE IF NOT EXISTS anamnesis (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    tenant_id UUID REFERENCES tenants(id) ON DELETE CASCADE,
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
     appointment_id UUID REFERENCES appointments(id) ON DELETE SET NULL,
@@ -74,6 +74,17 @@ CREATE TABLE IF NOT EXISTS anamnesis (
     updated_at TIMESTAMPTZ DEFAULT NOW(),
     deleted_at TIMESTAMPTZ
 );
+
+-- Add tenant_id column if it doesn't exist
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_name = 'anamnesis' AND column_name = 'tenant_id'
+  ) THEN
+    ALTER TABLE anamnesis ADD COLUMN tenant_id UUID REFERENCES tenants(id) ON DELETE CASCADE;
+  END IF;
+END $$;
 
 -- Índices
 CREATE INDEX IF NOT EXISTS idx_anamnesis_tenant ON anamnesis(tenant_id);

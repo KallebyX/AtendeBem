@@ -54,9 +54,14 @@ CREATE TABLE IF NOT EXISTS tenants (
     deleted_at TIMESTAMPTZ
 );
 
-CREATE INDEX idx_tenants_slug ON tenants(slug);
-CREATE INDEX idx_tenants_plan ON tenants(plan_type);
-CREATE INDEX idx_tenants_billing_status ON tenants(billing_status);
+DROP INDEX IF EXISTS idx_tenants_slug;
+CREATE INDEX IF NOT EXISTS idx_tenants_slug ON tenants(slug);
+
+DROP INDEX IF EXISTS idx_tenants_plan;
+CREATE INDEX IF NOT EXISTS idx_tenants_plan ON tenants(plan_type);
+
+DROP INDEX IF EXISTS idx_tenants_billing_status;
+CREATE INDEX IF NOT EXISTS idx_tenants_billing_status ON tenants(billing_status);
 
 -- =====================================================
 -- 2. ADICIONAR tenant_id EM TODAS AS TABELAS

@@ -1,9 +1,9 @@
 -- Fix RLS policy for login
 -- Allow unauthenticated users to query users table for email/password during login
--- After login verification, RLS protects the user's own record
 
 -- First, drop the current restrictive policy
 DROP POLICY IF EXISTS "Users can view own profile" ON users;
+DROP POLICY IF EXISTS "Users can view own profile or login" ON users;
 
 -- Allow users to select by email (for login) OR if they are the user
 CREATE POLICY "Users can view own profile or login" ON users
@@ -22,11 +22,12 @@ CREATE POLICY "Users can update own profile" ON users
 
 -- Allow registration (INSERT without user context)
 DROP POLICY IF EXISTS "Users can insert own record" ON users;
+DROP POLICY IF EXISTS "Users can register" ON users;
 
 CREATE POLICY "Users can register" ON users
     FOR INSERT WITH CHECK (
         -- Allow insert if no user context (registration)
         current_setting('app.current_user_id', true) IS NULL
         -- OR if inserting as the current user
-        OR user_id = current_setting('app.current_user_id', true)::uuid
+        OR id = current_setting('app.current_user_id', true)::uuid
     );

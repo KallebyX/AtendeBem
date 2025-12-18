@@ -125,6 +125,19 @@ ALTER TABLE electronic_medical_records ENABLE ROW LEVEL SECURITY;
 ALTER TABLE clinical_notes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE problem_list ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS emr_select ON electronic_medical_records;
+DROP POLICY IF EXISTS emr_insert ON electronic_medical_records;
+DROP POLICY IF EXISTS emr_update ON electronic_medical_records;
+DROP POLICY IF EXISTS emr_delete ON electronic_medical_records;
+DROP POLICY IF EXISTS clinical_notes_select ON clinical_notes;
+DROP POLICY IF EXISTS clinical_notes_insert ON clinical_notes;
+DROP POLICY IF EXISTS clinical_notes_update ON clinical_notes;
+DROP POLICY IF EXISTS clinical_notes_delete ON clinical_notes;
+DROP POLICY IF EXISTS problem_list_select ON problem_list;
+DROP POLICY IF EXISTS problem_list_insert ON problem_list;
+DROP POLICY IF EXISTS problem_list_update ON problem_list;
+DROP POLICY IF EXISTS problem_list_delete ON problem_list;
+
 CREATE POLICY emr_select ON electronic_medical_records
   FOR SELECT USING (tenant_id IN (SELECT id FROM tenants WHERE id = current_setting('app.current_user_tenant', true)::uuid));
 
@@ -162,6 +175,14 @@ CREATE POLICY problem_list_delete ON problem_list
   FOR DELETE USING (tenant_id IN (SELECT id FROM tenants WHERE id = current_setting('app.current_user_tenant', true)::uuid));
 
 -- Índices
+DROP INDEX IF EXISTS idx_emr_tenant;
+DROP INDEX IF EXISTS idx_emr_patient;
+DROP INDEX IF EXISTS idx_clinical_notes_emr;
+DROP INDEX IF EXISTS idx_clinical_notes_appointment;
+DROP INDEX IF EXISTS idx_clinical_notes_type;
+DROP INDEX IF EXISTS idx_problem_list_emr;
+DROP INDEX IF EXISTS idx_problem_list_status;
+
 CREATE INDEX idx_emr_tenant ON electronic_medical_records(tenant_id);
 CREATE INDEX idx_emr_patient ON electronic_medical_records(patient_id);
 CREATE INDEX idx_clinical_notes_emr ON clinical_notes(emr_id);

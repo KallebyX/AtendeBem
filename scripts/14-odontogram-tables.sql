@@ -3,7 +3,7 @@
 
 CREATE TABLE IF NOT EXISTS odontograms (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    tenant_id UUID REFERENCES tenants(id) ON DELETE CASCADE,
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
     appointment_id UUID REFERENCES appointments(id) ON DELETE SET NULL,
@@ -19,6 +19,17 @@ CREATE TABLE IF NOT EXISTS odontograms (
     updated_at TIMESTAMPTZ DEFAULT NOW(),
     deleted_at TIMESTAMPTZ
 );
+
+-- Add tenant_id column if it doesn't exist
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_name = 'odontograms' AND column_name = 'tenant_id'
+  ) THEN
+    ALTER TABLE odontograms ADD COLUMN tenant_id UUID REFERENCES tenants(id) ON DELETE CASCADE;
+  END IF;
+END $$;
 
 CREATE INDEX IF NOT EXISTS idx_odontograms_tenant ON odontograms(tenant_id);
 CREATE INDEX IF NOT EXISTS idx_odontograms_patient ON odontograms(patient_id);
@@ -37,7 +48,7 @@ CREATE POLICY "Users can manage own odontograms" ON odontograms
 -- Procedimentos odontológicos por dente
 CREATE TABLE IF NOT EXISTS odontogram_procedures (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    tenant_id UUID REFERENCES tenants(id) ON DELETE CASCADE,
     odontogram_id UUID NOT NULL REFERENCES odontograms(id) ON DELETE CASCADE,
     
     tooth_number VARCHAR(2) NOT NULL, -- 11-18, 21-28, 31-38, 41-48
@@ -50,6 +61,17 @@ CREATE TABLE IF NOT EXISTS odontogram_procedures (
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Add tenant_id column if it doesn't exist
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_name = 'odontogram_procedures' AND column_name = 'tenant_id'
+  ) THEN
+    ALTER TABLE odontogram_procedures ADD COLUMN tenant_id UUID REFERENCES tenants(id) ON DELETE CASCADE;
+  END IF;
+END $$;
 
 CREATE INDEX IF NOT EXISTS idx_odontogram_procedures_odontogram ON odontogram_procedures(odontogram_id);
 CREATE INDEX IF NOT EXISTS idx_odontogram_procedures_tooth ON odontogram_procedures(tooth_number);

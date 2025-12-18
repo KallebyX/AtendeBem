@@ -77,6 +77,15 @@ CREATE TABLE IF NOT EXISTS image_annotations (
 ALTER TABLE medical_images ENABLE ROW LEVEL SECURITY;
 ALTER TABLE image_annotations ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS medical_images_select ON medical_images;
+DROP POLICY IF EXISTS medical_images_insert ON medical_images;
+DROP POLICY IF EXISTS medical_images_update ON medical_images;
+DROP POLICY IF EXISTS medical_images_delete ON medical_images;
+DROP POLICY IF EXISTS image_annotations_select ON image_annotations;
+DROP POLICY IF EXISTS image_annotations_insert ON image_annotations;
+DROP POLICY IF EXISTS image_annotations_update ON image_annotations;
+DROP POLICY IF EXISTS image_annotations_delete ON image_annotations;
+
 CREATE POLICY medical_images_select ON medical_images
   FOR SELECT USING (tenant_id IN (SELECT id FROM tenants WHERE id = current_setting('app.current_user_tenant', true)::uuid));
 
@@ -102,6 +111,13 @@ CREATE POLICY image_annotations_delete ON image_annotations
   FOR DELETE USING (image_id IN (SELECT id FROM medical_images WHERE tenant_id = current_setting('app.current_user_tenant', true)::uuid));
 
 -- Índices
+DROP INDEX IF EXISTS idx_medical_images_tenant;
+DROP INDEX IF EXISTS idx_medical_images_patient;
+DROP INDEX IF EXISTS idx_medical_images_modality;
+DROP INDEX IF EXISTS idx_medical_images_status;
+DROP INDEX IF EXISTS idx_medical_images_study_date;
+DROP INDEX IF EXISTS idx_image_annotations_image;
+
 CREATE INDEX idx_medical_images_tenant ON medical_images(tenant_id);
 CREATE INDEX idx_medical_images_patient ON medical_images(patient_id);
 CREATE INDEX idx_medical_images_modality ON medical_images(modality);

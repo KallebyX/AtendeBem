@@ -8,8 +8,8 @@
 import { storeRefreshToken, getRefreshToken, deleteRefreshToken } from "./redis"
 
 const JWT_SECRET = process.env.JWT_SECRET || "atendebem-secret-key-change-in-production"
-const ACCESS_TOKEN_EXPIRY = parseInt(process.env.JWT_ACCESS_TOKEN_EXPIRY || "900") // 15 min
-const REFRESH_TOKEN_EXPIRY = parseInt(process.env.JWT_REFRESH_TOKEN_EXPIRY || "2592000") // 30 dias
+const ACCESS_TOKEN_EXPIRY = Number.parseInt(process.env.JWT_ACCESS_TOKEN_EXPIRY || "900") // 15 min
+const REFRESH_TOKEN_EXPIRY = Number.parseInt(process.env.JWT_REFRESH_TOKEN_EXPIRY || "2592000") // 30 dias
 
 export interface SessionUser {
   id: string
@@ -65,7 +65,7 @@ export async function hashPassword(password: string): Promise<string> {
   try {
     // Tentar usar Argon2 (requer dependência @node-rs/argon2)
     const argon2 = await import("@node-rs/argon2").catch(() => null)
-    
+
     if (argon2) {
       return await argon2.hash(password, {
         memoryCost: 65536, // 64MB
@@ -137,10 +137,10 @@ export async function createAccessToken(user: SessionUser): Promise<string> {
  */
 export async function createSession(user: SessionUser): Promise<{ accessToken: string; refreshToken: string }> {
   const accessToken = await createAccessToken(user)
-  
+
   // Refresh token: UUID seguro
   const refreshToken = crypto.randomUUID()
-  
+
   // Armazenar refresh token no Redis
   try {
     await storeRefreshToken(user.id, refreshToken, REFRESH_TOKEN_EXPIRY)
@@ -157,7 +157,7 @@ export async function createSession(user: SessionUser): Promise<{ accessToken: s
 export async function refreshAccessToken(userId: string, refreshToken: string): Promise<string | null> {
   try {
     const storedToken = await getRefreshToken(userId)
-    
+
     if (!storedToken || storedToken !== refreshToken) {
       return null
     }
@@ -182,9 +182,6 @@ export async function revokeRefreshToken(userId: string): Promise<void> {
     console.warn("Erro ao revogar refresh token:", error)
   }
 }
-
-// Compatibilidade com código legado
-export { createAccessToken as createSession }
 
 // Verify and decode JWT session token
 export async function verifySession(token: string): Promise<SessionUser | null> {

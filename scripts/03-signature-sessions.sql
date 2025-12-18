@@ -71,3 +71,14 @@ $$ LANGUAGE plpgsql;
 COMMENT ON TABLE signature_sessions IS 'Armazena sessões temporárias para fluxo de assinatura digital OAuth PKCE';
 COMMENT ON COLUMN signature_sessions.code_verifier IS 'Code verifier do PKCE, usado para trocar authorization code por access token';
 COMMENT ON COLUMN signature_sessions.status IS 'Status da sessão: pending, completed, expired, failed';
+
+-- Adicionar coluna code_verifier na tabela signature_sessions se não existir
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_name = 'signature_sessions' AND column_name = 'code_verifier'
+  ) THEN
+    ALTER TABLE signature_sessions ADD COLUMN code_verifier TEXT NOT NULL DEFAULT '';
+  END IF;
+END $$;

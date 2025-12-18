@@ -78,6 +78,15 @@ ALTER TABLE prescription_templates ENABLE ROW LEVEL SECURITY;
 ALTER TABLE prescription_history ENABLE ROW LEVEL SECURITY;
 ALTER TABLE controlled_substances_log ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS prescription_templates_select ON prescription_templates;
+DROP POLICY IF EXISTS prescription_templates_insert ON prescription_templates;
+DROP POLICY IF EXISTS prescription_templates_update ON prescription_templates;
+DROP POLICY IF EXISTS prescription_templates_delete ON prescription_templates;
+DROP POLICY IF EXISTS prescription_history_select ON prescription_history;
+DROP POLICY IF EXISTS prescription_history_insert ON prescription_history;
+DROP POLICY IF EXISTS controlled_substances_log_select ON controlled_substances_log;
+DROP POLICY IF EXISTS controlled_substances_log_insert ON controlled_substances_log;
+
 CREATE POLICY prescription_templates_select ON prescription_templates
   FOR SELECT USING (
     tenant_id IN (SELECT id FROM tenants WHERE id = current_setting('app.current_user_tenant', true)::uuid)
@@ -106,6 +115,15 @@ CREATE POLICY controlled_substances_log_insert ON controlled_substances_log
   FOR INSERT WITH CHECK (tenant_id IN (SELECT id FROM tenants WHERE id = current_setting('app.current_user_tenant', true)::uuid));
 
 -- Índices
+DROP INDEX IF EXISTS idx_prescription_templates_tenant;
+DROP INDEX IF EXISTS idx_prescription_templates_category;
+DROP INDEX IF EXISTS idx_prescription_history_prescription;
+DROP INDEX IF EXISTS idx_prescription_history_action;
+DROP INDEX IF EXISTS idx_controlled_substances_tenant;
+DROP INDEX IF EXISTS idx_controlled_substances_patient;
+DROP INDEX IF EXISTS idx_controlled_substances_prescriber;
+DROP INDEX IF EXISTS idx_controlled_substances_date;
+
 CREATE INDEX idx_prescription_templates_tenant ON prescription_templates(tenant_id);
 CREATE INDEX idx_prescription_templates_category ON prescription_templates(category);
 CREATE INDEX idx_prescription_history_prescription ON prescription_history(prescription_id);
