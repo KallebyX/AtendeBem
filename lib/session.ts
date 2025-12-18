@@ -1,5 +1,15 @@
-// JWT implementation using native Web Crypto API (no external dependencies)
+/**
+ * Session Management & Authentication
+ * - JWT com Web Crypto API (access tokens)
+ * - Argon2id para hashing de senhas
+ * - Refresh tokens via Redis
+ */
+
+import { storeRefreshToken, getRefreshToken, deleteRefreshToken } from "./redis"
+
 const JWT_SECRET = process.env.JWT_SECRET || "atendebem-secret-key-change-in-production"
+const ACCESS_TOKEN_EXPIRY = parseInt(process.env.JWT_ACCESS_TOKEN_EXPIRY || "900") // 15 min
+const REFRESH_TOKEN_EXPIRY = parseInt(process.env.JWT_REFRESH_TOKEN_EXPIRY || "2592000") // 30 dias
 
 export interface SessionUser {
   id: string
@@ -8,6 +18,7 @@ export interface SessionUser {
   crm: string
   crm_uf: string
   specialty: string
+  tenant_id?: string // Multi-tenant support
 }
 
 // Base64URL encode
@@ -46,30 +57,71 @@ async function verifySignature(data: string, signature: string, secret: string):
   return signature === expectedSignature
 }
 
-// Hash password using Web Crypto API
+/**
+ * Hash password com Argon2id (seguro contra rainbow tables)
+ * Fallback para SHA-256 se Argon2 não disponível (compatibilidade)
+ */
 export async function hashPassword(password: string): Promise<string> {
+  try {
+    // Tentar usar Argon2 (requer dependência @node-rs/argon2)
+    const argon2 = await import("@node-rs/argon2").catch(() => null)
+    
+    if (argon2) {
+      return await argon2.hash(password, {
+        memoryCost: 65536, // 64MB
+        timeCost: 3,
+        parallelism: 4,
+        outputLen: 32,
+      })
+    }
+  } catch (error) {
+    console.warn("Argon2 não disponível, usando SHA-256 (não recomendado para produção)")
+  }
+
+  // Fallback para SHA-256 (compatibilidade com senhas antigas)
+  const encoder = new TextEncoder()
+  const data = encoder.encode(password)
+  const hashBuffer = await crypto.subtle.digest("SHA-256", data)
+  const hashArray = Array.from(new Uint8Array(hashBuffer))
+  return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("")
+}
+
+/**
+ * Verificar password (suporta Argon2 e SHA-256 legacy)
+ */
+export async function verifyPassword(password: string, hashedPassword: string): Promise<boolean> {
+  try {
+    // Se hash começa com $argon2, usar Argon2
+    if (hashedPassword.startsWith("$argon2")) {
+      const argon2 = await import("@node-rs/argon2").catch(() => null)
+      if (argon2) {
+        return await argon2.verify(hashedPassword, password)
+      }
+    }
+  } catch (error) {
+    console.error("Erro ao verificar Argon2:", error)
+  }
+
+  // Fallback SHA-256 (legacy)
   const encoder = new TextEncoder()
   const data = encoder.encode(password)
   const hashBuffer = await crypto.subtle.digest("SHA-256", data)
   const hashArray = Array.from(new Uint8Array(hashBuffer))
   const hash = hashArray.map((b) => b.toString(16).padStart(2, "0")).join("")
-  return hash
-}
-
-// Verify password
-export async function verifyPassword(password: string, hashedPassword: string): Promise<boolean> {
-  const hash = await hashPassword(password)
   return hash === hashedPassword
 }
 
-// Create JWT session token
-export async function createSession(user: SessionUser): Promise<string> {
+/**
+ * Criar access token JWT (curta duração)
+ */
+export async function createAccessToken(user: SessionUser): Promise<string> {
   const header = { alg: "HS256", typ: "JWT" }
   const now = Math.floor(Date.now() / 1000)
   const payload = {
     user,
     iat: now,
-    exp: now + 7 * 24 * 60 * 60, // 7 days
+    exp: now + ACCESS_TOKEN_EXPIRY,
+    type: "access",
   }
 
   const encodedHeader = base64UrlEncode(JSON.stringify(header))
@@ -79,6 +131,60 @@ export async function createSession(user: SessionUser): Promise<string> {
 
   return `${dataToSign}.${signature}`
 }
+
+/**
+ * Criar par de tokens (access + refresh)
+ */
+export async function createSession(user: SessionUser): Promise<{ accessToken: string; refreshToken: string }> {
+  const accessToken = await createAccessToken(user)
+  
+  // Refresh token: UUID seguro
+  const refreshToken = crypto.randomUUID()
+  
+  // Armazenar refresh token no Redis
+  try {
+    await storeRefreshToken(user.id, refreshToken, REFRESH_TOKEN_EXPIRY)
+  } catch (error) {
+    console.warn("Redis não disponível, refresh token não armazenado:", error)
+  }
+
+  return { accessToken, refreshToken }
+}
+
+/**
+ * Renovar access token usando refresh token
+ */
+export async function refreshAccessToken(userId: string, refreshToken: string): Promise<string | null> {
+  try {
+    const storedToken = await getRefreshToken(userId)
+    
+    if (!storedToken || storedToken !== refreshToken) {
+      return null
+    }
+
+    // Buscar dados do usuário (implementar busca no DB)
+    // Por ora, retornamos null - precisa integrar com getDb()
+    console.warn("refreshAccessToken: busca de usuário não implementada")
+    return null
+  } catch (error) {
+    console.error("Erro ao renovar token:", error)
+    return null
+  }
+}
+
+/**
+ * Revogar refresh token (logout)
+ */
+export async function revokeRefreshToken(userId: string): Promise<void> {
+  try {
+    await deleteRefreshToken(userId)
+  } catch (error) {
+    console.warn("Erro ao revogar refresh token:", error)
+  }
+}
+
+// Compatibilidade com código legado
+export { createAccessToken as createSession }
 
 // Verify and decode JWT session token
 export async function verifySession(token: string): Promise<SessionUser | null> {
