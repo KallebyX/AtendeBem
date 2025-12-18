@@ -136,16 +136,15 @@ export async function loginAction(formData: FormData) {
     const user = await loginUser(email, password)
     console.log("[v0] User authenticated successfully:", user.id)
 
-    // Create session
     const token = await createSession(user)
     console.log("[v0] Session token created, length:", token.length)
 
     await setSessionCookie(token)
     console.log("[v0] Session cookie set successfully")
 
-    return { success: true }
+    return { success: true, user }
   } catch (error: any) {
-    console.log("[v0] Login error:", error.message)
+    console.error("[v0] Login error:", error)
     return { error: error.message || "Erro ao fazer login" }
   }
 }

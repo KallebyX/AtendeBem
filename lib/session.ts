@@ -136,7 +136,7 @@ export async function createAccessToken(user: SessionUser): Promise<string> {
 /**
  * Criar par de tokens (access + refresh)
  */
-export async function createSession(user: SessionUser): Promise<{ accessToken: string; refreshToken: string }> {
+export async function createSession(user: SessionUser): Promise<string> {
   const accessToken = await createAccessToken(user)
 
   // Refresh token: UUID seguro
@@ -149,7 +149,7 @@ export async function createSession(user: SessionUser): Promise<{ accessToken: s
     console.warn("Redis não disponível, refresh token não armazenado:", error)
   }
 
-  return { accessToken, refreshToken }
+  return accessToken
 }
 
 /**
