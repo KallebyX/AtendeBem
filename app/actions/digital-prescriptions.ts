@@ -95,15 +95,10 @@ export async function createDigitalPrescription(data: {
     for (const med of data.medications) {
       await sql`
         INSERT INTO prescription_items 
-         (prescription_id, medication_id, medication_name, dosage, frequency, 
+         (prescription_id, medication_name, dosage, frequency, 
           duration, quantity, administration_instructions, special_warnings)
          VALUES (
            ${prescriptionId}, 
-           ${med.medicationId || null}, 
-           ${med.medicationName}, 
-           ${med.dosage}, 
-           ${med.frequency}, 
-           ${med.duration}, 
            ${med.quantity}, 
            ${med.instructions || null}, 
            ${med.warnings || null}

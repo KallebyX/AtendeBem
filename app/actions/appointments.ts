@@ -78,7 +78,8 @@ export async function createAppointment(data: {
           procedure_name,
           patient_name,
           patient_cpf,
-          procedure_date
+          procedure_date,
+          procedure_type
         )
         VALUES (
           ${appointmentId},
@@ -87,7 +88,8 @@ export async function createAppointment(data: {
           ${proc.friendlyName},
           ${data.patientName},
           ${data.patientCpf || null},
-          NOW()
+          NOW(),
+          ${data.appointmentType || 'consulta'}
         )
       `
     }

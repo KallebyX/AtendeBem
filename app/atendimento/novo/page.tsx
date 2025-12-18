@@ -259,9 +259,9 @@ export default function NovoAtendimentoPage() {
               </div>
 
               <div className="grid gap-3 max-h-[500px] overflow-y-auto pr-2">
-                {filteredProcedures.map((proc) => (
+                {filteredProcedures.map((proc, index) => (
                   <Card
-                    key={proc.code}
+                    key={`${proc.code}-${index}`}
                     className={cn(
                       "rounded-3xl cursor-pointer transition-all hover:shadow-md",
                       selectedProcedures.find((p) => p.code === proc.code)
