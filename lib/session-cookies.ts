@@ -10,10 +10,15 @@ export async function getCurrentUser(): Promise<SessionUser | null> {
   const token = cookieStore.get("session")?.value
 
   if (!token) {
+    console.log("[v0] getCurrentUser: No session token found")
     return null
   }
 
-  return verifySession(token)
+  console.log("[v0] getCurrentUser: Token found, verifying...")
+  const user = await verifySession(token)
+  console.log("[v0] getCurrentUser: Verification result:", user ? "Success" : "Failed")
+
+  return user
 }
 
 // Set session cookie
@@ -21,25 +26,32 @@ export async function setSessionCookie(token: string) {
   const cookieStore = await cookies()
 
   const isProduction = process.env.NODE_ENV === "production"
+  const domain = isProduction ? ".atendebem.io" : undefined
 
-  cookieStore.set("session", token, {
+  const cookieOptions = {
     httpOnly: true,
     secure: isProduction,
-    sameSite: "lax",
+    sameSite: "lax" as const,
     maxAge: 60 * 60 * 24 * 7, // 7 days
     path: "/",
-  })
+    ...(domain && { domain }),
+  }
+
+  cookieStore.set("session", token, cookieOptions)
 
   console.log("[v0] Cookie set successfully:", {
-    httpOnly: true,
-    secure: isProduction,
-    sameSite: "lax",
-    path: "/",
+    tokenLength: token.length,
+    ...cookieOptions,
   })
+
+  // Verify cookie was set
+  const verification = cookieStore.get("session")
+  console.log("[v0] Cookie verification:", verification ? "Cookie confirmed in store" : "Cookie not found in store")
 }
 
 // Clear session cookie
 export async function clearSessionCookie() {
   const cookieStore = await cookies()
   cookieStore.delete("session")
+  console.log("[v0] Session cookie cleared")
 }
