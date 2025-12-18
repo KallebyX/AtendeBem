@@ -188,6 +188,9 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+-- Drop trigger if exists before creating
+DROP TRIGGER IF EXISTS prescription_audit_trail ON digital_prescriptions;
+
 CREATE TRIGGER prescription_audit_trail
   AFTER INSERT OR UPDATE ON digital_prescriptions
   FOR EACH ROW

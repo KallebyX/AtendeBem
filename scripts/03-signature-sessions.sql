@@ -1,7 +1,10 @@
 -- Tabela para armazenar sessões de assinatura digital
 -- Necessária para o fluxo OAuth PKCE do VIDaaS
 
-CREATE TABLE IF NOT EXISTS signature_sessions (
+-- Drop table and recreate with code_verifier from the start
+DROP TABLE IF EXISTS signature_sessions CASCADE;
+
+CREATE TABLE signature_sessions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   code_verifier TEXT NOT NULL,
@@ -14,10 +17,10 @@ CREATE TABLE IF NOT EXISTS signature_sessions (
 );
 
 -- Índice para busca por usuário
-CREATE INDEX IF NOT EXISTS idx_signature_sessions_user ON signature_sessions(user_id);
+CREATE INDEX idx_signature_sessions_user ON signature_sessions(user_id);
 
 -- Índice para limpeza de sessões expiradas
-CREATE INDEX IF NOT EXISTS idx_signature_sessions_expires ON signature_sessions(expires_at);
+CREATE INDEX idx_signature_sessions_expires ON signature_sessions(expires_at);
 
 -- Adicionar colunas de assinatura digital na tabela de usuários se não existirem
 DO $$
@@ -71,14 +74,3 @@ $$ LANGUAGE plpgsql;
 COMMENT ON TABLE signature_sessions IS 'Armazena sessões temporárias para fluxo de assinatura digital OAuth PKCE';
 COMMENT ON COLUMN signature_sessions.code_verifier IS 'Code verifier do PKCE, usado para trocar authorization code por access token';
 COMMENT ON COLUMN signature_sessions.status IS 'Status da sessão: pending, completed, expired, failed';
-
--- Adicionar coluna code_verifier na tabela signature_sessions se não existir
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM information_schema.columns 
-    WHERE table_name = 'signature_sessions' AND column_name = 'code_verifier'
-  ) THEN
-    ALTER TABLE signature_sessions ADD COLUMN code_verifier TEXT NOT NULL DEFAULT '';
-  END IF;
-END $$;

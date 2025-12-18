@@ -1,4 +1,15 @@
-CREATE TABLE IF NOT EXISTS tiss_submissions (
+-- Recreating TISS tables with all columns correctly defined including payment_status
+-- TISS Submission and Guides Tables
+-- Para integração completa com operadoras de saúde
+
+-- Drop existing tables to recreate with correct schema
+DROP TABLE IF EXISTS tiss_guides CASCADE;
+DROP TABLE IF EXISTS tiss_submissions CASCADE;
+
+-- =====================================================
+-- TABELA: tiss_submissions (Lotes de Envio TISS)
+-- =====================================================
+CREATE TABLE tiss_submissions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   
@@ -38,7 +49,7 @@ CREATE TABLE IF NOT EXISTS tiss_submissions (
   total_value DECIMAL(10,2),
   
   -- Guias incluídas neste lote
-  guide_ids JSONB DEFAULT '[]'::jsonb, -- Array de IDs das guias
+  guide_ids JSONB DEFAULT '[]'::jsonb,
   
   -- FTP/Transmissão
   transmission_method VARCHAR(50) DEFAULT 'manual' CHECK (transmission_method IN (
@@ -55,7 +66,10 @@ CREATE TABLE IF NOT EXISTS tiss_submissions (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE TABLE IF NOT EXISTS tiss_guides (
+-- =====================================================
+-- TABELA: tiss_guides (Guias TISS Individuais)
+-- =====================================================
+CREATE TABLE tiss_guides (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   submission_id UUID REFERENCES tiss_submissions(id) ON DELETE SET NULL,
@@ -81,7 +95,7 @@ CREATE TABLE IF NOT EXISTS tiss_guides (
   professional_cbo VARCHAR(10),
   
   -- Procedimentos
-  procedures JSONB NOT NULL, -- Array de procedimentos
+  procedures JSONB NOT NULL,
   
   -- Valores
   total_value DECIMAL(10,2) NOT NULL,
@@ -94,7 +108,7 @@ CREATE TABLE IF NOT EXISTS tiss_guides (
   clinical_indication TEXT,
   observations TEXT,
   
-  -- Status de pagamento
+  -- Status de pagamento - coluna adicionada corretamente
   payment_status VARCHAR(50) DEFAULT 'pending' CHECK (payment_status IN (
     'pending', 'authorized', 'paid', 'denied', 'gloss'
   )),
@@ -108,12 +122,49 @@ CREATE TABLE IF NOT EXISTS tiss_guides (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Índices
-CREATE INDEX IF NOT EXISTS idx_tiss_submissions_user ON tiss_submissions(user_id);
-CREATE INDEX IF NOT EXISTS idx_tiss_submissions_status ON tiss_submissions(status);
-CREATE INDEX IF NOT EXISTS idx_tiss_submissions_lote ON tiss_submissions(lote_number);
-CREATE INDEX IF NOT EXISTS idx_tiss_guides_user ON tiss_guides(user_id);
-CREATE INDEX IF NOT EXISTS idx_tiss_guides_submission ON tiss_guides(submission_id);
-CREATE INDEX IF NOT EXISTS idx_tiss_guides_appointment ON tiss_guides(appointment_id);
-CREATE INDEX IF NOT EXISTS idx_tiss_guides_patient ON tiss_guides(patient_id);
-CREATE INDEX IF NOT EXISTS idx_tiss_guides_payment ON tiss_guides(payment_status);
+-- Índices para performance
+DROP INDEX IF EXISTS idx_tiss_submissions_user;
+DROP INDEX IF EXISTS idx_tiss_submissions_status;
+DROP INDEX IF EXISTS idx_tiss_submissions_lote;
+DROP INDEX IF EXISTS idx_tiss_guides_user;
+DROP INDEX IF EXISTS idx_tiss_guides_submission;
+DROP INDEX IF EXISTS idx_tiss_guides_appointment;
+DROP INDEX IF EXISTS idx_tiss_guides_patient;
+DROP INDEX IF EXISTS idx_tiss_guides_payment;
+
+CREATE INDEX idx_tiss_submissions_user ON tiss_submissions(user_id);
+CREATE INDEX idx_tiss_submissions_status ON tiss_submissions(status);
+CREATE INDEX idx_tiss_submissions_lote ON tiss_submissions(lote_number);
+CREATE INDEX idx_tiss_guides_user ON tiss_guides(user_id);
+CREATE INDEX idx_tiss_guides_submission ON tiss_guides(submission_id);
+CREATE INDEX idx_tiss_guides_appointment ON tiss_guides(appointment_id);
+CREATE INDEX idx_tiss_guides_patient ON tiss_guides(patient_id);
+CREATE INDEX idx_tiss_guides_payment ON tiss_guides(payment_status);
+
+-- RLS Policies
+ALTER TABLE tiss_submissions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE tiss_guides ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Users can view own submissions" ON tiss_submissions;
+CREATE POLICY "Users can view own submissions" ON tiss_submissions
+    FOR SELECT USING (user_id = current_setting('app.current_user_id', true)::uuid);
+
+DROP POLICY IF EXISTS "Users can create own submissions" ON tiss_submissions;
+CREATE POLICY "Users can create own submissions" ON tiss_submissions
+    FOR INSERT WITH CHECK (user_id = current_setting('app.current_user_id', true)::uuid);
+
+DROP POLICY IF EXISTS "Users can update own submissions" ON tiss_submissions;
+CREATE POLICY "Users can update own submissions" ON tiss_submissions
+    FOR UPDATE USING (user_id = current_setting('app.current_user_id', true)::uuid);
+
+DROP POLICY IF EXISTS "Users can view own guides" ON tiss_guides;
+CREATE POLICY "Users can view own guides" ON tiss_guides
+    FOR SELECT USING (user_id = current_setting('app.current_user_id', true)::uuid);
+
+DROP POLICY IF EXISTS "Users can create own guides" ON tiss_guides;
+CREATE POLICY "Users can create own guides" ON tiss_guides
+    FOR INSERT WITH CHECK (user_id = current_setting('app.current_user_id', true)::uuid);
+
+DROP POLICY IF EXISTS "Users can update own guides" ON tiss_guides;
+CREATE POLICY "Users can update own guides" ON tiss_guides
+    FOR UPDATE USING (user_id = current_setting('app.current_user_id', true)::uuid);

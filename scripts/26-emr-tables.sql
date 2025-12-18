@@ -207,6 +207,8 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- Trigger para criar EMR automaticamente
+DROP TRIGGER IF EXISTS auto_create_emr ON patients;
+
 CREATE TRIGGER auto_create_emr
   AFTER INSERT ON patients
   FOR EACH ROW

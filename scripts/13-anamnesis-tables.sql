@@ -1,12 +1,16 @@
+-- Recreating anamnesis tables without tenant_id dependency since tenants table doesn't exist in base schema
 -- Migration: Tabela de Anamnese Clínica (MOD-ANM)
 -- Data: 2025-12-17
+
+-- Drop existing tables to recreate properly
+DROP TABLE IF EXISTS anamnesis_templates CASCADE;
+DROP TABLE IF EXISTS anamnesis CASCADE;
 
 -- =====================================================
 -- TABELA: anamnesis (Anamnese Completa)
 -- =====================================================
-CREATE TABLE IF NOT EXISTS anamnesis (
+CREATE TABLE anamnesis (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    tenant_id UUID REFERENCES tenants(id) ON DELETE CASCADE,
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
     appointment_id UUID REFERENCES appointments(id) ON DELETE SET NULL,
@@ -75,51 +79,38 @@ CREATE TABLE IF NOT EXISTS anamnesis (
     deleted_at TIMESTAMPTZ
 );
 
--- Add tenant_id column if it doesn't exist
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM information_schema.columns 
-    WHERE table_name = 'anamnesis' AND column_name = 'tenant_id'
-  ) THEN
-    ALTER TABLE anamnesis ADD COLUMN tenant_id UUID REFERENCES tenants(id) ON DELETE CASCADE;
-  END IF;
-END $$;
+-- Índices para performance
+CREATE INDEX idx_anamnesis_user ON anamnesis(user_id);
+CREATE INDEX idx_anamnesis_patient ON anamnesis(patient_id);
+CREATE INDEX idx_anamnesis_appointment ON anamnesis(appointment_id);
+CREATE INDEX idx_anamnesis_specialty ON anamnesis(specialty);
+CREATE INDEX idx_anamnesis_created ON anamnesis(created_at DESC);
+CREATE INDEX idx_anamnesis_completed ON anamnesis(is_completed, completed_at DESC);
 
--- Índices
-CREATE INDEX IF NOT EXISTS idx_anamnesis_tenant ON anamnesis(tenant_id);
-CREATE INDEX IF NOT EXISTS idx_anamnesis_user ON anamnesis(user_id);
-CREATE INDEX IF NOT EXISTS idx_anamnesis_patient ON anamnesis(patient_id);
-CREATE INDEX IF NOT EXISTS idx_anamnesis_appointment ON anamnesis(appointment_id);
-CREATE INDEX IF NOT EXISTS idx_anamnesis_specialty ON anamnesis(specialty);
-CREATE INDEX IF NOT EXISTS idx_anamnesis_created ON anamnesis(created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_anamnesis_completed ON anamnesis(is_completed, completed_at DESC);
-
--- RLS
+-- RLS Policies
 ALTER TABLE anamnesis ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "Users can view own anamnesis" ON anamnesis;
 CREATE POLICY "Users can view own anamnesis" ON anamnesis
-    FOR SELECT USING (tenant_id = current_setting('app.current_tenant_id', true)::uuid);
+    FOR SELECT USING (user_id = current_setting('app.current_user_id', true)::uuid);
 
 DROP POLICY IF EXISTS "Users can create own anamnesis" ON anamnesis;
 CREATE POLICY "Users can create own anamnesis" ON anamnesis
-    FOR INSERT WITH CHECK (tenant_id = current_setting('app.current_tenant_id', true)::uuid);
+    FOR INSERT WITH CHECK (user_id = current_setting('app.current_user_id', true)::uuid);
 
 DROP POLICY IF EXISTS "Users can update own anamnesis" ON anamnesis;
 CREATE POLICY "Users can update own anamnesis" ON anamnesis
-    FOR UPDATE USING (tenant_id = current_setting('app.current_tenant_id', true)::uuid);
+    FOR UPDATE USING (user_id = current_setting('app.current_user_id', true)::uuid);
 
 DROP POLICY IF EXISTS "Users can delete own anamnesis" ON anamnesis;
 CREATE POLICY "Users can delete own anamnesis" ON anamnesis
-    FOR DELETE USING (tenant_id = current_setting('app.current_tenant_id', true)::uuid);
+    FOR DELETE USING (user_id = current_setting('app.current_user_id', true)::uuid);
 
 -- =====================================================
 -- TABELA: anamnesis_templates (Templates por Especialidade)
 -- =====================================================
-CREATE TABLE IF NOT EXISTS anamnesis_templates (
+CREATE TABLE anamnesis_templates (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    tenant_id UUID REFERENCES tenants(id) ON DELETE CASCADE,
     user_id UUID REFERENCES users(id) ON DELETE CASCADE,
     
     name VARCHAR(200) NOT NULL,
@@ -139,9 +130,9 @@ CREATE TABLE IF NOT EXISTS anamnesis_templates (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS idx_anamnesis_templates_tenant ON anamnesis_templates(tenant_id);
-CREATE INDEX IF NOT EXISTS idx_anamnesis_templates_specialty ON anamnesis_templates(specialty);
-CREATE INDEX IF NOT EXISTS idx_anamnesis_templates_public ON anamnesis_templates(is_public, is_active);
+CREATE INDEX idx_anamnesis_templates_user ON anamnesis_templates(user_id);
+CREATE INDEX idx_anamnesis_templates_specialty ON anamnesis_templates(specialty);
+CREATE INDEX idx_anamnesis_templates_public ON anamnesis_templates(is_public, is_active);
 
 ALTER TABLE anamnesis_templates ENABLE ROW LEVEL SECURITY;
 
@@ -149,12 +140,12 @@ DROP POLICY IF EXISTS "Users can view own or public templates" ON anamnesis_temp
 CREATE POLICY "Users can view own or public templates" ON anamnesis_templates
     FOR SELECT USING (
         is_public = true 
-        OR tenant_id = current_setting('app.current_tenant_id', true)::uuid
+        OR user_id = current_setting('app.current_user_id', true)::uuid
     );
 
 DROP POLICY IF EXISTS "Users can manage own templates" ON anamnesis_templates;
 CREATE POLICY "Users can manage own templates" ON anamnesis_templates
-    FOR ALL USING (tenant_id = current_setting('app.current_tenant_id', true)::uuid);
+    FOR ALL USING (user_id = current_setting('app.current_user_id', true)::uuid);
 
 -- =====================================================
 -- SEED: Templates Padrão
@@ -162,7 +153,7 @@ CREATE POLICY "Users can manage own templates" ON anamnesis_templates
 
 -- Template: Anamnese Clínica Geral
 INSERT INTO anamnesis_templates (
-    tenant_id,
+    user_id,
     name,
     specialty,
     description,
@@ -215,7 +206,7 @@ INSERT INTO anamnesis_templates (
 
 -- Template: Anamnese Pediátrica
 INSERT INTO anamnesis_templates (
-    tenant_id,
+    user_id,
     name,
     specialty,
     description,
@@ -268,7 +259,7 @@ INSERT INTO anamnesis_templates (
 
 -- Template: Anamnese Cardiológica
 INSERT INTO anamnesis_templates (
-    tenant_id,
+    user_id,
     name,
     specialty,
     description,

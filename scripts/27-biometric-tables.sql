@@ -169,6 +169,9 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- Triggers de auditoria
+DROP TRIGGER IF EXISTS biometric_templates_audit ON biometric_templates;
+DROP TRIGGER IF EXISTS biometric_verifications_audit ON biometric_verifications;
+
 CREATE TRIGGER biometric_templates_audit
   AFTER INSERT OR UPDATE ON biometric_templates
   FOR EACH ROW
