@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -18,16 +18,20 @@ import {
   Activity,
   TestTube,
   Search,
-  ChevronDown,
   FileCheck,
   AlertCircle,
   Loader2,
+  Users,
+  Calendar,
+  ChevronDown,
 } from "lucide-react"
 import Link from "next/link"
 import { cn } from "@/lib/utils"
 import { appointmentContexts, urgencyLevels, lateralityOptions, locationOptions } from "@/lib/tuss-data"
 import { createAppointment } from "@/app/actions/appointments"
-import { searchTUSS, tussGroups, type TUSSProcedure } from "@/lib/tuss-complete"
+import { searchTUSS, tussGroups, getTUSSByGroup, type TUSSProcedure } from "@/lib/tuss-complete"
+import { searchPatients } from "@/app/actions/patients"
+import { getAppointmentHistory } from "@/app/actions/appointments"
 
 type AppointmentType = "consulta" | "retorno" | "procedimento" | "exame"
 
@@ -39,17 +43,80 @@ export default function NovoAtendimentoPage() {
   const [urgency, setUrgency] = useState("")
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedCategory, setSelectedCategory] = useState<string>("all")
-  const [selectedSpecialty, setSelectedSpecialty] = useState<string>("all")
   const [selectedProcedures, setSelectedProcedures] = useState<TUSSProcedure[]>([])
   const [procedureDetails, setProcedureDetails] = useState<Record<string, any>>({})
-  const [showTussCodes, setShowTussCodes] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [patientName, setPatientName] = useState("")
 
-  const filteredProcedures = searchTUSS(searchQuery, 50)
+  const [patientSearchQuery, setPatientSearchQuery] = useState("")
+  const [patientSearchResults, setPatientSearchResults] = useState<any[]>([])
+  const [selectedPatient, setSelectedPatient] = useState<any>(null)
+  const [isSearchingPatients, setIsSearchingPatients] = useState(false)
+
+  const [linkedAppointmentId, setLinkedAppointmentId] = useState<string | null>(null)
+  const [availableAppointments, setAvailableAppointments] = useState<any[]>([])
+
+  const [patientName, setPatientName] = useState("")
+  const [patientCpf, setPatientCpf] = useState("")
+  const [showTussCodes, setShowTussCodes] = useState(false)
+
+  useEffect(() => {
+    const timer = setTimeout(async () => {
+      if (patientSearchQuery.length >= 2) {
+        setIsSearchingPatients(true)
+        const result = await searchPatients(patientSearchQuery)
+        if (result.success) {
+          setPatientSearchResults(result.patients || [])
+        }
+        setIsSearchingPatients(false)
+      } else {
+        setPatientSearchResults([])
+      }
+    }, 300)
+
+    return () => clearTimeout(timer)
+  }, [patientSearchQuery])
+
+  useEffect(() => {
+    const loadAppointments = async () => {
+      if (selectedPatient) {
+        const result = await getAppointmentHistory(20, 0)
+        if (result.success && result.appointments) {
+          // Filter appointments for selected patient
+          const patientAppointments = result.appointments.filter(
+            (apt: any) => apt.patient_name === selectedPatient.full_name,
+          )
+          setAvailableAppointments(patientAppointments)
+        }
+      }
+    }
+    loadAppointments()
+  }, [selectedPatient])
+
+  const filteredProcedures = useMemo(() => {
+    let results: TUSSProcedure[] = []
+
+    // First apply category filter
+    if (selectedCategory !== "all") {
+      results = getTUSSByGroup(selectedCategory)
+    } else {
+      // If no category, search all
+      results = searchTUSS(searchQuery, 100)
+    }
+
+    // Then apply text search if query exists
+    if (searchQuery.trim().length > 0 && selectedCategory !== "all") {
+      const normalizedQuery = searchQuery.toLowerCase()
+      results = results.filter(
+        (p) => p.description.toLowerCase().includes(normalizedQuery) || p.code.includes(searchQuery),
+      )
+    }
+
+    return results.slice(0, 50) // Limit to 50 results
+  }, [searchQuery, selectedCategory])
 
   const handleProcedureToggle = (proc: TUSSProcedure) => {
-    if (selectedProcedures.find((p) => p.code === proc.code)) {
+    const isSelected = selectedProcedures.some((p) => p.code === proc.code)
+    if (isSelected) {
       setSelectedProcedures(selectedProcedures.filter((p) => p.code !== proc.code))
     } else {
       setSelectedProcedures([...selectedProcedures, proc])
@@ -63,15 +130,8 @@ export default function NovoAtendimentoPage() {
     if (step === 1) return appointmentType !== null
     if (step === 2) return context !== "" && urgency !== ""
     if (step === 3) return selectedProcedures.length > 0
-    if (step === 4) {
-      // Validar que todos procedimentos com requisitos obrigatórios foram preenchidos
-      return selectedProcedures.every((proc) => {
-        const details = procedureDetails[proc.code] || {}
-        // Laterality and location are optional
-        return true
-      })
-    }
-    if (step === 5) return patientName.trim() !== ""
+    if (step === 4) return true
+    if (step === 5) return patientName.trim() !== "" || selectedPatient !== null
     return true
   }
 
@@ -80,7 +140,8 @@ export default function NovoAtendimentoPage() {
 
     try {
       const result = await createAppointment({
-        patientName,
+        patientName: selectedPatient ? selectedPatient.full_name : patientName,
+        patientCpf: selectedPatient ? selectedPatient.cpf : patientCpf,
         appointmentType: appointmentType!,
         context,
         urgency,
@@ -98,10 +159,9 @@ export default function NovoAtendimentoPage() {
         return
       }
 
-      // Ir para tela de sucesso
       setStep(6)
     } catch (error) {
-      console.error("[v0] Error saving appointment:", error)
+      console.error("Error saving appointment:", error)
       alert("Erro ao salvar atendimento")
     } finally {
       setIsSubmitting(false)
@@ -110,7 +170,6 @@ export default function NovoAtendimentoPage() {
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
-      {/* Header */}
       <header className="border-b border-border">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
           <Logo />
@@ -226,16 +285,19 @@ export default function NovoAtendimentoPage() {
             <div className="space-y-6">
               <div className="text-center space-y-2">
                 <h1 className="text-4xl lg:text-5xl font-bold text-balance">O que foi feito?</h1>
-                <p className="text-lg text-muted-foreground">{filteredProcedures.length} procedimentos encontrados</p>
+                <p className="text-lg text-muted-foreground">
+                  {filteredProcedures.length} procedimentos encontrados
+                  {selectedProcedures.length > 0 && ` • ${selectedProcedures.length} selecionados`}
+                </p>
               </div>
 
               <div className="grid sm:grid-cols-2 gap-3">
                 <Select value={selectedCategory} onValueChange={setSelectedCategory}>
                   <SelectTrigger className="h-12 rounded-3xl">
-                    <SelectValue placeholder="Todas as categorias" />
+                    <SelectValue placeholder="Filtrar por categoria" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">Todas</SelectItem>
+                    <SelectItem value="all">Todas as categorias</SelectItem>
                     {tussGroups.map((group) => (
                       <SelectItem key={group} value={group}>
                         {group}
@@ -243,15 +305,12 @@ export default function NovoAtendimentoPage() {
                     ))}
                   </SelectContent>
                 </Select>
-
-                
               </div>
 
-              {/* Search */}
               <div className="relative">
                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
                 <Input
-                  placeholder="Busque por nome, código TUSS ou palavra-chave"
+                  placeholder="Busque por nome ou código TUSS (ex: 10101012)"
                   className="pl-12 h-14 rounded-3xl text-base"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
@@ -259,64 +318,57 @@ export default function NovoAtendimentoPage() {
               </div>
 
               <div className="grid gap-3 max-h-[500px] overflow-y-auto pr-2">
-                {filteredProcedures.map((proc, index) => (
-                  <Card
-                    key={`${proc.code}-${index}`}
-                    className={cn(
-                      "rounded-3xl cursor-pointer transition-all hover:shadow-md",
-                      selectedProcedures.find((p) => p.code === proc.code)
-                        ? "border-secondary border-2 shadow-md"
-                        : "border-border",
-                    )}
-                    onClick={() => {
-                      if (selectedProcedures.find((p) => p.code === proc.code)) {
-                        setSelectedProcedures(selectedProcedures.filter((p) => p.code !== proc.code))
-                      } else {
-                        setSelectedProcedures([...selectedProcedures, proc])
-                      }
-                    }}
-                  >
-                    <CardContent className="p-5">
-                      <div className="flex items-start gap-4">
-                        <div
-                          className={cn(
-                            "w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors flex-shrink-0 mt-0.5",
-                            selectedProcedures.find((p) => p.code === proc.code)
-                              ? "border-secondary bg-secondary"
-                              : "border-muted-foreground",
-                          )}
-                        >
-                          {selectedProcedures.find((p) => p.code === proc.code) && (
-                            <Check className="w-4 h-4 text-primary" />
-                          )}
-                        </div>
-                        <div className="flex-1 space-y-1">
-                          <p className="font-semibold">{proc.description}</p>
-                          <p className="text-sm text-muted-foreground">{proc.description}</p>
-                          <div className="flex flex-wrap gap-2 mt-2">
-                            <Badge variant="outline" className="text-xs">
-                              {proc.group}
-                            </Badge>
-                            {proc.requiresAuth && (
-                              <Badge variant="secondary" className="text-xs">
-                                Requer Autorização
-                              </Badge>
+                {filteredProcedures.map((proc) => {
+                  const isSelected = selectedProcedures.some((p) => p.code === proc.code)
+                  return (
+                    <Card
+                      key={proc.code}
+                      className={cn(
+                        "rounded-3xl transition-all hover:shadow-md",
+                        isSelected ? "border-secondary border-2 shadow-md" : "border-border",
+                      )}
+                    >
+                      <CardContent className="p-5">
+                        <div className="flex items-start gap-4">
+                          <button
+                            type="button"
+                            onClick={() => handleProcedureToggle(proc)}
+                            className={cn(
+                              "w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors flex-shrink-0 mt-0.5",
+                              isSelected ? "border-secondary bg-secondary" : "border-muted-foreground",
                             )}
-                            {proc.porte && (
+                          >
+                            {isSelected && <Check className="w-4 h-4 text-primary" />}
+                          </button>
+                          <div className="flex-1 space-y-1">
+                            <p className="font-semibold">{proc.description}</p>
+                            <p className="text-sm text-muted-foreground">Código: {proc.code}</p>
+                            <div className="flex flex-wrap gap-2 mt-2">
                               <Badge variant="outline" className="text-xs">
-                                Porte {proc.porte}
+                                {proc.group}
                               </Badge>
-                            )}
+                              {proc.requiresAuth && (
+                                <Badge variant="secondary" className="text-xs">
+                                  Requer Autorização
+                                </Badge>
+                              )}
+                              {proc.porte && (
+                                <Badge variant="outline" className="text-xs">
+                                  Porte {proc.porte}
+                                </Badge>
+                              )}
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
+                      </CardContent>
+                    </Card>
+                  )
+                })}
               </div>
 
               {filteredProcedures.length === 0 && (
                 <div className="text-center py-12">
+                  <AlertCircle className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
                   <p className="text-muted-foreground">
                     Nenhum procedimento encontrado. Tente ajustar os filtros ou busca.
                   </p>
@@ -408,22 +460,130 @@ export default function NovoAtendimentoPage() {
             <div className="space-y-8">
               <div className="text-center space-y-2">
                 <h1 className="text-4xl lg:text-5xl font-bold text-balance">Dados do paciente</h1>
-                <p className="text-lg text-muted-foreground text-balance">Informe os dados básicos para o registro</p>
+                <p className="text-lg text-muted-foreground text-balance">
+                  Vincule a um paciente existente ou cadastre novo
+                </p>
               </div>
 
               <Card className="rounded-3xl border-border">
                 <CardContent className="p-6 space-y-4">
-                  <div>
-                    <label className="text-sm font-medium mb-2 block">Nome do paciente</label>
-                    <Input
-                      placeholder="Nome completo"
-                      value={patientName}
-                      onChange={(e) => setPatientName(e.target.value)}
-                      className="rounded-2xl h-12"
-                    />
+                  <div className="flex items-center gap-2 mb-4">
+                    <Users className="h-5 w-5 text-muted-foreground" />
+                    <h3 className="font-semibold">Buscar paciente existente</h3>
                   </div>
+
+                  <div className="relative">
+                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Buscar por nome ou CPF"
+                      value={patientSearchQuery}
+                      onChange={(e) => setPatientSearchQuery(e.target.value)}
+                      className="pl-10 h-12 rounded-2xl"
+                    />
+                    {isSearchingPatients && (
+                      <Loader2 className="absolute right-4 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
+                    )}
+                  </div>
+
+                  {patientSearchResults.length > 0 && (
+                    <div className="space-y-2 max-h-60 overflow-y-auto">
+                      {patientSearchResults.map((patient) => (
+                        <button
+                          key={patient.id}
+                          type="button"
+                          onClick={() => {
+                            setSelectedPatient(patient)
+                            setPatientSearchQuery("")
+                            setPatientSearchResults([])
+                          }}
+                          className={cn(
+                            "w-full text-left p-4 rounded-2xl border-2 transition-all hover:shadow-md",
+                            selectedPatient?.id === patient.id ? "border-secondary bg-secondary/10" : "border-border",
+                          )}
+                        >
+                          <p className="font-semibold">{patient.full_name}</p>
+                          <p className="text-sm text-muted-foreground">CPF: {patient.cpf}</p>
+                          <p className="text-sm text-muted-foreground">Tel: {patient.phone}</p>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  {selectedPatient && (
+                    <div className="p-4 bg-secondary/10 rounded-2xl border-2 border-secondary">
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <p className="font-semibold text-lg">{selectedPatient.full_name}</p>
+                          <p className="text-sm text-muted-foreground">CPF: {selectedPatient.cpf}</p>
+                          <p className="text-sm text-muted-foreground">Tel: {selectedPatient.phone}</p>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setSelectedPatient(null)}
+                          className="text-muted-foreground"
+                        >
+                          Remover
+                        </Button>
+                      </div>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
+
+              {selectedPatient && availableAppointments.length > 0 && (
+                <Card className="rounded-3xl border-border">
+                  <CardContent className="p-6 space-y-4">
+                    <div className="flex items-center gap-2 mb-4">
+                      <Calendar className="h-5 w-5 text-muted-foreground" />
+                      <h3 className="font-semibold">Vincular a agendamento (opcional)</h3>
+                    </div>
+
+                    <Select
+                      value={linkedAppointmentId || "none"}
+                      onValueChange={(v) => setLinkedAppointmentId(v === "none" ? null : v)}
+                    >
+                      <SelectTrigger className="h-12 rounded-2xl">
+                        <SelectValue placeholder="Selecione um agendamento" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">Nenhum</SelectItem>
+                        {availableAppointments.map((apt) => (
+                          <SelectItem key={apt.id} value={apt.id}>
+                            {new Date(apt.appointment_date).toLocaleDateString()} - {apt.appointment_type}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </CardContent>
+                </Card>
+              )}
+
+              {!selectedPatient && (
+                <Card className="rounded-3xl border-border">
+                  <CardContent className="p-6 space-y-4">
+                    <h3 className="font-semibold mb-4">Ou cadastre um novo paciente</h3>
+                    <div>
+                      <label className="text-sm font-medium mb-2 block">Nome completo</label>
+                      <Input
+                        placeholder="Nome completo do paciente"
+                        value={patientName}
+                        onChange={(e) => setPatientName(e.target.value)}
+                        className="rounded-2xl h-12"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium mb-2 block">CPF (opcional)</label>
+                      <Input
+                        placeholder="000.000.000-00"
+                        value={patientCpf}
+                        onChange={(e) => setPatientCpf(e.target.value)}
+                        className="rounded-2xl h-12"
+                      />
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
 
               {/* Resumo do Atendimento */}
               <Card className="rounded-3xl border-border">
@@ -542,40 +702,47 @@ export default function NovoAtendimentoPage() {
             </div>
           )}
 
-          {/* Navigation */}
+          {/* Navigation Buttons */}
           {step < 6 && (
-            <div className="flex justify-between pt-8">
-              <Button
-                variant="outline"
-                onClick={handleBack}
-                disabled={step === 1}
-                className="rounded-3xl bg-transparent"
-              >
-                <ArrowLeft className="w-4 h-4 mr-2" />
-                Voltar
-              </Button>
-              <Button
-                onClick={step === 5 ? handleSaveAppointment : handleNext}
-                disabled={!canProceed() || isSubmitting}
-                className="rounded-3xl"
-              >
-                {isSubmitting ? (
-                  <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Salvando...
-                  </>
-                ) : step === 5 ? (
-                  <>
-                    Gerar registro
-                    <FileCheck className="w-4 h-4 ml-2" />
-                  </>
-                ) : (
-                  <>
-                    Próximo
-                    <ArrowRight className="w-4 h-4 ml-2" />
-                  </>
-                )}
-              </Button>
+            <div className="flex justify-between pt-6">
+              {step > 1 && (
+                <Button
+                  variant="outline"
+                  size="lg"
+                  onClick={handleBack}
+                  className="rounded-full px-8 bg-transparent"
+                  disabled={isSubmitting}
+                >
+                  <ArrowLeft className="h-4 w-4 mr-2" />
+                  Voltar
+                </Button>
+              )}
+              {step < 5 && (
+                <Button size="lg" onClick={handleNext} disabled={!canProceed()} className="rounded-full px-8 ml-auto">
+                  Continuar
+                  <ArrowRight className="h-4 w-4 ml-2" />
+                </Button>
+              )}
+              {step === 5 && (
+                <Button
+                  size="lg"
+                  onClick={handleSaveAppointment}
+                  disabled={!canProceed() || isSubmitting}
+                  className="rounded-full px-8 ml-auto"
+                >
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Salvando...
+                    </>
+                  ) : (
+                    <>
+                      <FileCheck className="h-4 w-4 mr-2" />
+                      Finalizar Atendimento
+                    </>
+                  )}
+                </Button>
+              )}
             </div>
           )}
         </div>
