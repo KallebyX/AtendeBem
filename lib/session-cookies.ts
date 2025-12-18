@@ -19,12 +19,21 @@ export async function getCurrentUser(): Promise<SessionUser | null> {
 // Set session cookie
 export async function setSessionCookie(token: string) {
   const cookieStore = await cookies()
+
   cookieStore.set("session", token, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
     maxAge: 60 * 60 * 24 * 7, // 7 days
     path: "/",
+    domain: process.env.NODE_ENV === "production" ? ".atendebem.io" : undefined,
+  })
+
+  console.log("[v0] Cookie set with options:", {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    domain: process.env.NODE_ENV === "production" ? ".atendebem.io" : undefined,
   })
 }
 

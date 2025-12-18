@@ -15,7 +15,14 @@ export async function proxy(request: NextRequest) {
   // Check for session token
   const token = request.cookies.get("session")?.value
 
+  console.log("[v0] Middleware check:", {
+    pathname,
+    hasToken: !!token,
+    tokenLength: token?.length,
+  })
+
   if (!token) {
+    console.log("[v0] No token found, redirecting to login")
     return NextResponse.redirect(new URL("/login", request.url))
   }
 
@@ -23,9 +30,11 @@ export async function proxy(request: NextRequest) {
   const user = await verifySession(token)
 
   if (!user) {
+    console.log("[v0] Invalid token, redirecting to login")
     return NextResponse.redirect(new URL("/login", request.url))
   }
 
+  console.log("[v0] Valid session for user:", user.id)
   return NextResponse.next()
 }
 
