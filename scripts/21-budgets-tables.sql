@@ -1,6 +1,9 @@
+-- Removendo dependência de tenant_id e usando apenas user_id para isolamento
+DROP TABLE IF EXISTS budget_items CASCADE;
+DROP TABLE IF EXISTS budgets CASCADE;
+
 CREATE TABLE IF NOT EXISTS budgets (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
   user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
   
@@ -54,14 +57,13 @@ CREATE TABLE IF NOT EXISTS budgets (
 CREATE TABLE IF NOT EXISTS budget_items (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   budget_id UUID NOT NULL REFERENCES budgets(id) ON DELETE CASCADE,
-  tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
   
   item_type VARCHAR(50) NOT NULL CHECK (item_type IN (
     'procedure', 'material', 'medication', 'exam', 'surgery', 'consultation', 'other'
   )),
   
   -- Descrição
-  code VARCHAR(20), -- TUSS code se aplicável
+  code VARCHAR(20),
   name VARCHAR(255) NOT NULL,
   description TEXT,
   
@@ -90,38 +92,55 @@ CREATE TABLE IF NOT EXISTS budget_items (
 ALTER TABLE budgets ENABLE ROW LEVEL SECURITY;
 ALTER TABLE budget_items ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS budgets_select ON budgets;
+DROP POLICY IF EXISTS budgets_insert ON budgets;
+DROP POLICY IF EXISTS budgets_update ON budgets;
+DROP POLICY IF EXISTS budgets_delete ON budgets;
+DROP POLICY IF EXISTS budget_items_select ON budget_items;
+DROP POLICY IF EXISTS budget_items_insert ON budget_items;
+DROP POLICY IF EXISTS budget_items_update ON budget_items;
+DROP POLICY IF EXISTS budget_items_delete ON budget_items;
+
 CREATE POLICY budgets_select ON budgets
-  FOR SELECT USING (tenant_id IN (SELECT id FROM tenants WHERE id = current_setting('app.current_user_tenant', true)::uuid));
+  FOR SELECT USING (user_id = current_setting('app.current_user_id', true)::uuid);
 
 CREATE POLICY budgets_insert ON budgets
-  FOR INSERT WITH CHECK (tenant_id IN (SELECT id FROM tenants WHERE id = current_setting('app.current_user_tenant', true)::uuid));
+  FOR INSERT WITH CHECK (user_id = current_setting('app.current_user_id', true)::uuid);
 
 CREATE POLICY budgets_update ON budgets
-  FOR UPDATE USING (tenant_id IN (SELECT id FROM tenants WHERE id = current_setting('app.current_user_tenant', true)::uuid));
+  FOR UPDATE USING (user_id = current_setting('app.current_user_id', true)::uuid);
 
 CREATE POLICY budgets_delete ON budgets
-  FOR DELETE USING (tenant_id IN (SELECT id FROM tenants WHERE id = current_setting('app.current_user_tenant', true)::uuid));
+  FOR DELETE USING (user_id = current_setting('app.current_user_id', true)::uuid);
 
 CREATE POLICY budget_items_select ON budget_items
-  FOR SELECT USING (tenant_id IN (SELECT id FROM tenants WHERE id = current_setting('app.current_user_tenant', true)::uuid));
+  FOR SELECT USING (budget_id IN (SELECT id FROM budgets WHERE user_id = current_setting('app.current_user_id', true)::uuid));
 
 CREATE POLICY budget_items_insert ON budget_items
-  FOR INSERT WITH CHECK (tenant_id IN (SELECT id FROM tenants WHERE id = current_setting('app.current_user_tenant', true)::uuid));
+  FOR INSERT WITH CHECK (budget_id IN (SELECT id FROM budgets WHERE user_id = current_setting('app.current_user_id', true)::uuid));
 
 CREATE POLICY budget_items_update ON budget_items
-  FOR UPDATE USING (tenant_id IN (SELECT id FROM tenants WHERE id = current_setting('app.current_user_tenant', true)::uuid));
+  FOR UPDATE USING (budget_id IN (SELECT id FROM budgets WHERE user_id = current_setting('app.current_user_id', true)::uuid));
 
 CREATE POLICY budget_items_delete ON budget_items
-  FOR DELETE USING (tenant_id IN (SELECT id FROM tenants WHERE id = current_setting('app.current_user_tenant', true)::uuid));
+  FOR DELETE USING (budget_id IN (SELECT id FROM budgets WHERE user_id = current_setting('app.current_user_id', true)::uuid));
 
 -- Índices
-CREATE INDEX idx_budgets_tenant ON budgets(tenant_id);
+DROP INDEX IF EXISTS idx_budgets_user;
+DROP INDEX IF EXISTS idx_budgets_patient;
+DROP INDEX IF EXISTS idx_budgets_status;
+DROP INDEX IF EXISTS idx_budgets_valid_until;
+DROP INDEX IF EXISTS idx_budget_items_budget;
+
+CREATE INDEX idx_budgets_user ON budgets(user_id);
 CREATE INDEX idx_budgets_patient ON budgets(patient_id);
 CREATE INDEX idx_budgets_status ON budgets(status);
 CREATE INDEX idx_budgets_valid_until ON budgets(valid_until);
 CREATE INDEX idx_budget_items_budget ON budget_items(budget_id);
 
 -- Trigger para atualizar updated_at
+DROP TRIGGER IF EXISTS budgets_updated_at ON budgets;
+
 CREATE OR REPLACE FUNCTION update_budget_timestamp()
 RETURNS TRIGGER AS $$
 BEGIN

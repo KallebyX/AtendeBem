@@ -1,6 +1,8 @@
+-- Removendo dependência de tenant_id e usando apenas user_id para isolamento
+DROP TABLE IF EXISTS calendar_events CASCADE;
+
 CREATE TABLE IF NOT EXISTS calendar_events (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
   user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   patient_id UUID REFERENCES patients(id) ON DELETE SET NULL,
   
@@ -40,10 +42,10 @@ CREATE TABLE IF NOT EXISTS calendar_events (
   recurrence_end_date DATE,
   
   -- Lembretes
-  reminders JSONB DEFAULT '[]'::jsonb, -- [{type: 'email', minutes: 60}, {type: 'sms', minutes: 1440}]
+  reminders JSONB DEFAULT '[]'::jsonb,
   
   -- Participantes
-  attendees JSONB DEFAULT '[]'::jsonb, -- [{email: 'email@example.com', name: 'Nome', response: 'accepted'}]
+  attendees JSONB DEFAULT '[]'::jsonb,
   
   -- Metadados
   appointment_id UUID REFERENCES appointments(id) ON DELETE SET NULL,
@@ -58,20 +60,31 @@ CREATE TABLE IF NOT EXISTS calendar_events (
 -- RLS Policies
 ALTER TABLE calendar_events ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS calendar_events_select ON calendar_events;
+DROP POLICY IF EXISTS calendar_events_insert ON calendar_events;
+DROP POLICY IF EXISTS calendar_events_update ON calendar_events;
+DROP POLICY IF EXISTS calendar_events_delete ON calendar_events;
+
 CREATE POLICY calendar_events_select ON calendar_events
-  FOR SELECT USING (tenant_id IN (SELECT id FROM tenants WHERE id = current_setting('app.current_user_tenant', true)::uuid));
+  FOR SELECT USING (user_id = current_setting('app.current_user_id', true)::uuid);
 
 CREATE POLICY calendar_events_insert ON calendar_events
-  FOR INSERT WITH CHECK (tenant_id IN (SELECT id FROM tenants WHERE id = current_setting('app.current_user_tenant', true)::uuid));
+  FOR INSERT WITH CHECK (user_id = current_setting('app.current_user_id', true)::uuid);
 
 CREATE POLICY calendar_events_update ON calendar_events
-  FOR UPDATE USING (tenant_id IN (SELECT id FROM tenants WHERE id = current_setting('app.current_user_tenant', true)::uuid));
+  FOR UPDATE USING (user_id = current_setting('app.current_user_id', true)::uuid);
 
 CREATE POLICY calendar_events_delete ON calendar_events
-  FOR DELETE USING (tenant_id IN (SELECT id FROM tenants WHERE id = current_setting('app.current_user_tenant', true)::uuid));
+  FOR DELETE USING (user_id = current_setting('app.current_user_id', true)::uuid);
 
 -- Índices
-CREATE INDEX idx_calendar_events_tenant ON calendar_events(tenant_id);
+DROP INDEX IF EXISTS idx_calendar_events_user;
+DROP INDEX IF EXISTS idx_calendar_events_patient;
+DROP INDEX IF EXISTS idx_calendar_events_start_time;
+DROP INDEX IF EXISTS idx_calendar_events_end_time;
+DROP INDEX IF EXISTS idx_calendar_events_status;
+DROP INDEX IF EXISTS idx_calendar_events_google;
+
 CREATE INDEX idx_calendar_events_user ON calendar_events(user_id);
 CREATE INDEX idx_calendar_events_patient ON calendar_events(patient_id);
 CREATE INDEX idx_calendar_events_start_time ON calendar_events(start_time);

@@ -1,6 +1,9 @@
+-- Removendo dependência de tenant_id, adicionando DROP POLICY IF EXISTS, e usando apenas user_id
+DROP TABLE IF EXISTS contract_templates CASCADE;
+DROP TABLE IF EXISTS contracts CASCADE;
+
 CREATE TABLE IF NOT EXISTS contracts (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
   user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
   
@@ -12,8 +15,8 @@ CREATE TABLE IF NOT EXISTS contracts (
   )),
   
   -- Conteúdo
-  content TEXT NOT NULL, -- HTML/Markdown do contrato
-  template_id UUID, -- Referência ao template usado
+  content TEXT NOT NULL,
+  template_id UUID,
   
   -- Status
   status VARCHAR(50) DEFAULT 'draft' CHECK (status IN (
@@ -56,17 +59,16 @@ CREATE TABLE IF NOT EXISTS contracts (
 
 CREATE TABLE IF NOT EXISTS contract_templates (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  tenant_id UUID REFERENCES tenants(id) ON DELETE CASCADE,
   user_id UUID REFERENCES users(id) ON DELETE SET NULL,
   
   name VARCHAR(255) NOT NULL,
   description TEXT,
   contract_type VARCHAR(50) NOT NULL,
   
-  content TEXT NOT NULL, -- Template com variáveis {{patient_name}}, {{date}}, etc
+  content TEXT NOT NULL,
   
   -- Campos dinâmicos
-  dynamic_fields JSONB DEFAULT '[]'::jsonb, -- [{name: 'treatment_duration', type: 'number', label: 'Duração do tratamento (meses)'}]
+  dynamic_fields JSONB DEFAULT '[]'::jsonb,
   
   -- Disponibilidade
   is_public BOOLEAN DEFAULT false,
@@ -84,40 +86,56 @@ CREATE TABLE IF NOT EXISTS contract_templates (
 ALTER TABLE contracts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE contract_templates ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS contracts_select ON contracts;
+DROP POLICY IF EXISTS contracts_insert ON contracts;
+DROP POLICY IF EXISTS contracts_update ON contracts;
+DROP POLICY IF EXISTS contracts_delete ON contracts;
+DROP POLICY IF EXISTS contract_templates_select ON contract_templates;
+DROP POLICY IF EXISTS contract_templates_insert ON contract_templates;
+DROP POLICY IF EXISTS contract_templates_update ON contract_templates;
+DROP POLICY IF EXISTS contract_templates_delete ON contract_templates;
+
 CREATE POLICY contracts_select ON contracts
-  FOR SELECT USING (tenant_id IN (SELECT id FROM tenants WHERE id = current_setting('app.current_user_tenant', true)::uuid));
+  FOR SELECT USING (user_id = current_setting('app.current_user_id', true)::uuid);
 
 CREATE POLICY contracts_insert ON contracts
-  FOR INSERT WITH CHECK (tenant_id IN (SELECT id FROM tenants WHERE id = current_setting('app.current_user_tenant', true)::uuid));
+  FOR INSERT WITH CHECK (user_id = current_setting('app.current_user_id', true)::uuid);
 
 CREATE POLICY contracts_update ON contracts
-  FOR UPDATE USING (tenant_id IN (SELECT id FROM tenants WHERE id = current_setting('app.current_user_tenant', true)::uuid));
+  FOR UPDATE USING (user_id = current_setting('app.current_user_id', true)::uuid);
 
 CREATE POLICY contracts_delete ON contracts
-  FOR DELETE USING (tenant_id IN (SELECT id FROM tenants WHERE id = current_setting('app.current_user_tenant', true)::uuid));
+  FOR DELETE USING (user_id = current_setting('app.current_user_id', true)::uuid);
 
 CREATE POLICY contract_templates_select ON contract_templates
-  FOR SELECT USING (tenant_id IN (SELECT id FROM tenants WHERE id = current_setting('app.current_user_tenant', true)::uuid) OR is_public = true);
+  FOR SELECT USING (user_id = current_setting('app.current_user_id', true)::uuid OR is_public = true);
 
 CREATE POLICY contract_templates_insert ON contract_templates
-  FOR INSERT WITH CHECK (tenant_id IN (SELECT id FROM tenants WHERE id = current_setting('app.current_user_tenant', true)::uuid));
+  FOR INSERT WITH CHECK (user_id = current_setting('app.current_user_id', true)::uuid);
 
 CREATE POLICY contract_templates_update ON contract_templates
-  FOR UPDATE USING (tenant_id IN (SELECT id FROM tenants WHERE id = current_setting('app.current_user_tenant', true)::uuid));
+  FOR UPDATE USING (user_id = current_setting('app.current_user_id', true)::uuid);
 
 CREATE POLICY contract_templates_delete ON contract_templates
-  FOR DELETE USING (tenant_id IN (SELECT id FROM tenants WHERE id = current_setting('app.current_user_tenant', true)::uuid));
+  FOR DELETE USING (user_id = current_setting('app.current_user_id', true)::uuid);
 
 -- Índices
-CREATE INDEX idx_contracts_tenant ON contracts(tenant_id);
+DROP INDEX IF EXISTS idx_contracts_user;
+DROP INDEX IF EXISTS idx_contracts_patient;
+DROP INDEX IF EXISTS idx_contracts_status;
+DROP INDEX IF EXISTS idx_contract_templates_user;
+DROP INDEX IF EXISTS idx_contract_templates_type;
+DROP INDEX IF EXISTS idx_contract_templates_public;
+
+CREATE INDEX idx_contracts_user ON contracts(user_id);
 CREATE INDEX idx_contracts_patient ON contracts(patient_id);
 CREATE INDEX idx_contracts_status ON contracts(status);
-CREATE INDEX idx_contract_templates_tenant ON contract_templates(tenant_id);
+CREATE INDEX idx_contract_templates_user ON contract_templates(user_id);
 CREATE INDEX idx_contract_templates_type ON contract_templates(contract_type);
 CREATE INDEX idx_contract_templates_public ON contract_templates(is_public) WHERE is_public = true;
 
 -- Seed: Templates padrão
-INSERT INTO contract_templates (id, name, description, contract_type, content, is_public, tenant_id) VALUES
+INSERT INTO contract_templates (id, name, description, contract_type, content, is_public, user_id) VALUES
 (
   '10000000-0000-0000-0000-000000000001',
   'Consentimento Informado - Procedimento Geral',
@@ -168,4 +186,5 @@ INSERT INTO contract_templates (id, name, description, contract_type, content, i
 <p>Data: {{date}}</p>',
   true,
   NULL
-);
+)
+ON CONFLICT (id) DO NOTHING;
