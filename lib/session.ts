@@ -233,4 +233,5 @@ export async function getUserFromToken(): Promise<SessionUser | null> {
   }
 }
 
+export const getCurrentUser = getUserFromToken
 export const verifyToken = verifySession
