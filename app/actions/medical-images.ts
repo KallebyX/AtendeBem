@@ -1,9 +1,9 @@
-'use server'
+"use server"
 
-import { getDb } from '@/lib/db'
-import { verifyToken } from '@/lib/session'
-import { cookies } from 'next/headers'
-import { setUserContext } from '@/lib/db-init'
+import { getDb } from "@/lib/db"
+import { verifyToken } from "@/lib/session"
+import { cookies } from "next/headers"
+import { setUserContext } from "@/lib/db-init"
 
 export async function createMedicalImage(data: {
   patient_id: string
@@ -17,11 +17,11 @@ export async function createMedicalImage(data: {
 }) {
   try {
     const cookieStore = await cookies()
-    const token = cookieStore.get('session')?.value
-    
-    if (!token) return { error: 'Não autenticado' }
+    const token = cookieStore.get("session")?.value
+
+    if (!token) return { error: "Não autenticado" }
     const user = await verifyToken(token)
-    if (!user) return { error: 'Token inválido' }
+    if (!user) return { error: "Token inválido" }
 
     await setUserContext(user.id)
     const db = getDb()
@@ -38,7 +38,7 @@ export async function createMedicalImage(data: {
         ${user.tenant_id}, ${user.id}, ${data.patient_id}, ${data.appointment_id || null},
         ${studyUID}, ${data.modality}, ${data.study_description}, ${data.body_part || null},
         ${data.study_date}, ${data.clinical_indication || null},
-        ${data.dicom_files ? JSON.stringify(data.dicom_files) : '[]'}::jsonb,
+        ${data.dicom_files ? JSON.stringify(data.dicom_files) : "[]"}::jsonb,
         ${data.dicom_files?.length || 0}, 'scheduled'
       ) RETURNING *
     `
@@ -56,11 +56,11 @@ export async function getMedicalImages(filters?: {
 }) {
   try {
     const cookieStore = await cookies()
-    const token = cookieStore.get('session')?.value
-    
-    if (!token) return { error: 'Não autenticado' }
+    const token = cookieStore.get("session")?.value
+
+    if (!token) return { error: "Não autenticado" }
     const user = await verifyToken(token)
-    if (!user) return { error: 'Token inválido' }
+    if (!user) return { error: "Token inválido" }
 
     await setUserContext(user.id)
     const db = getDb()
@@ -111,11 +111,11 @@ export async function addImageReport(data: {
 }) {
   try {
     const cookieStore = await cookies()
-    const token = cookieStore.get('session')?.value
-    
-    if (!token) return { error: 'Não autenticado' }
+    const token = cookieStore.get("session")?.value
+
+    if (!token) return { error: "Não autenticado" }
     const user = await verifyToken(token)
-    if (!user) return { error: 'Token inválido' }
+    if (!user) return { error: "Token inválido" }
 
     await setUserContext(user.id)
     const db = getDb()
@@ -151,11 +151,11 @@ export async function createImageAnnotation(data: {
 }) {
   try {
     const cookieStore = await cookies()
-    const token = cookieStore.get('session')?.value
-    
-    if (!token) return { error: 'Não autenticado' }
+    const token = cookieStore.get("session")?.value
+
+    if (!token) return { error: "Não autenticado" }
     const user = await verifyToken(token)
-    if (!user) return { error: 'Token inválido' }
+    if (!user) return { error: "Token inválido" }
 
     await setUserContext(user.id)
     const db = getDb()
@@ -173,6 +173,31 @@ export async function createImageAnnotation(data: {
     `
 
     return { success: true, data: result[0] }
+  } catch (error: any) {
+    return { error: error.message }
+  }
+}
+
+export async function deleteMedicalImage(image_id: string) {
+  try {
+    const cookieStore = await cookies()
+    const token = cookieStore.get("session")?.value
+
+    if (!token) return { error: "Não autenticado" }
+    const user = await verifyToken(token)
+    if (!user) return { error: "Token inválido" }
+
+    await setUserContext(user.id)
+    const db = getDb()
+
+    const result = await db`
+      DELETE FROM medical_images
+      WHERE id = ${image_id} AND tenant_id = ${user.tenant_id}
+      RETURNING id
+    `
+
+    if (result.length === 0) return { error: "Imagem não encontrada" }
+    return { success: true }
   } catch (error: any) {
     return { error: error.message }
   }

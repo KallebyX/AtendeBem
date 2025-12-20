@@ -1,19 +1,18 @@
-'use server'
+"use server"
 
-import { getDb } from '@/lib/db'
-import { verifyToken } from '@/lib/session'
-import { cookies } from 'next/headers'
-import { setUserContext } from '@/lib/db-init'
-import crypto from 'crypto'
+import { getDb } from "@/lib/db"
+import { verifyToken } from "@/lib/session"
+import { cookies } from "next/headers"
+import { setUserContext } from "@/lib/db-init"
 
 export async function getNFeConfiguration() {
   try {
     const cookieStore = await cookies()
-    const token = cookieStore.get('session')?.value
-    
-    if (!token) return { error: 'Não autenticado' }
+    const token = cookieStore.get("session")?.value
+
+    if (!token) return { error: "Não autenticado" }
     const user = await verifyToken(token)
-    if (!user) return { error: 'Token inválido' }
+    if (!user) return { error: "Token inválido" }
 
     await setUserContext(user.id)
     const db = getDb()
@@ -38,16 +37,16 @@ export async function updateNFeConfiguration(data: {
   address?: any
   phone?: string
   email?: string
-  environment?: 'sandbox' | 'production'
+  environment?: "sandbox" | "production"
   api_brasil_token?: string
 }) {
   try {
     const cookieStore = await cookies()
-    const token = cookieStore.get('session')?.value
-    
-    if (!token) return { error: 'Não autenticado' }
+    const token = cookieStore.get("session")?.value
+
+    if (!token) return { error: "Não autenticado" }
     const user = await verifyToken(token)
-    if (!user) return { error: 'Token inválido' }
+    if (!user) return { error: "Token inválido" }
 
     await setUserContext(user.id)
     const db = getDb()
@@ -92,10 +91,10 @@ export async function updateNFeConfiguration(data: {
         ) VALUES (
           ${user.tenant_id}, ${data.company_name}, ${data.company_cnpj},
           ${data.company_ie || null}, ${data.company_im || null},
-          ${data.company_regime_tributario || '1'}, ${data.address?.street || null},
+          ${data.company_regime_tributario || "1"}, ${data.address?.street || null},
           ${data.address?.number || null}, ${data.address?.city || null},
           ${data.address?.state || null}, ${data.address?.zipcode || null},
-          ${data.phone || null}, ${data.email || null}, ${data.environment || 'sandbox'},
+          ${data.phone || null}, ${data.email || null}, ${data.environment || "sandbox"},
           ${data.api_brasil_token || null}
         ) RETURNING *
       `
@@ -112,15 +111,15 @@ export async function createNFe(data: {
   services: any[]
   customer_name?: string
   customer_cpf_cnpj?: string
-  invoice_type?: 'nfe' | 'nfse'
+  invoice_type?: "nfe" | "nfse"
 }) {
   try {
     const cookieStore = await cookies()
-    const token = cookieStore.get('session')?.value
-    
-    if (!token) return { error: 'Não autenticado' }
+    const token = cookieStore.get("session")?.value
+
+    if (!token) return { error: "Não autenticado" }
     const user = await verifyToken(token)
-    if (!user) return { error: 'Token inválido' }
+    if (!user) return { error: "Token inválido" }
 
     await setUserContext(user.id)
     const db = getDb()
@@ -130,7 +129,7 @@ export async function createNFe(data: {
       SELECT name, cpf FROM patients WHERE id = ${data.patient_id}
     `
 
-    if (!patient.length) return { error: 'Paciente não encontrado' }
+    if (!patient.length) return { error: "Paciente não encontrado" }
 
     // Buscar configuração NFe
     const config = await db`
@@ -138,15 +137,13 @@ export async function createNFe(data: {
     `
 
     if (!config.length) {
-      return { error: 'Configuração NFe não encontrada. Configure primeiro.' }
+      return { error: "Configuração NFe não encontrada. Configure primeiro." }
     }
 
-    const invoiceType = data.invoice_type || 'nfse'
+    const invoiceType = data.invoice_type || "nfse"
 
     // Calcular valores
-    const servicesValue = data.services.reduce((sum: number, s: any) => 
-      sum + (s.quantity * s.unit_price), 0
-    )
+    const servicesValue = data.services.reduce((sum: number, s: any) => sum + s.quantity * s.unit_price, 0)
 
     // Impostos simplificados (em produção, calcular baseado em regime tributário)
     const issRate = 2.0 // 2% ISS exemplo
@@ -155,12 +152,12 @@ export async function createNFe(data: {
 
     // Gerar número da nota
     let invoiceNumber: string
-    if (invoiceType === 'nfe') {
+    if (invoiceType === "nfe") {
       const nextNumber = await db`SELECT get_next_nfe_number(${user.tenant_id}::uuid) as number`
-      invoiceNumber = `NFE-${config[0].nfe_series}-${String(nextNumber[0].number).padStart(9, '0')}`
+      invoiceNumber = `NFE-${config[0].nfe_series}-${String(nextNumber[0].number).padStart(9, "0")}`
     } else {
       const nextRps = await db`SELECT get_next_rps_number(${user.tenant_id}::uuid) as number`
-      invoiceNumber = `NFSE-${config[0].nfse_rps_series}-${String(nextRps[0].number).padStart(6, '0')}`
+      invoiceNumber = `NFSE-${config[0].nfse_rps_series}-${String(nextRps[0].number).padStart(6, "0")}`
     }
 
     const result = await db`
@@ -170,7 +167,7 @@ export async function createNFe(data: {
         services, services_value, iss_value, iss_rate, net_value, status
       ) VALUES (
         ${user.tenant_id}, ${user.id}, ${invoiceNumber}, ${invoiceType},
-        ${invoiceType === 'nfe' ? config[0].nfe_series : config[0].nfse_rps_series},
+        ${invoiceType === "nfe" ? config[0].nfe_series : config[0].nfse_rps_series},
         ${data.appointment_id || null}, ${data.patient_id},
         ${data.customer_name || patient[0].name}, ${data.customer_cpf_cnpj || patient[0].cpf || null},
         ${JSON.stringify(data.services)}, ${servicesValue}, ${issValue},
@@ -193,11 +190,11 @@ export async function getNFeInvoices(filters?: {
 }) {
   try {
     const cookieStore = await cookies()
-    const token = cookieStore.get('session')?.value
-    
-    if (!token) return { error: 'Não autenticado' }
+    const token = cookieStore.get("session")?.value
+
+    if (!token) return { error: "Não autenticado" }
     const user = await verifyToken(token)
-    if (!user) return { error: 'Token inválido' }
+    if (!user) return { error: "Token inválido" }
 
     await setUserContext(user.id)
     const db = getDb()
@@ -222,14 +219,24 @@ export async function getNFeInvoices(filters?: {
   }
 }
 
+export async function getNFes(filters?: {
+  patient_id?: string
+  status?: string
+  invoice_type?: string
+  start_date?: string
+  end_date?: string
+}) {
+  return getNFeInvoices(filters)
+}
+
 export async function sendNFeToAPI(invoice_id: string) {
   try {
     const cookieStore = await cookies()
-    const token = cookieStore.get('session')?.value
-    
-    if (!token) return { error: 'Não autenticado' }
+    const token = cookieStore.get("session")?.value
+
+    if (!token) return { error: "Não autenticado" }
     const user = await verifyToken(token)
-    if (!user) return { error: 'Token inválido' }
+    if (!user) return { error: "Token inválido" }
 
     await setUserContext(user.id)
     const db = getDb()
@@ -239,14 +246,14 @@ export async function sendNFeToAPI(invoice_id: string) {
       SELECT * FROM nfe_invoices WHERE id = ${invoice_id} AND tenant_id = ${user.tenant_id}
     `
 
-    if (!invoice.length) return { error: 'Nota fiscal não encontrada' }
+    if (!invoice.length) return { error: "Nota fiscal não encontrada" }
 
     const config = await db`
       SELECT * FROM nfe_configuration WHERE tenant_id = ${user.tenant_id}
     `
 
     if (!config.length || !config[0].api_brasil_token) {
-      return { error: 'Token API Brasil não configurado' }
+      return { error: "Token API Brasil não configurado" }
     }
 
     // Atualizar status
@@ -268,7 +275,7 @@ export async function sendNFeToAPI(invoice_id: string) {
 
     // Simular sucesso
     const simulatedProtocol = `PROT-${Date.now()}`
-    const simulatedAccessKey = String(Math.random()).slice(2, 46).padEnd(44, '0')
+    const simulatedAccessKey = String(Math.random()).slice(2, 46).padEnd(44, "0")
 
     await db`
       UPDATE nfe_invoices
@@ -280,14 +287,14 @@ export async function sendNFeToAPI(invoice_id: string) {
       WHERE id = ${invoice_id}
     `
 
-    return { 
-      success: true, 
-      message: 'Nota fiscal enviada com sucesso',
-      protocol: simulatedProtocol
+    return {
+      success: true,
+      message: "Nota fiscal enviada com sucesso",
+      protocol: simulatedProtocol,
     }
   } catch (error: any) {
     // Registrar erro
-    await setUserContext((await verifyToken((await cookies()).get('session')?.value || ''))?.id || '')
+    await setUserContext((await verifyToken((await cookies()).get("session")?.value || ""))?.id || "")
     const db = getDb()
     await db`
       UPDATE nfe_invoices
@@ -302,11 +309,11 @@ export async function sendNFeToAPI(invoice_id: string) {
 export async function cancelNFe(invoice_id: string, reason: string) {
   try {
     const cookieStore = await cookies()
-    const token = cookieStore.get('session')?.value
-    
-    if (!token) return { error: 'Não autenticado' }
+    const token = cookieStore.get("session")?.value
+
+    if (!token) return { error: "Não autenticado" }
     const user = await verifyToken(token)
-    if (!user) return { error: 'Token inválido' }
+    if (!user) return { error: "Token inválido" }
 
     await setUserContext(user.id)
     const db = getDb()
