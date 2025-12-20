@@ -22,22 +22,31 @@ export async function proxy(request: NextRequest) {
   const token = request.cookies.get("session")?.value
 
   if (!token) {
-    console.log("[MIDDLEWARE] No token, redirecting:", pathname)
+    console.log("[MIDDLEWARE] No token found, redirecting:", pathname)
     return NextResponse.redirect(new URL("/login", request.url))
   }
 
-  // Verify session
-  const user = await verifySession(token)
+  console.log("[MIDDLEWARE] Token found, verifying for:", pathname)
 
-  if (!user) {
-    console.log("[MIDDLEWARE] Invalid token, redirecting:", pathname)
+  // Verify session
+  try {
+    const user = await verifySession(token)
+
+    if (!user) {
+      console.log("[MIDDLEWARE] Token verification failed (invalid or expired), redirecting:", pathname)
+      const response = NextResponse.redirect(new URL("/login", request.url))
+      response.cookies.delete("session")
+      return response
+    }
+
+    console.log("[MIDDLEWARE] ✓ Authenticated:", user.email, "accessing:", pathname)
+    return NextResponse.next()
+  } catch (error) {
+    console.error("[MIDDLEWARE] Error during token verification:", error)
     const response = NextResponse.redirect(new URL("/login", request.url))
     response.cookies.delete("session")
     return response
   }
-
-  console.log("[MIDDLEWARE] Authenticated:", user.email, "->", pathname)
-  return NextResponse.next()
 }
 
 export const config = {

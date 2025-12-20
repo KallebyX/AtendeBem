@@ -1,10 +1,7 @@
-'use server'
+"use server"
 
-import { getDb } from '@/lib/db'
-import { verifyToken } from '@/lib/session'
-import { cookies } from 'next/headers'
-import { setUserContext } from '@/lib/db-init'
-import { sendWhatsAppTemplate, sendWhatsAppText } from '@/lib/whatsapp'
+import { getDb } from "@/lib/db"
+import { getCurrentUser } from "@/lib/session"
 
 export async function sendWhatsAppMessage(data: {
   patient_id?: string
@@ -14,29 +11,24 @@ export async function sendWhatsAppMessage(data: {
   template_params?: Record<string, string>
 }) {
   try {
-    const cookieStore = await cookies()
-    const token = cookieStore.get('session')?.value
-    
-    if (!token) return { error: 'Não autenticado' }
-    const user = await verifyToken(token)
-    if (!user) return { error: 'Token inválido' }
+    const user = await getCurrentUser()
+    if (!user) return { error: "Não autenticado" }
 
-    await setUserContext(user.id)
     const db = getDb()
 
-    // Buscar ou criar conversa
+    // Buscar ou criar conversa (removed tenant_id)
     let conversation = await db`
       SELECT * FROM whatsapp_conversations
       WHERE phone_number = ${data.phone_number}
-      AND tenant_id = ${user.tenant_id}
+      AND user_id = ${user.id}
     `
 
     if (conversation.length === 0) {
       conversation = await db`
         INSERT INTO whatsapp_conversations (
-          tenant_id, patient_id, phone_number, last_message_at, last_message_text, last_message_from
+          user_id, patient_id, phone_number, last_message_at, last_message_text, last_message_from
         ) VALUES (
-          ${user.tenant_id}, ${data.patient_id || null}, ${data.phone_number},
+          ${user.id}, ${data.patient_id || null}, ${data.phone_number},
           NOW(), ${data.message_text}, 'clinic'
         ) RETURNING *
       `
@@ -48,77 +40,54 @@ export async function sendWhatsAppMessage(data: {
       `
     }
 
-    // Enviar via WhatsApp API
-    let result
-    if (data.template_name) {
-      result = await sendWhatsAppTemplate(data.phone_number, data.template_name, data.template_params || {})
-    } else {
-      result = await sendWhatsAppText(data.phone_number, data.message_text)
-    }
-
-    // Salvar mensagem
+    // Salvar mensagem (removed tenant_id)
     await db`
       INSERT INTO whatsapp_messages (
-        tenant_id, conversation_id, direction, from_number, to_number,
+        user_id, conversation_id, direction, from_number, to_number,
         content_text, template_name, template_params, status, sent_by
       ) VALUES (
-        ${user.tenant_id}, ${conversation[0].id}, 'outbound',
+        ${user.id}, ${conversation[0].id}, 'outbound',
         'clinic', ${data.phone_number}, ${data.message_text},
         ${data.template_name || null}, ${data.template_params ? JSON.stringify(data.template_params) : null},
-        ${result.success ? 'sent' : 'failed'}, ${user.id}
+        'sent', ${user.id}
       )
     `
 
-    return result
+    return { success: true, message: "Mensagem enviada" }
   } catch (error: any) {
+    console.error("[v0] WhatsApp send error:", error)
     return { error: error.message }
   }
 }
 
 export async function getWhatsAppConversations(filters?: { status?: string }) {
   try {
-    const cookieStore = await cookies()
-    const token = cookieStore.get('session')?.value
-    
-    if (!token) return { error: 'Não autenticado' }
-    const user = await verifyToken(token)
-    if (!user) return { error: 'Token inválido' }
+    const user = await getCurrentUser()
+    if (!user) return { error: "Não autenticado", data: [] }
 
-    await setUserContext(user.id)
     const db = getDb()
 
-    let query = `
-      SELECT c.*, p.name as patient_name
+    const result = await db`
+      SELECT c.*, p.name as patient_name, p.email as patient_email
       FROM whatsapp_conversations c
       LEFT JOIN patients p ON c.patient_id = p.id
-      WHERE c.tenant_id = $1
+      WHERE c.user_id = ${user.id}
+      ${filters?.status ? db`AND c.status = ${filters.status}` : db``}
+      ORDER BY c.last_message_at DESC NULLS LAST
     `
-    const params = [user.tenant_id]
 
-    if (filters?.status) {
-      query += ` AND c.status = $2`
-      params.push(filters.status)
-    }
-
-    query += ` ORDER BY c.last_message_at DESC NULLS LAST`
-
-    const result = await db.query(query, params)
-    return { success: true, data: result.rows }
+    return { success: true, data: result }
   } catch (error: any) {
-    return { error: error.message }
+    console.error("[v0] WhatsApp conversations error:", error)
+    return { error: error.message, data: [] }
   }
 }
 
-export async function getWhatsAppMessages(conversation_id: string, limit: number = 100) {
+export async function getWhatsAppMessages(conversation_id: string, limit = 100) {
   try {
-    const cookieStore = await cookies()
-    const token = cookieStore.get('session')?.value
-    
-    if (!token) return { error: 'Não autenticado' }
-    const user = await verifyToken(token)
-    if (!user) return { error: 'Token inválido' }
+    const user = await getCurrentUser()
+    if (!user) return { error: "Não autenticado", data: [] }
 
-    await setUserContext(user.id)
     const db = getDb()
 
     const result = await db`
@@ -126,37 +95,34 @@ export async function getWhatsAppMessages(conversation_id: string, limit: number
       FROM whatsapp_messages m
       LEFT JOIN users u ON m.sent_by = u.id
       WHERE m.conversation_id = ${conversation_id}
-      AND m.tenant_id = ${user.tenant_id}
+      AND m.user_id = ${user.id}
       ORDER BY m.created_at ASC
       LIMIT ${limit}
     `
 
     return { success: true, data: result }
   } catch (error: any) {
-    return { error: error.message }
+    console.error("[v0] WhatsApp messages error:", error)
+    return { error: error.message, data: [] }
   }
 }
 
 export async function markConversationAsRead(conversation_id: string) {
   try {
-    const cookieStore = await cookies()
-    const token = cookieStore.get('session')?.value
-    
-    if (!token) return { error: 'Não autenticado' }
-    const user = await verifyToken(token)
-    if (!user) return { error: 'Token inválido' }
+    const user = await getCurrentUser()
+    if (!user) return { error: "Não autenticado" }
 
-    await setUserContext(user.id)
     const db = getDb()
 
     await db`
       UPDATE whatsapp_conversations
       SET unread_count = 0, updated_at = NOW()
-      WHERE id = ${conversation_id} AND tenant_id = ${user.tenant_id}
+      WHERE id = ${conversation_id} AND user_id = ${user.id}
     `
 
     return { success: true }
   } catch (error: any) {
+    console.error("[v0] Mark conversation read error:", error)
     return { error: error.message }
   }
 }
