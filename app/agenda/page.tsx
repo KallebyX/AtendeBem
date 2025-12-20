@@ -1,36 +1,35 @@
-'use client'
+"use client"
 
-import { useState, useEffect } from 'react'
-import { Button } from '@/components/ui/button'
-import { Card } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
-import { Badge } from '@/components/ui/badge'
-import { Textarea } from '@/components/ui/textarea'
-import { Label } from '@/components/ui/label'
-import {
-  createCalendarEvent,
-  getCalendarEvents,
-  updateCalendarEvent,
-  getAgendaDay
-} from '@/app/actions/calendar'
-import { Calendar as CalendarIcon, Clock, Plus, Video, Phone, MapPin, ChevronLeft, ChevronRight } from 'lucide-react'
+import { useState, useEffect } from "react"
+import { NavigationHeader } from "@/components/navigation-header"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
+import { Badge } from "@/components/ui/badge"
+import { Textarea } from "@/components/ui/textarea"
+import { Label } from "@/components/ui/label"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { createCalendarEvent, getCalendarEvents, getAgendaDay } from "@/app/actions/calendar"
+import { CalendarIcon, Clock, Plus, ChevronLeft, ChevronRight, MapPin } from "lucide-react"
+import { toast } from "sonner"
 
-const HOURS = Array.from({ length: 13 }, (_, i) => i + 7) // 7h às 19h
+const WEEKDAYS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"]
 
 export default function AgendaPage() {
   const [currentDate, setCurrentDate] = useState(new Date())
   const [events, setEvents] = useState<any[]>([])
   const [dayEvents, setDayEvents] = useState<any[]>([])
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
-  const [showNewEvent, setShowNewEvent] = useState(false)
+  const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const [loading, setLoading] = useState(true)
+
   const [newEvent, setNewEvent] = useState({
-    title: '',
-    start_time: '',
-    end_time: '',
-    event_type: 'appointment',
-    patient_id: '',
-    location: '',
-    description: ''
+    title: "",
+    start_time: "",
+    end_time: "",
+    event_type: "appointment",
+    location: "",
+    description: "",
   })
 
   useEffect(() => {
@@ -44,31 +43,65 @@ export default function AgendaPage() {
   }, [selectedDate])
 
   async function loadMonthEvents() {
-    const start = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1).toISOString()
-    const end = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).toISOString()
-    
-    const result = await getCalendarEvents({ start_date: start, end_date: end })
-    if (result.data) setEvents(result.data)
+    setLoading(true)
+    try {
+      const start = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1).toISOString()
+      const end = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0, 23, 59, 59).toISOString()
+
+      const result = await getCalendarEvents({ start_date: start, end_date: end })
+      if (result.success && result.data) {
+        setEvents(result.data)
+      } else {
+        toast.error(result.error || "Erro ao carregar eventos")
+      }
+    } catch (error) {
+      toast.error("Erro ao carregar eventos")
+    } finally {
+      setLoading(false)
+    }
   }
 
   async function loadDayEvents(date: string) {
-    const result = await getAgendaDay(date)
-    if (result.data) setDayEvents(result.data)
+    try {
+      const result = await getAgendaDay(date)
+      if (result.success && result.data) {
+        setDayEvents(result.data)
+      }
+    } catch (error) {
+      toast.error("Erro ao carregar eventos do dia")
+    }
   }
 
   async function handleCreateEvent() {
-    const result = await createCalendarEvent(newEvent)
-    if (result.success) {
-      setShowNewEvent(false)
-      setNewEvent({ title: '', start_time: '', end_time: '', event_type: 'appointment', patient_id: '', location: '', description: '' })
-      loadMonthEvents()
-      if (selectedDate) loadDayEvents(selectedDate)
-    } else {
-      if (result.conflicts) {
-        alert(`Conflito de agenda detectado! Eventos em conflito: ${result.conflicts.length}`)
+    if (!newEvent.title || !newEvent.start_time || !newEvent.end_time) {
+      toast.error("Preencha todos os campos obrigatórios")
+      return
+    }
+
+    try {
+      const result = await createCalendarEvent(newEvent)
+      if (result.success) {
+        toast.success("Evento criado com sucesso")
+        setIsDialogOpen(false)
+        setNewEvent({
+          title: "",
+          start_time: "",
+          end_time: "",
+          event_type: "appointment",
+          location: "",
+          description: "",
+        })
+        loadMonthEvents()
+        if (selectedDate) loadDayEvents(selectedDate)
       } else {
-        alert(result.error)
+        if (result.conflicts) {
+          toast.error(`Conflito de agenda! ${result.conflicts.length} evento(s) em conflito`)
+        } else {
+          toast.error(result.error || "Erro ao criar evento")
+        }
       }
+    } catch (error) {
+      toast.error("Erro ao criar evento")
     }
   }
 
@@ -77,7 +110,7 @@ export default function AgendaPage() {
     const month = date.getMonth()
     const firstDay = new Date(year, month, 1).getDay()
     const daysInMonth = new Date(year, month + 1, 0).getDate()
-    
+
     const days = []
     for (let i = 0; i < firstDay; i++) {
       days.push(null)
@@ -90,241 +123,268 @@ export default function AgendaPage() {
 
   function getEventsForDay(date: Date | null) {
     if (!date) return []
-    const dateStr = date.toISOString().split('T')[0]
-    return events.filter(e => e.start_time.split('T')[0] === dateStr)
+    const dateStr = date.toISOString().split("T")[0]
+    return events.filter((e) => e.start_time?.split("T")[0] === dateStr)
   }
 
   function getStatusColor(status: string) {
-    const colors = {
-      scheduled: 'bg-blue-500',
-      confirmed: 'bg-green-500',
-      in_progress: 'bg-yellow-500',
-      completed: 'bg-gray-500',
-      cancelled: 'bg-red-500',
-      no_show: 'bg-orange-500'
+    const colors: Record<string, string> = {
+      scheduled: "bg-blue-500",
+      confirmed: "bg-green-500",
+      in_progress: "bg-yellow-500",
+      completed: "bg-gray-500",
+      cancelled: "bg-red-500",
+      no_show: "bg-orange-500",
     }
-    return colors[status as keyof typeof colors] || 'bg-gray-500'
+    return colors[status] || "bg-gray-500"
   }
 
   const days = getDaysInMonth(currentDate)
 
   return (
-    <div className="container mx-auto p-6">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold flex items-center gap-3">
-          <CalendarIcon className="w-8 h-8" />
-          Agenda Médica
-        </h1>
-      </div>
+    <div className="min-h-screen bg-background">
+      <NavigationHeader />
 
-      <div className="grid grid-cols-3 gap-6">
-        {/* Calendar */}
-        <div className="col-span-2">
-          <Card className="p-6">
-            <div className="flex items-center justify-between mb-6">
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1))}
-              >
-                <ChevronLeft className="w-4 h-4" />
-              </Button>
-              <h2 className="text-2xl font-semibold">
-                {currentDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
-              </h2>
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1))}
-              >
-                <ChevronRight className="w-4 h-4" />
-              </Button>
-            </div>
+      <div className="container mx-auto px-4 py-8">
+        <div className="mb-8 flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold flex items-center gap-3">
+              <CalendarIcon className="h-8 w-8 text-blue-600" />
+              Agenda Médica
+            </h1>
+            <p className="text-muted-foreground mt-2">Gerencie seus compromissos e consultas</p>
+          </div>
 
-            <div className="grid grid-cols-7 gap-2 mb-2">
-              {['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'].map(day => (
-                <div key={day} className="text-center font-semibold text-sm text-muted-foreground">
-                  {day}
+          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+            <DialogTrigger asChild>
+              <Button>
+                <Plus className="h-4 w-4 mr-2" />
+                Novo Evento
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-2xl">
+              <DialogHeader>
+                <DialogTitle>Criar Novo Evento</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div>
+                  <Label>Título *</Label>
+                  <Input
+                    value={newEvent.title}
+                    onChange={(e) => setNewEvent({ ...newEvent, title: e.target.value })}
+                    placeholder="Ex: Consulta com paciente"
+                  />
                 </div>
-              ))}
-            </div>
-
-            <div className="grid grid-cols-7 gap-2">
-              {days.map((day, index) => {
-                const dayEvents = day ? getEventsForDay(day) : []
-                const isToday = day && day.toDateString() === new Date().toDateString()
-                const isSelected = day && selectedDate === day.toISOString().split('T')[0]
-                
-                return (
-                  <div
-                    key={index}
-                    onClick={() => day && setSelectedDate(day.toISOString().split('T')[0])}
-                    className={`
-                      min-h-24 p-2 border rounded cursor-pointer hover:bg-accent transition
-                      ${isToday ? 'border-primary border-2' : ''}
-                      ${isSelected ? 'bg-accent' : ''}
-                      ${!day ? 'bg-gray-50 cursor-default' : ''}
-                    `}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label>Início *</Label>
+                    <Input
+                      type="datetime-local"
+                      value={newEvent.start_time}
+                      onChange={(e) => setNewEvent({ ...newEvent, start_time: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <Label>Fim *</Label>
+                    <Input
+                      type="datetime-local"
+                      value={newEvent.end_time}
+                      onChange={(e) => setNewEvent({ ...newEvent, end_time: e.target.value })}
+                    />
+                  </div>
+                </div>
+                <div>
+                  <Label>Tipo de Evento</Label>
+                  <select
+                    className="w-full border rounded-lg p-2"
+                    value={newEvent.event_type}
+                    onChange={(e) => setNewEvent({ ...newEvent, event_type: e.target.value })}
                   >
-                    {day && (
-                      <>
-                        <div className="text-sm font-medium mb-1">{day.getDate()}</div>
-                        <div className="space-y-1">
-                          {dayEvents.slice(0, 3).map(event => (
-                            <div
-                              key={event.id}
-                              className="text-xs bg-primary/10 rounded px-1 py-0.5 truncate"
-                            >
-                              {event.title}
-                            </div>
-                          ))}
-                          {dayEvents.length > 3 && (
-                            <div className="text-xs text-muted-foreground">
-                              +{dayEvents.length - 3} mais
+                    <option value="appointment">Consulta</option>
+                    <option value="procedure">Procedimento</option>
+                    <option value="surgery">Cirurgia</option>
+                    <option value="exam">Exame</option>
+                    <option value="meeting">Reunião</option>
+                    <option value="break">Pausa</option>
+                  </select>
+                </div>
+                <div>
+                  <Label>Local</Label>
+                  <Input
+                    value={newEvent.location}
+                    onChange={(e) => setNewEvent({ ...newEvent, location: e.target.value })}
+                    placeholder="Ex: Consultório 1"
+                  />
+                </div>
+                <div>
+                  <Label>Descrição</Label>
+                  <Textarea
+                    value={newEvent.description}
+                    onChange={(e) => setNewEvent({ ...newEvent, description: e.target.value })}
+                    rows={3}
+                    placeholder="Informações adicionais sobre o evento..."
+                  />
+                </div>
+              </div>
+              <div className="flex gap-2 mt-6">
+                <Button onClick={handleCreateEvent} className="flex-1">
+                  Criar Evento
+                </Button>
+                <Button variant="outline" onClick={() => setIsDialogOpen(false)} className="flex-1">
+                  Cancelar
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Calendar */}
+          <div className="lg:col-span-2">
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1))}
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <CardTitle className="text-xl">
+                    {currentDate.toLocaleDateString("pt-BR", { month: "long", year: "numeric" })}
+                  </CardTitle>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1))}
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {loading ? (
+                  <div className="flex items-center justify-center py-12">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                  </div>
+                ) : (
+                  <>
+                    <div className="grid grid-cols-7 gap-2 mb-2">
+                      {WEEKDAYS.map((day) => (
+                        <div key={day} className="text-center font-semibold text-sm text-muted-foreground py-2">
+                          {day}
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="grid grid-cols-7 gap-2">
+                      {days.map((day, index) => {
+                        const dayEvents = day ? getEventsForDay(day) : []
+                        const isToday = day && day.toDateString() === new Date().toDateString()
+                        const isSelected = day && selectedDate === day.toISOString().split("T")[0]
+
+                        return (
+                          <div
+                            key={index}
+                            onClick={() => day && setSelectedDate(day.toISOString().split("T")[0])}
+                            className={`
+                              min-h-24 p-2 border rounded-lg cursor-pointer hover:bg-accent transition-colors
+                              ${isToday ? "border-primary border-2 bg-primary/5" : ""}
+                              ${isSelected ? "bg-accent" : ""}
+                              ${!day ? "bg-muted/30 cursor-default" : ""}
+                            `}
+                          >
+                            {day && (
+                              <>
+                                <div className={`text-sm font-medium mb-1 ${isToday ? "text-primary" : ""}`}>
+                                  {day.getDate()}
+                                </div>
+                                <div className="space-y-1">
+                                  {dayEvents.slice(0, 2).map((event) => (
+                                    <div
+                                      key={event.id}
+                                      className="text-xs bg-primary/10 rounded px-1 py-0.5 truncate"
+                                      title={event.title}
+                                    >
+                                      {event.title}
+                                    </div>
+                                  ))}
+                                  {dayEvents.length > 2 && (
+                                    <div className="text-xs text-muted-foreground">+{dayEvents.length - 2} mais</div>
+                                  )}
+                                </div>
+                              </>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Day Schedule */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">
+                {selectedDate
+                  ? new Date(selectedDate).toLocaleDateString("pt-BR", {
+                      day: "2-digit",
+                      month: "long",
+                      year: "numeric",
+                    })
+                  : "Selecione um dia"}
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {selectedDate ? (
+                <div className="space-y-3 max-h-[600px] overflow-y-auto">
+                  {dayEvents.length === 0 ? (
+                    <p className="text-sm text-muted-foreground text-center py-8">Nenhum evento agendado</p>
+                  ) : (
+                    dayEvents.map((event) => (
+                      <div key={event.id} className="border rounded-lg p-4 hover:bg-accent transition-colors">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="font-medium">{event.title}</span>
+                          <Badge className={getStatusColor(event.status)} variant="secondary">
+                            {event.status}
+                          </Badge>
+                        </div>
+                        <div className="space-y-1 text-sm text-muted-foreground">
+                          <div className="flex items-center gap-2">
+                            <Clock className="h-4 w-4" />
+                            {new Date(event.start_time).toLocaleTimeString("pt-BR", {
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })}{" "}
+                            -{" "}
+                            {new Date(event.end_time).toLocaleTimeString("pt-BR", {
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })}
+                          </div>
+                          {event.patient_name && <div>Paciente: {event.patient_name}</div>}
+                          {event.location && (
+                            <div className="flex items-center gap-2">
+                              <MapPin className="h-4 w-4" />
+                              {event.location}
                             </div>
                           )}
                         </div>
-                      </>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
-          </Card>
-        </div>
-
-        {/* Day Schedule */}
-        <div className="col-span-1">
-          <Card className="p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-semibold">
-                {selectedDate
-                  ? new Date(selectedDate).toLocaleDateString('pt-BR', { day: '2-digit', month: 'long' })
-                  : 'Selecione um dia'}
-              </h3>
-              <Button size="sm" onClick={() => setShowNewEvent(true)}>
-                <Plus className="w-4 h-4" />
-              </Button>
-            </div>
-
-            {selectedDate ? (
-              <div className="space-y-2 max-h-[600px] overflow-y-auto">
-                {dayEvents.length === 0 ? (
-                  <p className="text-sm text-muted-foreground text-center py-8">
-                    Nenhum evento agendado
-                  </p>
-                ) : (
-                  dayEvents.map(event => (
-                    <div key={event.id} className="border rounded p-3">
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="font-medium text-sm">{event.title}</span>
-                        <Badge className={getStatusColor(event.status)} variant="secondary">
-                          {event.status}
-                        </Badge>
                       </div>
-                      <div className="space-y-1 text-xs text-muted-foreground">
-                        <div className="flex items-center gap-1">
-                          <Clock className="w-3 h-3" />
-                          {new Date(event.start_time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-                          {' - '}
-                          {new Date(event.end_time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-                        </div>
-                        {event.patient_name && (
-                          <div>Paciente: {event.patient_name}</div>
-                        )}
-                        {event.location && (
-                          <div className="flex items-center gap-1">
-                            <MapPin className="w-3 h-3" />
-                            {event.location}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            ) : (
-              <p className="text-sm text-muted-foreground text-center py-8">
-                Clique em um dia para ver os eventos
-              </p>
-            )}
+                    ))
+                  )}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground text-center py-8">Clique em um dia para ver os eventos</p>
+              )}
+            </CardContent>
           </Card>
         </div>
       </div>
-
-      {/* New Event Modal */}
-      {showNewEvent && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-          <Card className="p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-            <h3 className="text-xl font-semibold mb-4">Novo Evento</h3>
-            <div className="space-y-4">
-              <div>
-                <Label>Título</Label>
-                <Input
-                  value={newEvent.title}
-                  onChange={(e) => setNewEvent({ ...newEvent, title: e.target.value })}
-                  placeholder="Ex: Consulta com paciente"
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label>Início</Label>
-                  <Input
-                    type="datetime-local"
-                    value={newEvent.start_time}
-                    onChange={(e) => setNewEvent({ ...newEvent, start_time: e.target.value })}
-                  />
-                </div>
-                <div>
-                  <Label>Fim</Label>
-                  <Input
-                    type="datetime-local"
-                    value={newEvent.end_time}
-                    onChange={(e) => setNewEvent({ ...newEvent, end_time: e.target.value })}
-                  />
-                </div>
-              </div>
-              <div>
-                <Label>Tipo</Label>
-                <select
-                  className="w-full border rounded p-2"
-                  value={newEvent.event_type}
-                  onChange={(e) => setNewEvent({ ...newEvent, event_type: e.target.value })}
-                >
-                  <option value="appointment">Consulta</option>
-                  <option value="procedure">Procedimento</option>
-                  <option value="surgery">Cirurgia</option>
-                  <option value="exam">Exame</option>
-                  <option value="meeting">Reunião</option>
-                  <option value="break">Pausa</option>
-                </select>
-              </div>
-              <div>
-                <Label>Local</Label>
-                <Input
-                  value={newEvent.location}
-                  onChange={(e) => setNewEvent({ ...newEvent, location: e.target.value })}
-                  placeholder="Ex: Consultório 1"
-                />
-              </div>
-              <div>
-                <Label>Descrição</Label>
-                <Textarea
-                  value={newEvent.description}
-                  onChange={(e) => setNewEvent({ ...newEvent, description: e.target.value })}
-                  rows={3}
-                />
-              </div>
-            </div>
-            <div className="flex gap-2 mt-6">
-              <Button onClick={handleCreateEvent}>Criar Evento</Button>
-              <Button variant="outline" onClick={() => setShowNewEvent(false)}>
-                Cancelar
-              </Button>
-            </div>
-          </Card>
-        </div>
-      )}
     </div>
   )
 }

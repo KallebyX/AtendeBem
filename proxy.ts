@@ -3,26 +3,26 @@ import type { NextRequest } from "next/server"
 import { verifySession } from "@/lib/session"
 
 const publicRoutes = ["/", "/login", "/cadastro"]
+const publicPathPrefixes = ["/validar/", "/api/", "/images/", "/_next/", "/favicon"]
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
 
-  // Allow public routes
+  // Allow exact public routes
   if (publicRoutes.includes(pathname)) {
+    return NextResponse.next()
+  }
+
+  // Allow public path prefixes
+  if (publicPathPrefixes.some((path) => pathname.startsWith(path))) {
     return NextResponse.next()
   }
 
   // Check for session token
   const token = request.cookies.get("session")?.value
 
-  console.log("[v0] Middleware check:", {
-    pathname,
-    hasToken: !!token,
-    tokenLength: token?.length,
-  })
-
   if (!token) {
-    console.log("[v0] No token found, redirecting to login")
+    console.log("[MIDDLEWARE] No token, redirecting:", pathname)
     return NextResponse.redirect(new URL("/login", request.url))
   }
 
@@ -30,11 +30,13 @@ export async function proxy(request: NextRequest) {
   const user = await verifySession(token)
 
   if (!user) {
-    console.log("[v0] Invalid token, redirecting to login")
-    return NextResponse.redirect(new URL("/login", request.url))
+    console.log("[MIDDLEWARE] Invalid token, redirecting:", pathname)
+    const response = NextResponse.redirect(new URL("/login", request.url))
+    response.cookies.delete("session")
+    return response
   }
 
-  console.log("[v0] Valid session for user:", user.id)
+  console.log("[MIDDLEWARE] Authenticated:", user.email, "->", pathname)
   return NextResponse.next()
 }
 
