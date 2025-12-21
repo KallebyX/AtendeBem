@@ -9,9 +9,8 @@ import { storeRefreshToken, getRefreshToken, deleteRefreshToken } from "./redis"
 import { cookies } from "next/headers"
 
 const JWT_SECRET = process.env.JWT_SECRET || "atendebem-secret-key-change-in-production"
-// Aumentado para 7 dias para evitar logouts frequentes (era 15 min)
-const ACCESS_TOKEN_EXPIRY = Number.parseInt(process.env.JWT_ACCESS_TOKEN_EXPIRY || "604800") // 7 dias
-const REFRESH_TOKEN_EXPIRY = Number.parseInt(process.env.JWT_REFRESH_TOKEN_EXPIRY || "2592000") // 30 dias
+const ACCESS_TOKEN_EXPIRY = Number.parseInt(process.env.JWT_ACCESS_TOKEN_EXPIRY || "2592000") // 30 dias
+const REFRESH_TOKEN_EXPIRY = Number.parseInt(process.env.JWT_REFRESH_TOKEN_EXPIRY || "7776000") // 90 dias
 
 export interface SessionUser {
   id: string
