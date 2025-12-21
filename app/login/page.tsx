@@ -66,6 +66,7 @@ export default function LoginPage() {
                   type="email"
                   placeholder="seu@email.com"
                   className="rounded-2xl h-11"
+                  autoComplete="email"
                   required
                   disabled={loading}
                 />
@@ -78,6 +79,7 @@ export default function LoginPage() {
                   type="password"
                   placeholder="••••••••"
                   className="rounded-2xl h-11"
+                  autoComplete="current-password"
                   required
                   disabled={loading}
                 />

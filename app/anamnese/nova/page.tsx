@@ -9,42 +9,32 @@ import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
 import { NavigationHeader } from "@/components/navigation-header"
-import {
-  ChevronLeft,
-  ChevronRight,
-  Check,
-  FileText,
-  User,
-  Activity,
-  AlertCircle,
-  Heart,
-  Wind,
-  Utensils,
-} from "lucide-react"
+import { PatientSearchSelect } from "@/components/patient-search-select"
+import { AlertCircle, FileText } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { createAnamnesis, updateAnamnesisStep, getAnamnesisTemplates } from "@/app/actions/anamnesis"
+import { toast } from "sonner"
 
 const STEPS = [
-  { id: 1, name: "Identificação", icon: User },
+  { id: 1, name: "Identificação", icon: FileText },
   { id: 2, name: "Queixa Principal", icon: FileText },
-  { id: 3, name: "História da Doença", icon: Activity },
+  { id: 3, name: "História da Doença", icon: FileText },
   { id: 4, name: "Antecedentes", icon: FileText },
-  { id: 5, name: "Revisão de Sistemas", icon: Activity },
-  { id: 6, name: "Exame Físico", icon: Heart },
-  { id: 7, name: "Conduta", icon: Check },
+  { id: 5, name: "Revisão de Sistemas", icon: FileText },
+  { id: 6, name: "Exame Físico", icon: FileText },
+  { id: 7, name: "Conduta", icon: FileText },
 ]
 
-export default function NovaAnamnesiPage() {
+export default function NovaAnamesePage() {
   const router = useRouter()
   const [currentStep, setCurrentStep] = useState(1)
   const [anamnesisId, setAnamnesisId] = useState<string | null>(null)
-  const [error, setError] = useState("")
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState("")
   const [autoSaving, setAutoSaving] = useState(false)
 
   const [patients, setPatients] = useState<any[]>([])
   const [searchingPatients, setSearchingPatients] = useState(false)
-  const [selectedPatientId, setSelectedPatientId] = useState("")
   const [selectedPatient, setSelectedPatient] = useState<any>(null)
   const [templates, setTemplates] = useState<any[]>([])
 
@@ -109,8 +99,18 @@ export default function NovaAnamnesiPage() {
   }, [])
 
   useEffect(() => {
-    loadTemplates()
-  }, [formData.specialty])
+    async function fetchTemplates() {
+      try {
+        const result = await getAnamnesisTemplates()
+        if (result.success) {
+          setTemplates(result.templates || [])
+        }
+      } catch (err) {
+        console.error("[v0] Error fetching templates:", err)
+      }
+    }
+    fetchTemplates()
+  }, [])
 
   useEffect(() => {
     if (!anamnesisId) return
@@ -121,13 +121,6 @@ export default function NovaAnamnesiPage() {
 
     return () => clearInterval(interval)
   }, [anamnesisId, formData, currentStep])
-
-  async function loadTemplates() {
-    const result = await getAnamnesisTemplates(formData.specialty)
-    if (result.success && result.data) {
-      setTemplates(result.data)
-    }
-  }
 
   async function autoSave() {
     if (!anamnesisId) return
@@ -180,12 +173,8 @@ export default function NovaAnamnesiPage() {
     }
   }
 
-  const handlePatientSelect = (patientId: string) => {
-    const patient = patients.find((p) => p.id === patientId)
-    if (patient) {
-      setSelectedPatientId(patient.id)
-      setSelectedPatient(patient)
-    }
+  const handlePatientSelect = (patient: any) => {
+    setSelectedPatient(patient)
   }
 
   async function handleNext() {
@@ -193,20 +182,21 @@ export default function NovaAnamnesiPage() {
     setLoading(true)
 
     if (currentStep === 1) {
-      if (!selectedPatientId) {
+      if (!selectedPatient) {
         setError("Selecione um paciente")
         setLoading(false)
         return
       }
 
       const result = await createAnamnesis({
-        patient_id: selectedPatientId,
+        patientId: selectedPatient.id,
         specialty: formData.specialty,
-        template_id: formData.templateId || undefined,
+        templateId: formData.templateId || undefined,
       })
 
       if (result.error) {
         setError(result.error)
+        toast.error(result.error)
         setLoading(false)
         return
       }
@@ -221,6 +211,7 @@ export default function NovaAnamnesiPage() {
 
       if (result.error) {
         setError(result.error)
+        toast.error(result.error)
         setLoading(false)
         return
       }
@@ -250,11 +241,9 @@ export default function NovaAnamnesiPage() {
           <div className="space-y-2">
             <h1 className="text-3xl font-bold text-foreground flex items-center gap-3">
               <FileText className="h-8 w-8 text-primary" />
-              Nova Anamnese Clínica
+              Nova Anamnese
             </h1>
-            <p className="text-muted-foreground leading-relaxed">
-              Registro completo da história clínica do paciente em 7 etapas
-            </p>
+            <p className="text-muted-foreground leading-relaxed">Preencha os dados da anamnese do paciente</p>
           </div>
 
           {error && (
@@ -290,7 +279,7 @@ export default function NovaAnamnesiPage() {
                       }
                     `}
                     >
-                      {currentStep > step.id ? <Check className="w-6 h-6" /> : <step.icon className="w-6 h-6" />}
+                      {currentStep > step.id ? <FileText className="w-6 h-6" /> : <step.icon className="w-6 h-6" />}
                     </div>
                     <span className="text-xs text-center whitespace-nowrap">{step.name}</span>
                   </div>
@@ -304,10 +293,21 @@ export default function NovaAnamnesiPage() {
             </div>
           </div>
 
+          {/* Dados do Paciente */}
+          <Card className="rounded-3xl">
+            <CardHeader>
+              <CardTitle>Dados do Paciente</CardTitle>
+              <CardDescription>Selecione o paciente para esta anamnese</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <PatientSearchSelect onPatientSelect={handlePatientSelect} selectedPatient={selectedPatient} required />
+            </CardContent>
+          </Card>
+
           <Card className="rounded-3xl">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <StepIcon className="h-6 w-6 text-primary" />
+                {currentStep === 1 ? <FileText className="h-6 w-6 text-primary" /> : StepIcon}
                 {STEPS[currentStep - 1].name}
               </CardTitle>
               <CardDescription>
@@ -324,29 +324,6 @@ export default function NovaAnamnesiPage() {
               {/* Step 1: Identificação */}
               {currentStep === 1 && (
                 <div className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="patientSelect">Selecionar paciente *</Label>
-                    <Select value={selectedPatientId} onValueChange={handlePatientSelect} disabled={searchingPatients}>
-                      <SelectTrigger className="rounded-2xl">
-                        <SelectValue
-                          placeholder={searchingPatients ? "Carregando pacientes..." : "Selecione um paciente"}
-                        />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {patients.map((patient) => (
-                          <SelectItem key={patient.id} value={patient.id}>
-                            {patient.full_name} - CPF: {patient.cpf}
-                          </SelectItem>
-                        ))}
-                        {patients.length === 0 && !searchingPatients && (
-                          <SelectItem value="none" disabled>
-                            Nenhum paciente cadastrado
-                          </SelectItem>
-                        )}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
                   {selectedPatient && (
                     <Card className="rounded-2xl bg-muted">
                       <CardContent className="p-4 space-y-2">
@@ -576,20 +553,19 @@ export default function NovaAnamnesiPage() {
               {currentStep === 5 && (
                 <div className="grid md:grid-cols-2 gap-4">
                   {[
-                    { key: "cardiovascular", label: "Cardiovascular", icon: Heart },
-                    { key: "respiratory", label: "Respiratório", icon: Wind },
-                    { key: "gastrointestinal", label: "Digestivo", icon: Utensils },
-                    { key: "genitourinary", label: "Urinário", icon: Activity },
-                    { key: "musculoskeletal", label: "Musculoesquelético", icon: Activity },
-                    { key: "neurological", label: "Neurológico", icon: Activity },
-                    { key: "psychiatric", label: "Psiquiátrico", icon: Activity },
-                    { key: "endocrine", label: "Endócrino", icon: Activity },
+                    { key: "cardiovascular", label: "Cardiovascular", icon: FileText },
+                    { key: "respiratory", label: "Respiratório", icon: FileText },
+                    { key: "gastrointestinal", label: "Digestivo", icon: FileText },
+                    { key: "genitourinary", label: "Urinário", icon: FileText },
+                    { key: "musculoskeletal", label: "Musculoesquelético", icon: FileText },
+                    { key: "neurological", label: "Neurológico", icon: FileText },
+                    { key: "psychiatric", label: "Psiquiátrico", icon: FileText },
+                    { key: "endocrine", label: "Endócrino", icon: FileText },
                   ].map((system) => {
-                    const Icon = system.icon
                     return (
                       <div key={system.key} className="space-y-2">
                         <Label htmlFor={system.key} className="flex items-center gap-2">
-                          <Icon className="h-4 w-4" />
+                          {system.icon}
                           {system.label}
                         </Label>
                         <Textarea
@@ -842,12 +818,12 @@ export default function NovaAnamnesiPage() {
                   variant="outline"
                   className="rounded-2xl bg-transparent"
                 >
-                  <ChevronLeft className="w-4 h-4 mr-2" />
+                  <FileText className="w-4 h-4 mr-2" />
                   Anterior
                 </Button>
                 <Button onClick={handleNext} disabled={loading} className="rounded-2xl">
                   {loading ? "Salvando..." : currentStep === 7 ? "Concluir Anamnese" : "Próximo"}
-                  {currentStep < 7 && !loading && <ChevronRight className="w-4 h-4 ml-2" />}
+                  {currentStep < 7 && !loading && <FileText className="w-4 h-4 ml-2" />}
                 </Button>
               </div>
             </CardContent>

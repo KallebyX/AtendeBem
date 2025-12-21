@@ -255,6 +255,7 @@ export default function ConfiguracoesPage() {
                     name="current-password"
                     type="password"
                     className="rounded-2xl h-11"
+                    autoComplete="current-password"
                     required
                   />
                 </div>
@@ -265,6 +266,7 @@ export default function ConfiguracoesPage() {
                     name="new-password"
                     type="password"
                     className="rounded-2xl h-11"
+                    autoComplete="new-password"
                     required
                     minLength={8}
                   />
@@ -276,6 +278,7 @@ export default function ConfiguracoesPage() {
                     name="confirm-password"
                     type="password"
                     className="rounded-2xl h-11"
+                    autoComplete="new-password"
                     required
                     minLength={8}
                   />
