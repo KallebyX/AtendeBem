@@ -58,7 +58,7 @@ export async function createAnamnesis(data: {
     if (!user) return { error: 'Token inválido' }
 
     await setUserContext(user.id)
-    const db = getDb()
+    const db = await getDb()
 
     const result = await db`
       INSERT INTO anamnesis (
@@ -87,7 +87,7 @@ export async function updateAnamnesisStep(id: string, step: number, data: any) {
     if (!user) return { error: 'Token inválido' }
 
     await setUserContext(user.id)
-    const db = getDb()
+    const db = await getDb()
 
     const updates: any = {
       current_step: step,
@@ -171,7 +171,7 @@ export async function getAnamnesisByPatient(patient_id: string) {
     if (!user) return { error: 'Token inválido' }
 
     await setUserContext(user.id)
-    const db = getDb()
+    const db = await getDb()
 
     const result = await db`
       SELECT a.*, p.name as patient_name
@@ -199,7 +199,7 @@ export async function getAnamnesisById(id: string) {
     if (!user) return { error: 'Token inválido' }
 
     await setUserContext(user.id)
-    const db = getDb()
+    const db = await getDb()
 
     const result = await db`
       SELECT a.*, p.name as patient_name
@@ -227,7 +227,7 @@ export async function getAnamnesisTemplates(specialty?: string) {
     if (!user) return { error: 'Token inválido' }
 
     await setUserContext(user.id)
-    const db = getDb()
+    const db = await getDb()
 
     let query = `
       SELECT * FROM anamnesis_templates
@@ -261,7 +261,7 @@ export async function deleteAnamnesis(id: string) {
     if (!user) return { error: 'Token inválido' }
 
     await setUserContext(user.id)
-    const db = getDb()
+    const db = await getDb()
 
     const result = await db`
       UPDATE anamnesis 

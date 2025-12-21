@@ -22,7 +22,7 @@ export async function createContract(data: {
     if (!user) return { error: 'Token inválido' }
 
     await setUserContext(user.id)
-    const db = getDb()
+    const db = await getDb()
 
     // Gerar número do contrato
     const count = await db`SELECT COUNT(*) FROM contracts WHERE tenant_id = ${user.tenant_id}`
@@ -55,7 +55,7 @@ export async function getContracts(filters?: { patient_id?: string; status?: str
     if (!user) return { error: 'Token inválido' }
 
     await setUserContext(user.id)
-    const db = getDb()
+    const db = await getDb()
 
     let query = `
       SELECT c.*, p.name as patient_name
@@ -97,7 +97,7 @@ export async function getContractTemplates(type?: string) {
     if (!user) return { error: 'Token inválido' }
 
     await setUserContext(user.id)
-    const db = getDb()
+    const db = await getDb()
 
     let query = `
       SELECT * FROM contract_templates
@@ -134,7 +134,7 @@ export async function signContract(data: {
     if (!user) return { error: 'Token inválido' }
 
     await setUserContext(user.id)
-    const db = getDb()
+    const db = await getDb()
 
     const result = await db`
       UPDATE contracts

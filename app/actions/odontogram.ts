@@ -20,7 +20,7 @@ export async function createOdontogram(data: {
     if (!user) return { error: "Token inválido" }
 
     await setUserContext(user.id)
-    const db = getDb()
+    const db = await getDb()
 
     const result = await db`
       INSERT INTO odontograms (
@@ -56,7 +56,7 @@ export async function updateOdontogram(
     if (!user) return { error: "Token inválido" }
 
     await setUserContext(user.id)
-    const db = getDb()
+    const db = await getDb()
 
     const result = await db`
       UPDATE odontograms SET
@@ -85,7 +85,7 @@ export async function getOdontogramsByPatient(patient_id: string) {
     if (!user) return { error: "Token inválido" }
 
     await setUserContext(user.id)
-    const db = getDb()
+    const db = await getDb()
 
     const result = await db`
       SELECT o.*, p.name as patient_name
@@ -120,7 +120,7 @@ export async function addOdontogramProcedure(data: {
     if (!user) return { error: "Token inválido" }
 
     await setUserContext(user.id)
-    const db = getDb()
+    const db = await getDb()
 
     const result = await db`
       INSERT INTO odontogram_procedures (
@@ -149,7 +149,7 @@ export async function getOdontograms(patient_id?: string) {
     if (!user) return { error: "Token inválido" }
 
     await setUserContext(user.id)
-    const db = getDb()
+    const db = await getDb()
 
     const result = await db`
       SELECT o.*, p.name as patient_name

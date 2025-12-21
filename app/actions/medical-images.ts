@@ -24,7 +24,7 @@ export async function createMedicalImage(data: {
     if (!user) return { error: "Token inválido" }
 
     await setUserContext(user.id)
-    const db = getDb()
+    const db = await getDb()
 
     // Gerar Study Instance UID se não fornecido
     const studyUID = `1.2.826.0.1.${Date.now()}.${user.tenant_id.slice(0, 8)}`
@@ -63,7 +63,7 @@ export async function getMedicalImages(filters?: {
     if (!user) return { error: "Token inválido" }
 
     await setUserContext(user.id)
-    const db = getDb()
+    const db = await getDb()
 
     let query = `
       SELECT i.*, p.name as patient_name
@@ -118,7 +118,7 @@ export async function addImageReport(data: {
     if (!user) return { error: "Token inválido" }
 
     await setUserContext(user.id)
-    const db = getDb()
+    const db = await getDb()
 
     const result = await db`
       UPDATE medical_images
@@ -158,7 +158,7 @@ export async function createImageAnnotation(data: {
     if (!user) return { error: "Token inválido" }
 
     await setUserContext(user.id)
-    const db = getDb()
+    const db = await getDb()
 
     const result = await db`
       INSERT INTO image_annotations (
@@ -188,7 +188,7 @@ export async function deleteMedicalImage(image_id: string) {
     if (!user) return { error: "Token inválido" }
 
     await setUserContext(user.id)
-    const db = getDb()
+    const db = await getDb()
 
     const result = await db`
       DELETE FROM medical_images

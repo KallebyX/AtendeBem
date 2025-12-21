@@ -38,15 +38,17 @@ export async function createAppointment(data: {
     // Criar registro de atendimento
     const result = await sql`
       INSERT INTO appointments (
-        user_id, 
-        patient_name, 
+        user_id,
+        patient_name,
         patient_cpf,
         patient_age,
         patient_gender,
-        appointment_type, 
+        appointment_type,
         specialty,
         appointment_date,
-        status
+        status,
+        context,
+        urgency
       )
       VALUES (
         ${user.id},
@@ -57,14 +59,16 @@ export async function createAppointment(data: {
         ${data.appointmentType},
         ${user.specialty || "Clínica Geral"},
         NOW(),
-        'completed'
+        'completed',
+        ${data.context || null},
+        ${data.urgency || null}
       )
       RETURNING id
     `
 
     const appointmentId = result[0].id
 
-    // Criar registros de procedimentos
+    // Criar registros de procedimentos com laterality e location
     for (const proc of data.procedures) {
       await sql`
         INSERT INTO procedures (
@@ -75,7 +79,9 @@ export async function createAppointment(data: {
           patient_name,
           patient_cpf,
           procedure_date,
-          procedure_type
+          procedure_type,
+          laterality,
+          location
         )
         VALUES (
           ${appointmentId},
@@ -85,7 +91,9 @@ export async function createAppointment(data: {
           ${data.patientName},
           ${data.patientCpf || null},
           NOW(),
-          ${data.appointmentType || 'consulta'}
+          ${data.appointmentType || 'consulta'},
+          ${proc.laterality || null},
+          ${proc.location || null}
         )
       `
     }

@@ -12,7 +12,7 @@ export async function sendSingleSMS(data: {
     const user = await getCurrentUser()
     if (!user) return { error: "Não autenticado" }
 
-    const db = getDb()
+    const db = await getDb()
 
     // Verificar opt-out
     const optOut = await db`
@@ -56,7 +56,7 @@ export async function createSMSCampaign(data: {
     const user = await getCurrentUser()
     if (!user) return { error: "Não autenticado" }
 
-    const db = getDb()
+    const db = await getDb()
 
     // Calcular total de destinatários
     let totalRecipients = 0
@@ -88,7 +88,7 @@ export async function getSMSCampaigns() {
     const user = await getCurrentUser()
     if (!user) return { error: "Não autenticado", data: [] }
 
-    const db = getDb()
+    const db = await getDb()
 
     const result = await db`
       SELECT c.*, u.name as created_by_name
@@ -114,7 +114,7 @@ export async function getSMSMessages(filters?: {
     const user = await getCurrentUser()
     if (!user) return { error: "Não autenticado", data: [] }
 
-    const db = getDb()
+    const db = await getDb()
 
     const result = await db`
       SELECT s.*, p.name as patient_name, u.name as sent_by_name
@@ -141,7 +141,7 @@ export async function addSMSOptOut(phone_number: string, reason?: string) {
     const user = await getCurrentUser()
     if (!user) return { error: "Não autenticado" }
 
-    const db = getDb()
+    const db = await getDb()
 
     await db`
       INSERT INTO sms_opt_outs (user_id, phone_number, reason)
@@ -169,7 +169,7 @@ export async function getSMSOptOuts() {
     const user = await getCurrentUser()
     if (!user) return { error: "Não autenticado", data: [] }
 
-    const db = getDb()
+    const db = await getDb()
 
     const result = await db`
       SELECT * FROM sms_opt_outs

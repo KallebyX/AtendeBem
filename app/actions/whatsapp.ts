@@ -14,7 +14,7 @@ export async function sendWhatsAppMessage(data: {
     const user = await getCurrentUser()
     if (!user) return { error: "Não autenticado" }
 
-    const db = getDb()
+    const db = await getDb()
 
     // Buscar ou criar conversa (removed tenant_id)
     let conversation = await db`
@@ -65,7 +65,7 @@ export async function getWhatsAppConversations(filters?: { status?: string }) {
     const user = await getCurrentUser()
     if (!user) return { error: "Não autenticado", data: [] }
 
-    const db = getDb()
+    const db = await getDb()
 
     const result = await db`
       SELECT c.*, p.name as patient_name, p.email as patient_email
@@ -88,7 +88,7 @@ export async function getWhatsAppMessages(conversation_id: string, limit = 100) 
     const user = await getCurrentUser()
     if (!user) return { error: "Não autenticado", data: [] }
 
-    const db = getDb()
+    const db = await getDb()
 
     const result = await db`
       SELECT m.*, u.name as sent_by_name
@@ -112,7 +112,7 @@ export async function markConversationAsRead(conversation_id: string) {
     const user = await getCurrentUser()
     if (!user) return { error: "Não autenticado" }
 
-    const db = getDb()
+    const db = await getDb()
 
     await db`
       UPDATE whatsapp_conversations
