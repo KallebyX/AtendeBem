@@ -1,37 +1,39 @@
 "use server"
 
-import { getDb } from "@/lib/db"
 import { getCurrentUser } from "@/lib/session"
-import { revalidatePath } from "next/cache"
+import { getDb } from "@/lib/db"
+import { randomBytes } from "crypto"
 
 export async function getDigitalPrescriptions() {
-  const user = await getCurrentUser()
-  if (!user) {
-    throw new Error("Não autorizado")
+  try {
+    const user = await getCurrentUser()
+    if (!user) {
+      return { success: false, error: "Não autenticado" }
+    }
+
+    const db = await getDb()
+
+    const prescriptions = await db`
+      SELECT 
+        dp.*,
+        p.name as patient_name,
+        p.cpf as patient_cpf
+      FROM digital_prescriptions dp
+      LEFT JOIN patients p ON dp.patient_id = p.id
+      WHERE dp.user_id = ${user.id}
+      ORDER BY dp.created_at DESC
+      LIMIT 100
+    `
+
+    return { success: true, prescriptions }
+  } catch (error: any) {
+    console.error("[v0] Error fetching digital prescriptions:", error)
+    return { success: false, error: error.message }
   }
-
-  const db = getDb()
-
-  const result = await db.query(
-    `SELECT 
-      dp.*,
-      p.name as patient_name,
-      p.cpf as patient_cpf,
-      u.name as doctor_name,
-      u.crm as doctor_crm
-    FROM digital_prescriptions dp
-    JOIN patients p ON dp.patient_id = p.id
-    JOIN users u ON dp.doctor_id = u.id
-    WHERE dp.user_id = $1
-    ORDER BY dp.created_at DESC`,
-    [user.id],
-  )
-
-  return { success: true, prescriptions: result.rows }
 }
 
 export async function createDigitalPrescription(data: {
-  patient_id: string
+  patientId: string
   medications: Array<{
     name: string
     dosage: string
@@ -41,199 +43,226 @@ export async function createDigitalPrescription(data: {
   }>
   notes?: string
 }) {
-  const user = await getCurrentUser()
-  if (!user) {
-    throw new Error("Não autorizado")
+  try {
+    const user = await getCurrentUser()
+    if (!user) {
+      return { success: false, error: "Não autenticado" }
+    }
+
+    const db = await getDb()
+
+    if (!data.patientId || !data.medications || data.medications.length === 0) {
+      return { success: false, error: "Dados incompletos" }
+    }
+
+    const validationToken = randomBytes(32).toString("hex")
+
+    const result = await db`
+      INSERT INTO digital_prescriptions (
+        user_id,
+        patient_id,
+        medications,
+        notes,
+        validation_token,
+        status
+      ) VALUES (
+        ${user.id},
+        ${data.patientId},
+        ${JSON.stringify(data.medications)},
+        ${data.notes || null},
+        ${validationToken},
+        'pending'
+      )
+      RETURNING *
+    `
+
+    return {
+      success: true,
+      prescription: result[0],
+      validationToken,
+    }
+  } catch (error: any) {
+    console.error("[v0] Error creating digital prescription:", error)
+    return { success: false, error: error.message }
   }
-
-  const db = getDb()
-
-  const result = await db.query(
-    `INSERT INTO digital_prescriptions (
-      user_id,
-      doctor_id,
-      patient_id,
-      medications,
-      notes,
-      status
-    ) VALUES ($1, $2, $3, $4, $5, 'active')
-    RETURNING *`,
-    [user.id, user.id, data.patient_id, JSON.stringify(data.medications), data.notes],
-  )
-
-  revalidatePath("/receitas")
-
-  return { success: true, prescription: result.rows[0] }
 }
 
 export async function validatePrescription(token: string) {
-  const db = getDb()
+  try {
+    const db = await getDb()
 
-  const result = await db.query(
-    `SELECT 
-      dp.*,
-      p.name as patient_name,
-      p.cpf as patient_cpf,
-      p.birth_date as patient_birth_date,
-      u.name as doctor_name,
-      u.crm as doctor_crm,
-      u.email as doctor_email
-    FROM digital_prescriptions dp
-    JOIN patients p ON dp.patient_id = p.id
-    JOIN users u ON dp.doctor_id = u.id
-    WHERE dp.validation_token = $1`,
-    [token],
-  )
+    const prescriptions = await db`
+      SELECT 
+        dp.*,
+        p.name as patient_name,
+        p.cpf as patient_cpf,
+        u.name as doctor_name,
+        u.crm,
+        u.crm_uf
+      FROM digital_prescriptions dp
+      LEFT JOIN patients p ON dp.patient_id = p.id
+      LEFT JOIN users u ON dp.user_id = u.id
+      WHERE dp.validation_token = ${token}
+    `
 
-  if (result.rows.length === 0) {
-    return { success: false, error: "Receita não encontrada" }
+    if (prescriptions.length === 0) {
+      return { success: false, error: "Receita não encontrada" }
+    }
+
+    const prescription = prescriptions[0]
+
+    await db`
+      UPDATE digital_prescriptions
+      SET 
+        validated_at = NOW(),
+        validation_count = validation_count + 1
+      WHERE id = ${prescription.id}
+    `
+
+    return { success: true, prescription }
+  } catch (error: any) {
+    console.error("[v0] Error validating prescription:", error)
+    return { success: false, error: error.message }
   }
-
-  const prescription = result.rows[0]
-
-  if (prescription.status === "cancelled") {
-    return { success: false, error: "Receita cancelada" }
-  }
-
-  if (prescription.expires_at && new Date(prescription.expires_at) < new Date()) {
-    return { success: false, error: "Receita expirada" }
-  }
-
-  return { success: true, prescription }
 }
 
-export async function signDigitalPrescription(prescriptionId: string, signature: string) {
-  const user = await getCurrentUser()
-  if (!user) {
-    throw new Error("Não autorizado")
+export async function signDigitalPrescription(data: {
+  prescriptionId: string
+  signature: string
+  certificateData?: any
+}) {
+  try {
+    const user = await getCurrentUser()
+    if (!user) {
+      return { success: false, error: "Não autenticado" }
+    }
+
+    const db = await getDb()
+
+    const prescriptions = await db`
+      SELECT * FROM digital_prescriptions
+      WHERE id = ${data.prescriptionId} AND user_id = ${user.id}
+    `
+
+    if (prescriptions.length === 0) {
+      return { success: false, error: "Receita não encontrada" }
+    }
+
+    await db`
+      UPDATE digital_prescriptions
+      SET 
+        signature_data = ${data.signature},
+        certificate_data = ${JSON.stringify(data.certificateData || {})},
+        signed_at = NOW(),
+        status = 'signed'
+      WHERE id = ${data.prescriptionId}
+    `
+
+    return { success: true }
+  } catch (error: any) {
+    console.error("[v0] Error signing prescription:", error)
+    return { success: false, error: error.message }
   }
-
-  const db = getDb()
-
-  const result = await db.query(
-    `UPDATE digital_prescriptions
-    SET 
-      signed = true,
-      signed_at = NOW(),
-      signature = $1
-    WHERE id = $2 AND doctor_id = $3
-    RETURNING *`,
-    [signature, prescriptionId, user.id],
-  )
-
-  if (result.rows.length === 0) {
-    throw new Error("Receita não encontrada")
-  }
-
-  revalidatePath("/receitas")
-
-  return { success: true, prescription: result.rows[0] }
 }
 
 export async function generatePrescriptionPDF(prescriptionId: string) {
-  const user = await getCurrentUser()
-  if (!user) {
-    throw new Error("Não autorizado")
-  }
+  try {
+    const user = await getCurrentUser()
+    if (!user) {
+      return { success: false, error: "Não autenticado" }
+    }
 
-  const db = getDb()
+    const db = await getDb()
 
-  const result = await db.query(
-    `SELECT 
-      dp.*,
-      p.name as patient_name,
-      p.cpf as patient_cpf,
-      p.birth_date as patient_birth_date,
-      u.name as doctor_name,
-      u.crm as doctor_crm
-    FROM digital_prescriptions dp
-    JOIN patients p ON dp.patient_id = p.id
-    JOIN users u ON dp.doctor_id = u.id
-    WHERE dp.id = $1 AND dp.user_id = $2`,
-    [prescriptionId, user.id],
-  )
+    const prescriptions = await db`
+      SELECT 
+        dp.*,
+        p.name as patient_name,
+        p.cpf as patient_cpf,
+        p.birth_date,
+        u.name as doctor_name,
+        u.crm,
+        u.crm_uf
+      FROM digital_prescriptions dp
+      LEFT JOIN patients p ON dp.patient_id = p.id
+      LEFT JOIN users u ON dp.user_id = u.id
+      WHERE dp.id = ${prescriptionId} AND dp.user_id = ${user.id}
+    `
 
-  if (result.rows.length === 0) {
-    throw new Error("Receita não encontrada")
-  }
+    if (prescriptions.length === 0) {
+      return { success: false, error: "Receita não encontrada" }
+    }
 
-  const prescription = result.rows[0]
-  const medications = JSON.parse(prescription.medications)
+    const prescription = prescriptions[0]
+    const medications = JSON.parse(prescription.medications)
 
-  const html = `
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <meta charset="UTF-8">
-      <title>Receita Médica - ${prescription.patient_name}</title>
-      <style>
-        body { font-family: Arial, sans-serif; padding: 40px; max-width: 800px; margin: 0 auto; }
-        .header { text-align: center; border-bottom: 3px solid #2563eb; padding-bottom: 20px; margin-bottom: 30px; }
-        .header h1 { color: #2563eb; margin: 0; }
-        .section { margin: 25px 0; }
-        .label { font-weight: bold; color: #333; display: inline-block; width: 150px; }
-        .medication { background: #f8fafc; padding: 15px; margin: 10px 0; border-left: 4px solid #2563eb; border-radius: 4px; }
-        .medication-name { font-weight: bold; font-size: 18px; color: #1e40af; margin-bottom: 8px; }
-        .footer { margin-top: 50px; text-align: center; border-top: 2px solid #e5e7eb; padding-top: 20px; }
-        .signature { margin-top: 60px; text-align: center; }
-        .signature-line { border-top: 2px solid #333; width: 300px; margin: 0 auto; padding-top: 10px; }
-      </style>
-    </head>
-    <body>
-      <div class="header">
-        <h1>Receita Médica Digital</h1>
-        <p>Data de Emissão: ${new Date(prescription.created_at).toLocaleDateString("pt-BR")}</p>
+    const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Receita Digital - ${prescription.patient_name}</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 40px; }
+    .header { text-align: center; border-bottom: 2px solid #333; padding-bottom: 20px; margin-bottom: 30px; }
+    .section { margin: 20px 0; }
+    .medication { border: 1px solid #ddd; padding: 15px; margin: 10px 0; border-radius: 8px; }
+    .footer { margin-top: 40px; text-align: center; font-size: 12px; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>RECEITA MÉDICA DIGITAL</h1>
+    <p><strong>Dr(a). ${prescription.doctor_name}</strong></p>
+    <p>CRM: ${prescription.crm} - ${prescription.crm_uf}</p>
+  </div>
+
+  <div class="section">
+    <p><strong>Paciente:</strong> ${prescription.patient_name}</p>
+    <p><strong>CPF:</strong> ${prescription.patient_cpf || "N/A"}</p>
+    <p><strong>Data:</strong> ${new Date(prescription.created_at).toLocaleDateString("pt-BR")}</p>
+  </div>
+
+  <div class="section">
+    <h3>MEDICAMENTOS PRESCRITOS:</h3>
+    ${medications
+      .map(
+        (med: any, index: number) => `
+      <div class="medication">
+        <p><strong>${index + 1}. ${med.name}</strong></p>
+        <p>Dosagem: ${med.dosage}</p>
+        <p>Frequência: ${med.frequency}</p>
+        <p>Duração: ${med.duration}</p>
+        ${med.instructions ? `<p>Instruções: ${med.instructions}</p>` : ""}
       </div>
-      
-      <div class="section">
-        <p><span class="label">Paciente:</span> ${prescription.patient_name}</p>
-        <p><span class="label">CPF:</span> ${prescription.patient_cpf || "Não informado"}</p>
-        <p><span class="label">Data de Nascimento:</span> ${prescription.patient_birth_date ? new Date(prescription.patient_birth_date).toLocaleDateString("pt-BR") : "Não informado"}</p>
-      </div>
+    `,
+      )
+      .join("")}
+  </div>
 
-      <div class="section">
-        <h2>Medicações Prescritas</h2>
-        ${medications
-          .map(
-            (med: any, index: number) => `
-          <div class="medication">
-            <div class="medication-name">${index + 1}. ${med.name}</div>
-            <p><span class="label">Dosagem:</span> ${med.dosage}</p>
-            <p><span class="label">Frequência:</span> ${med.frequency}</p>
-            <p><span class="label">Duração:</span> ${med.duration}</p>
-            ${med.instructions ? `<p><span class="label">Instruções:</span> ${med.instructions}</p>` : ""}
-          </div>
-        `,
-          )
-          .join("")}
-      </div>
-
-      ${
-        prescription.notes
-          ? `
-      <div class="section">
-        <h3>Observações</h3>
-        <p>${prescription.notes}</p>
-      </div>
-      `
-          : ""
-      }
-
-      <div class="signature">
-        <div class="signature-line">
-          <strong>${prescription.doctor_name}</strong><br>
-          CRM: ${prescription.doctor_crm || "Não informado"}<br>
-          ${prescription.signed ? "Assinatura Digital Certificada" : "Aguardando Assinatura"}
-        </div>
-      </div>
-
-      <div class="footer">
-        <p><small>Documento gerado eletronicamente - AtendeBem</small></p>
-        ${prescription.validation_token ? `<p><small>Token de Validação: ${prescription.validation_token}</small></p>` : ""}
-      </div>
-    </body>
-    </html>
+  ${
+    prescription.notes
+      ? `
+  <div class="section">
+    <h3>OBSERVAÇÕES:</h3>
+    <p>${prescription.notes}</p>
+  </div>
   `
+      : ""
+  }
 
-  return { success: true, html }
+  <div class="footer">
+    <p>Token de Validação: ${prescription.validation_token}</p>
+    <p>Valide esta receita em: https://www.atendebem.io/validar/${prescription.validation_token}</p>
+    <p>Receita gerada digitalmente em ${new Date().toLocaleString("pt-BR")}</p>
+  </div>
+</body>
+</html>
+    `
+
+    return { success: true, html }
+  } catch (error: any) {
+    console.error("[v0] Error generating prescription PDF:", error)
+    return { success: false, error: error.message }
+  }
 }

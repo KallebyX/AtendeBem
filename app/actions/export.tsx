@@ -1,168 +1,224 @@
 "use server"
 
-import { getDb } from "@/lib/db"
 import { getCurrentUser } from "@/lib/session"
+import { getDb } from "@/lib/db"
 
 export async function exportAppointmentPDF(appointmentId: string) {
-  const user = await getCurrentUser()
-  if (!user) {
-    throw new Error("Não autorizado")
-  }
+  try {
+    const user = await getCurrentUser()
+    if (!user) {
+      return { success: false, error: "Não autenticado" }
+    }
 
-  const db = getDb()
+    const db = await getDb()
 
-  const appointment = await db.query(
-    `SELECT 
-      a.*,
-      p.name as patient_name,
-      p.cpf as patient_cpf,
-      p.birth_date as patient_birth_date,
-      u.name as doctor_name,
-      u.crm
-    FROM appointments a
-    JOIN patients p ON a.patient_id = p.id
-    JOIN users u ON a.doctor_id = u.id
-    WHERE a.id = $1 AND a.user_id = $2`,
-    [appointmentId, user.id],
-  )
+    const appointments = await db`
+      SELECT 
+        a.*,
+        p.name as patient_name, p.cpf as patient_cpf, p.cns as patient_cns, p.birth_date,
+        u.name as doctor_name, u.crm, u.crm_uf, u.specialty
+      FROM appointments a
+      LEFT JOIN patients p ON a.patient_id = p.id
+      LEFT JOIN users u ON a.user_id = u.id
+      WHERE a.id = ${appointmentId} AND a.user_id = ${user.id}
+    `
 
-  if (appointment.rows.length === 0) {
-    throw new Error("Consulta não encontrada")
-  }
+    if (appointments.length === 0) {
+      return { success: false, error: "Atendimento não encontrado" }
+    }
 
-  const data = appointment.rows[0]
+    const appointment = appointments[0]
 
-  const procedures = await db.query(`SELECT * FROM appointment_procedures WHERE appointment_id = $1`, [appointmentId])
+    const procedures = await db`
+      SELECT code, description, quantity, unit_price, total_price
+      FROM appointment_procedures
+      WHERE appointment_id = ${appointmentId}
+      ORDER BY created_at
+    `
 
-  const html = `
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <meta charset="UTF-8">
-      <title>Consulta - ${data.patient_name}</title>
-      <style>
-        body { font-family: Arial, sans-serif; padding: 40px; }
-        .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #333; padding-bottom: 20px; }
-        .section { margin: 20px 0; }
-        .label { font-weight: bold; color: #555; }
-        table { width: 100%; border-collapse: collapse; margin-top: 15px; }
-        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-        th { background-color: #f4f4f4; }
-      </style>
-    </head>
-    <body>
-      <div class="header">
-        <h1>Relatório de Consulta</h1>
-        <p>Data: ${new Date(data.date).toLocaleDateString("pt-BR")}</p>
-      </div>
-      
-      <div class="section">
-        <h2>Dados do Paciente</h2>
-        <p><span class="label">Nome:</span> ${data.patient_name}</p>
-        <p><span class="label">CPF:</span> ${data.patient_cpf || "Não informado"}</p>
-        <p><span class="label">Data de Nascimento:</span> ${data.patient_birth_date ? new Date(data.patient_birth_date).toLocaleDateString("pt-BR") : "Não informado"}</p>
-      </div>
+    const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Guia de Consulta TISS - ${appointment.patient_name}</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 40px; font-size: 12px; }
+    .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #333; padding-bottom: 10px; }
+    .section { margin: 20px 0; }
+    .section-title { font-weight: bold; background: #f0f0f0; padding: 8px; margin-bottom: 10px; }
+    table { width: 100%; border-collapse: collapse; margin: 10px 0; }
+    th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+    th { background-color: #f0f0f0; font-weight: bold; }
+    .footer { margin-top: 40px; text-align: center; font-size: 10px; color: #666; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>GUIA DE CONSULTA - TISS 4.0</h1>
+    <p>Padrão TISS - Troca de Informações na Saúde Suplementar</p>
+  </div>
 
-      <div class="section">
-        <h2>Dados da Consulta</h2>
-        <p><span class="label">Médico:</span> ${data.doctor_name}</p>
-        <p><span class="label">CRM:</span> ${data.crm || "Não informado"}</p>
-        <p><span class="label">Tipo:</span> ${data.type}</p>
-        <p><span class="label">Status:</span> ${data.status}</p>
-      </div>
+  <div class="section">
+    <div class="section-title">DADOS DA GUIA</div>
+    <table>
+      <tr><td><strong>Número da Guia:</strong></td><td>${appointment.id}</td></tr>
+      <tr><td><strong>Data do Atendimento:</strong></td><td>${new Date(appointment.date).toLocaleDateString("pt-BR")}</td></tr>
+      <tr><td><strong>Horário:</strong></td><td>${appointment.time || "N/A"}</td></tr>
+      <tr><td><strong>Status:</strong></td><td>${appointment.status}</td></tr>
+    </table>
+  </div>
 
-      ${
-        procedures.rows.length > 0
-          ? `
-      <div class="section">
-        <h2>Procedimentos TUSS</h2>
-        <table>
-          <thead>
-            <tr>
-              <th>Código</th>
-              <th>Descrição</th>
-              <th>Quantidade</th>
-              <th>Valor Unitário</th>
-              <th>Total</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${procedures.rows
-              .map(
-                (proc) => `
-              <tr>
-                <td>${proc.tuss_code}</td>
-                <td>${proc.description}</td>
-                <td>${proc.quantity}</td>
-                <td>R$ ${Number.parseFloat(proc.unit_price || 0).toFixed(2)}</td>
-                <td>R$ ${(Number.parseFloat(proc.unit_price || 0) * proc.quantity).toFixed(2)}</td>
-              </tr>
-            `,
-              )
-              .join("")}
-          </tbody>
-        </table>
-      </div>
-      `
-          : ""
-      }
+  <div class="section">
+    <div class="section-title">DADOS DO BENEFICIÁRIO</div>
+    <table>
+      <tr><td><strong>Nome:</strong></td><td>${appointment.patient_name}</td></tr>
+      <tr><td><strong>CPF:</strong></td><td>${appointment.patient_cpf || "N/A"}</td></tr>
+      <tr><td><strong>CNS:</strong></td><td>${appointment.patient_cns || "N/A"}</td></tr>
+      <tr><td><strong>Data de Nascimento:</strong></td><td>${appointment.birth_date ? new Date(appointment.birth_date).toLocaleDateString("pt-BR") : "N/A"}</td></tr>
+    </table>
+  </div>
 
-      ${
-        data.notes
-          ? `
-      <div class="section">
-        <h2>Observações</h2>
-        <p>${data.notes}</p>
-      </div>
-      `
-          : ""
-      }
-    </body>
-    </html>
+  <div class="section">
+    <div class="section-title">DADOS DO PRESTADOR</div>
+    <table>
+      <tr><td><strong>Nome:</strong></td><td>${appointment.doctor_name}</td></tr>
+      <tr><td><strong>CRM:</strong></td><td>${appointment.crm}</td></tr>
+      <tr><td><strong>UF:</strong></td><td>${appointment.crm_uf}</td></tr>
+      <tr><td><strong>Especialidade:</strong></td><td>${appointment.specialty}</td></tr>
+    </table>
+  </div>
+
+  ${
+    procedures.length > 0
+      ? `
+  <div class="section">
+    <div class="section-title">PROCEDIMENTOS REALIZADOS</div>
+    <table>
+      <thead>
+        <tr>
+          <th>Código TUSS</th>
+          <th>Descrição</th>
+          <th>Qtd</th>
+          <th>Valor Unitário</th>
+          <th>Valor Total</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${procedures
+          .map(
+            (proc) => `
+        <tr>
+          <td>${proc.code}</td>
+          <td>${proc.description}</td>
+          <td>${proc.quantity}</td>
+          <td>R$ ${(proc.unit_price || 0).toFixed(2)}</td>
+          <td>R$ ${(proc.total_price || 0).toFixed(2)}</td>
+        </tr>
+        `,
+          )
+          .join("")}
+      </tbody>
+    </table>
+  </div>
   `
+      : ""
+  }
 
-  return { success: true, html }
+  ${
+    appointment.notes
+      ? `
+  <div class="section">
+    <div class="section-title">OBSERVAÇÕES</div>
+    <p>${appointment.notes}</p>
+  </div>
+  `
+      : ""
+  }
+
+  <div class="footer">
+    <p>Documento gerado pelo sistema AtendeBem em ${new Date().toLocaleString("pt-BR")}</p>
+    <p>Este documento segue os padrões TISS 4.0 da ANS</p>
+  </div>
+</body>
+</html>
+    `
+
+    return { success: true, html, filename: `guia-${appointmentId}.pdf` }
+  } catch (error: any) {
+    console.error("[v0] Error exporting appointment PDF:", error)
+    return { success: false, error: error.message || "Erro ao gerar PDF" }
+  }
 }
 
 export async function exportAppointmentExcel(appointmentId: string) {
-  const user = await getCurrentUser()
-  if (!user) {
-    throw new Error("Não autorizado")
-  }
+  try {
+    const user = await getCurrentUser()
+    if (!user) {
+      return { success: false, error: "Não autenticado" }
+    }
 
-  const db = getDb()
+    const db = await getDb()
 
-  const appointment = await db.query(
-    `SELECT 
-      a.*,
-      p.name as patient_name,
-      p.cpf as patient_cpf,
-      u.name as doctor_name
-    FROM appointments a
-    JOIN patients p ON a.patient_id = p.id
-    JOIN users u ON a.doctor_id = u.id
-    WHERE a.id = $1 AND a.user_id = $2`,
-    [appointmentId, user.id],
-  )
+    const appointments = await db`
+      SELECT 
+        a.*,
+        p.name as patient_name, p.cpf as patient_cpf, p.cns as patient_cns,
+        u.name as doctor_name, u.crm, u.crm_uf, u.specialty
+      FROM appointments a
+      LEFT JOIN patients p ON a.patient_id = p.id
+      LEFT JOIN users u ON a.user_id = u.id
+      WHERE a.id = ${appointmentId} AND a.user_id = ${user.id}
+    `
 
-  if (appointment.rows.length === 0) {
-    throw new Error("Consulta não encontrada")
-  }
+    if (appointments.length === 0) {
+      return { success: false, error: "Atendimento não encontrado" }
+    }
 
-  const data = appointment.rows[0]
+    const appointment = appointments[0]
 
-  const procedures = await db.query(`SELECT * FROM appointment_procedures WHERE appointment_id = $1`, [appointmentId])
+    const procedures = await db`
+      SELECT code, description, quantity, unit_price, total_price
+      FROM appointment_procedures
+      WHERE appointment_id = ${appointmentId}
+      ORDER BY created_at
+    `
 
-  let csv = "Código TUSS,Descrição,Quantidade,Valor Unitário,Total\n"
+    const data = {
+      guia: {
+        numeroGuia: appointment.id,
+        dataAtendimento: new Date(appointment.date).toLocaleDateString("pt-BR"),
+        horario: appointment.time || "N/A",
+        status: appointment.status,
+      },
+      beneficiario: {
+        nome: appointment.patient_name,
+        cpf: appointment.patient_cpf || "N/A",
+        cns: appointment.patient_cns || "N/A",
+      },
+      prestador: {
+        nome: appointment.doctor_name,
+        crm: appointment.crm,
+        uf: appointment.crm_uf,
+        especialidade: appointment.specialty,
+      },
+      procedimentos: procedures.map((proc) => ({
+        codigo: proc.code,
+        descricao: proc.description,
+        quantidade: proc.quantity,
+        valorUnitario: proc.unit_price || 0,
+        valorTotal: proc.total_price || 0,
+      })),
+      observacoes: appointment.notes,
+    }
 
-  procedures.rows.forEach((proc) => {
-    const total = Number.parseFloat(proc.unit_price || 0) * proc.quantity
-    csv += `"${proc.tuss_code}","${proc.description}",${proc.quantity},${Number.parseFloat(proc.unit_price || 0).toFixed(2)},${total.toFixed(2)}\n`
-  })
-
-  return {
-    success: true,
-    csv,
-    filename: `consulta-${data.patient_name.replace(/\s/g, "-")}-${new Date().toISOString().split("T")[0]}.csv`,
+    return {
+      success: true,
+      data,
+      filename: `guia-${appointmentId}.xlsx`,
+    }
+  } catch (error: any) {
+    console.error("[v0] Error exporting appointment Excel:", error)
+    return { success: false, error: error.message || "Erro ao gerar Excel" }
   }
 }

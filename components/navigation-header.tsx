@@ -8,6 +8,7 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useState, useEffect } from "react"
 import { useToast } from "@/hooks/use-toast"
+import { logoutAction } from "@/app/actions/auth"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -47,21 +48,18 @@ export function NavigationHeader({ showBack = false, backHref = "/dashboard" }: 
   const handleLogout = async () => {
     setIsLoggingOut(true)
     try {
-      document.cookie = "session=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT"
+      await logoutAction()
 
       toast({
         title: "Logout realizado",
         description: "Você foi desconectado com sucesso",
       })
-
-      router.push("/login")
     } catch (error) {
       toast({
         title: "Erro",
         description: "Não foi possível realizar o logout",
         variant: "destructive",
       })
-    } finally {
       setIsLoggingOut(false)
     }
   }
