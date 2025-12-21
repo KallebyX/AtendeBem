@@ -15,7 +15,7 @@ export async function getEMR(patient_id: string) {
     if (!user) return { error: 'Token inválido' }
 
     await setUserContext(user.id)
-    const db = getDb()
+    const db = await getDb()
 
     const result = await db`
       SELECT e.*, p.name as patient_name
@@ -49,7 +49,7 @@ export async function updateEMR(data: {
     if (!user) return { error: 'Token inválido' }
 
     await setUserContext(user.id)
-    const db = getDb()
+    const db = await getDb()
 
     const result = await db`
       UPDATE electronic_medical_records
@@ -93,7 +93,7 @@ export async function createClinicalNote(data: {
     if (!user) return { error: 'Token inválido' }
 
     await setUserContext(user.id)
-    const db = getDb()
+    const db = await getDb()
 
     // Buscar EMR ID
     const emr = await db`
@@ -133,7 +133,7 @@ export async function getClinicalNotes(patient_id: string, limit: number = 50) {
     if (!user) return { error: 'Token inválido' }
 
     await setUserContext(user.id)
-    const db = getDb()
+    const db = await getDb()
 
     const result = await db`
       SELECT n.*, u.name as author_name
@@ -161,7 +161,7 @@ export async function signClinicalNote(note_id: string) {
     if (!user) return { error: 'Token inválido' }
 
     await setUserContext(user.id)
-    const db = getDb()
+    const db = await getDb()
 
     const result = await db`
       UPDATE clinical_notes
@@ -194,7 +194,7 @@ export async function addProblem(data: {
     if (!user) return { error: 'Token inválido' }
 
     await setUserContext(user.id)
-    const db = getDb()
+    const db = await getDb()
 
     // Buscar EMR ID
     const emr = await db`
@@ -231,7 +231,7 @@ export async function getActiveProblems(patient_id: string) {
     if (!user) return { error: 'Token inválido' }
 
     await setUserContext(user.id)
-    const db = getDb()
+    const db = await getDb()
 
     const result = await db`
       SELECT p.*

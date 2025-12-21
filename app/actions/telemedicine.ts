@@ -14,7 +14,7 @@ export async function createTelemedicineSession(data: {
     const user = await getCurrentUser()
     if (!user) return { error: "Não autenticado" }
 
-    const db = getDb()
+    const db = await getDb()
 
     // Gerar room Daily.co
     const roomName = `atendebem-${user.id}-${Date.now()}`
@@ -46,7 +46,7 @@ export async function startTelemedicineSession(id: string) {
     const user = await getCurrentUser()
     if (!user) return { error: "Não autenticado" }
 
-    const db = getDb()
+    const db = await getDb()
 
     const result = await db`
       UPDATE telemedicine_sessions
@@ -75,7 +75,7 @@ export async function endTelemedicineSession(data: {
     const user = await getCurrentUser()
     if (!user) return { error: "Não autenticado" }
 
-    const db = getDb()
+    const db = await getDb()
 
     // Calcular duração
     const session = await db`SELECT actual_start FROM telemedicine_sessions WHERE id = ${data.session_id}`
@@ -119,7 +119,7 @@ export async function getTelemedicineSessions(filters?: {
     const user = await getCurrentUser()
     if (!user) return { error: "Não autenticado", data: [] }
 
-    const db = getDb()
+    const db = await getDb()
 
     const result = await db`
       SELECT t.*, p.name as patient_name, u.name as doctor_name
@@ -146,7 +146,7 @@ export async function joinWaitingRoom(session_id: string, patient_id: string, no
     const user = await getCurrentUser()
     if (!user) return { error: "Não autenticado" }
 
-    const db = getDb()
+    const db = await getDb()
 
     const result = await db`
       INSERT INTO telemedicine_waiting_room (
@@ -168,7 +168,7 @@ export async function admitFromWaitingRoom(waiting_room_id: string) {
     const user = await getCurrentUser()
     if (!user) return { error: "Não autenticado" }
 
-    const db = getDb()
+    const db = await getDb()
 
     const result = await db`
       UPDATE telemedicine_waiting_room
@@ -190,7 +190,7 @@ export async function getWaitingRoom(session_id?: string) {
     const user = await getCurrentUser()
     if (!user) return { error: "Não autenticado", data: [] }
 
-    const db = getDb()
+    const db = await getDb()
 
     const result = await db`
       SELECT w.*, p.name as patient_name, s.room_url

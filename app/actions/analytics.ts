@@ -22,7 +22,7 @@ export async function trackEvent(data: {
     if (!user) return { error: 'Token inválido' }
 
     await setUserContext(user.id)
-    const db = getDb()
+    const db = await getDb()
 
     await db`
       INSERT INTO analytics_events (
@@ -52,7 +52,7 @@ export async function getAnalyticsDashboard(period?: { start: string; end: strin
     if (!user) return { error: 'Token inválido' }
 
     await setUserContext(user.id)
-    const db = getDb()
+    const db = await getDb()
 
     const startDate = period?.start || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
     const endDate = period?.end || new Date().toISOString()
@@ -133,7 +133,7 @@ export async function createSavedReport(data: {
     if (!user) return { error: 'Token inválido' }
 
     await setUserContext(user.id)
-    const db = getDb()
+    const db = await getDb()
 
     const result = await db`
       INSERT INTO saved_reports (
@@ -166,7 +166,7 @@ export async function getSavedReports() {
     if (!user) return { error: 'Token inválido' }
 
     await setUserContext(user.id)
-    const db = getDb()
+    const db = await getDb()
 
     const result = await db`
       SELECT r.*, u.name as created_by_name

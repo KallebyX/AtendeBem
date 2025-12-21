@@ -17,7 +17,7 @@ export async function GET() {
       return NextResponse.json({ error: "Sessão inválida" }, { status: 401 })
     }
 
-    const db = getDb()
+    const db = await getDb()
     const users = await db`
       SELECT id, name, email, crm, crm_uf, specialty, created_at
       FROM users

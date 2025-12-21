@@ -22,7 +22,7 @@ export async function createLabOrder(data: {
     if (!user) return { error: 'Token inválido' }
 
     await setUserContext(user.id)
-    const db = getDb()
+    const db = await getDb()
 
     // Gerar número do pedido
     const count = await db`SELECT COUNT(*) FROM lab_orders WHERE tenant_id = ${user.tenant_id}`
@@ -68,7 +68,7 @@ export async function getLabOrders(filters?: { patient_id?: string; status?: str
     if (!user) return { error: 'Token inválido' }
 
     await setUserContext(user.id)
-    const db = getDb()
+    const db = await getDb()
 
     let query = `
       SELECT o.*, p.name as patient_name, 
@@ -119,7 +119,7 @@ export async function updateExamResult(data: {
     if (!user) return { error: 'Token inválido' }
 
     await setUserContext(user.id)
-    const db = getDb()
+    const db = await getDb()
 
     const result = await db`
       UPDATE lab_exams
@@ -151,7 +151,7 @@ export async function getLabTemplates() {
     if (!user) return { error: 'Token inválido' }
 
     await setUserContext(user.id)
-    const db = getDb()
+    const db = await getDb()
 
     const result = await db`
       SELECT * FROM lab_templates

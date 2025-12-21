@@ -26,7 +26,7 @@ export async function createCalendarEvent(data: {
     if (!user) return { error: 'Token inválido' }
 
     await setUserContext(user.id)
-    const db = getDb()
+    const db = await getDb()
 
     // Verificar conflitos
     const conflicts = await db.query(
@@ -81,7 +81,7 @@ export async function getCalendarEvents(filters?: {
     if (!user) return { error: 'Token inválido' }
 
     await setUserContext(user.id)
-    const db = getDb()
+    const db = await getDb()
 
     let query = `
       SELECT e.*, p.name as patient_name, u.name as user_name
@@ -143,7 +143,7 @@ export async function updateCalendarEvent(data: {
     if (!user) return { error: 'Token inválido' }
 
     await setUserContext(user.id)
-    const db = getDb()
+    const db = await getDb()
 
     // Se mudou horário, verificar conflitos
     if (data.start_time || data.end_time) {
@@ -196,7 +196,7 @@ export async function deleteCalendarEvent(event_id: string) {
     if (!user) return { error: 'Token inválido' }
 
     await setUserContext(user.id)
-    const db = getDb()
+    const db = await getDb()
 
     await db`
       DELETE FROM calendar_events
@@ -219,7 +219,7 @@ export async function getAgendaDay(date: string) {
     if (!user) return { error: 'Token inválido' }
 
     await setUserContext(user.id)
-    const db = getDb()
+    const db = await getDb()
 
     const startOfDay = `${date}T00:00:00Z`
     const endOfDay = `${date}T23:59:59Z`

@@ -29,7 +29,7 @@ export async function getPrescriptionTemplates(category?: string) {
     if (!user) return { error: 'Token inválido' }
 
     await setUserContext(user.id)
-    const db = getDb()
+    const db = await getDb()
 
     const result = await db`
       SELECT * FROM prescription_templates
@@ -62,7 +62,7 @@ export async function createPrescriptionTemplate(data: {
     if (!user) return { error: 'Token inválido' }
 
     await setUserContext(user.id)
-    const db = getDb()
+    const db = await getDb()
 
     const result = await db`
       INSERT INTO prescription_templates (
@@ -91,7 +91,7 @@ export async function usePrescriptionTemplate(template_id: string, patient_id: s
     if (!user) return { error: 'Token inválido' }
 
     await setUserContext(user.id)
-    const db = getDb()
+    const db = await getDb()
 
     // Buscar template
     const template = await db`
@@ -137,7 +137,7 @@ export async function logPrescriptionAction(data: {
     if (!user) return { error: 'Token inválido' }
 
     await setUserContext(user.id)
-    const db = getDb()
+    const db = await getDb()
 
     const result = await db`
       INSERT INTO prescription_history (
@@ -166,7 +166,7 @@ export async function getPrescriptionHistory(prescription_id: string) {
     if (!user) return { error: 'Token inválido' }
 
     await setUserContext(user.id)
-    const db = getDb()
+    const db = await getDb()
 
     const result = await db`
       SELECT h.*, u.name as user_name
@@ -202,7 +202,7 @@ export async function logControlledSubstance(data: {
     if (!user) return { error: 'Token inválido' }
 
     await setUserContext(user.id)
-    const db = getDb()
+    const db = await getDb()
 
     // Buscar dados do paciente
     const patient = await db`
@@ -253,7 +253,7 @@ export async function getControlledSubstancesReport(filters?: {
     if (!user) return { error: 'Token inválido' }
 
     await setUserContext(user.id)
-    const db = getDb()
+    const db = await getDb()
 
     const result = await db`
       SELECT * FROM controlled_substances_log

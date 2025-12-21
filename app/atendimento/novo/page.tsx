@@ -32,6 +32,7 @@ import { createAppointment } from "@/app/actions/appointments"
 import { searchTUSS, tussGroups, getTUSSByGroup, type TUSSProcedure } from "@/lib/tuss-complete"
 import { searchPatients } from "@/app/actions/patients"
 import { getAppointmentHistory } from "@/app/actions/appointments"
+import { toast } from "sonner"
 
 type AppointmentType = "consulta" | "retorno" | "procedimento" | "exame"
 
@@ -154,15 +155,23 @@ export default function NovoAtendimentoPage() {
       })
 
       if (result.error) {
-        alert(result.error)
+        // Verificar se é erro de autenticação
+        const authErrors = ["Não autenticado", "Token inválido", "Sessão inválida"]
+        if (authErrors.some((e) => result.error?.includes(e))) {
+          toast.error("Sessão expirada. Redirecionando para login...")
+          router.push("/login?redirect=/atendimento/novo")
+          return
+        }
+        toast.error(result.error || "Erro ao salvar atendimento")
         setIsSubmitting(false)
         return
       }
 
+      toast.success("Atendimento registrado com sucesso!")
       setStep(6)
     } catch (error) {
       console.error("Error saving appointment:", error)
-      alert("Erro ao salvar atendimento")
+      toast.error("Erro ao salvar atendimento. Tente novamente.")
     } finally {
       setIsSubmitting(false)
     }

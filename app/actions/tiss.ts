@@ -36,7 +36,7 @@ export async function createTISSGuide(data: {
     if (!user) return { error: 'Token inválido' }
 
     await setUserContext(user.id)
-    const db = getDb()
+    const db = await getDb()
 
     // Buscar informações do paciente
     const patient = await db`
@@ -95,7 +95,7 @@ export async function getTISSGuides(filters?: {
     if (!user) return { error: 'Token inválido' }
 
     await setUserContext(user.id)
-    const db = getDb()
+    const db = await getDb()
 
     const result = await db`
       SELECT g.*, p.name as patient_name
@@ -126,7 +126,7 @@ export async function generateTISSSubmissionXML(guide_ids: string[]) {
     if (!user) return { error: 'Token inválido' }
 
     await setUserContext(user.id)
-    const db = getDb()
+    const db = await getDb()
 
     // Buscar guias
     const guides = await db`
@@ -270,7 +270,7 @@ export async function submitTISSToANS(submission_id: string, method: 'manual' | 
     if (!user) return { error: 'Token inválido' }
 
     await setUserContext(user.id)
-    const db = getDb()
+    const db = await getDb()
 
     // Atualizar status de envio
     const result = await db`
@@ -308,7 +308,7 @@ export async function getTISSSubmissions(filters?: {
     if (!user) return { error: 'Token inválido' }
 
     await setUserContext(user.id)
-    const db = getDb()
+    const db = await getDb()
 
     const result = await db`
       SELECT s.*, u.name as user_name

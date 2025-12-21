@@ -8,9 +8,18 @@ import { Users, TrendingUp, Calendar, DollarSign, Search, Plus, AlertCircle, Ref
 import { useEffect, useState } from "react"
 import { getPatientsList, getFinancialDashboard } from "@/app/actions/crm"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 
+// Verificar se o erro é de autenticação
+function isAuthError(error: string | undefined): boolean {
+  if (!error) return false
+  const authErrors = ["Não autenticado", "Token inválido", "Sessão inválida", "Sessão expirada"]
+  return authErrors.some((e) => error.includes(e))
+}
+
 export default function CRMPage() {
+  const router = useRouter()
   const [patients, setPatients] = useState<any[]>([])
   const [metrics, setMetrics] = useState<any>(null)
   const [searchTerm, setSearchTerm] = useState("")
@@ -34,6 +43,12 @@ export default function CRMPage() {
       if (patientsResult.success) {
         setPatients(patientsResult.patients || [])
       } else {
+        // Verificar se é erro de autenticação
+        if (isAuthError(patientsResult.error)) {
+          toast.error("Sessão expirada. Redirecionando para login...")
+          router.push("/login?redirect=/crm")
+          return
+        }
         console.error("Erro ao carregar pacientes:", patientsResult.error)
         setError(patientsResult.error || "Erro ao carregar pacientes")
         toast.error(patientsResult.error || "Erro ao carregar pacientes")

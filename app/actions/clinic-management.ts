@@ -22,7 +22,7 @@ export async function createClinic(data: {
     if (!user) return { error: 'Token inválido' }
 
     await setUserContext(user.id)
-    const db = getDb()
+    const db = await getDb()
 
     const result = await db`
       INSERT INTO clinics (
@@ -55,7 +55,7 @@ export async function getClinics() {
     if (!user) return { error: 'Token inválido' }
 
     await setUserContext(user.id)
-    const db = getDb()
+    const db = await getDb()
 
     const result = await db`
       SELECT * FROM clinics
@@ -86,7 +86,7 @@ export async function createRoom(data: {
     if (!user) return { error: 'Token inválido' }
 
     await setUserContext(user.id)
-    const db = getDb()
+    const db = await getDb()
 
     const result = await db`
       INSERT INTO rooms (
@@ -117,7 +117,7 @@ export async function getRoomsByClinic(clinic_id: string) {
     if (!user) return { error: 'Token inválido' }
 
     await setUserContext(user.id)
-    const db = getDb()
+    const db = await getDb()
 
     const result = await db`
       SELECT * FROM rooms
@@ -141,7 +141,7 @@ export async function updateRoomStatus(room_id: string, status: string) {
     if (!user) return { error: 'Token inválido' }
 
     await setUserContext(user.id)
-    const db = getDb()
+    const db = await getDb()
 
     const result = await db`
       UPDATE rooms
@@ -176,7 +176,7 @@ export async function createStaffSchedule(data: {
     if (!user) return { error: 'Token inválido' }
 
     await setUserContext(user.id)
-    const db = getDb()
+    const db = await getDb()
 
     const result = await db`
       INSERT INTO staff_schedules (
@@ -207,7 +207,7 @@ export async function getStaffSchedules(user_id?: string) {
     if (!currentUser) return { error: 'Token inválido' }
 
     await setUserContext(currentUser.id)
-    const db = getDb()
+    const db = await getDb()
 
     const targetUserId = user_id || currentUser.id
 

@@ -27,7 +27,7 @@ export async function createInventoryItem(data: {
     if (!user) return { error: 'Token inválido' }
 
     await setUserContext(user.id)
-    const db = getDb()
+    const db = await getDb()
 
     const result = await db`
       INSERT INTO inventory_items (
@@ -70,7 +70,7 @@ export async function updateInventoryItem(id: string, data: any) {
     if (!user) return { error: 'Token inválido' }
 
     await setUserContext(user.id)
-    const db = getDb()
+    const db = await getDb()
 
     const updates = Object.keys(data)
       .filter(k => data[k] !== undefined)
@@ -109,7 +109,7 @@ export async function createInventoryMovement(data: {
     if (!user) return { error: 'Token inválido' }
 
     await setUserContext(user.id)
-    const db = getDb()
+    const db = await getDb()
 
     // Buscar estoque atual
     const item = await db`SELECT * FROM inventory_items WHERE id = ${data.item_id}`
@@ -181,7 +181,7 @@ export async function getInventoryItems(filters?: {
     if (!user) return { error: 'Token inválido' }
 
     await setUserContext(user.id)
-    const db = getDb()
+    const db = await getDb()
 
     let query = `SELECT * FROM inventory_items WHERE tenant_id = $1 AND deleted_at IS NULL`
     const params = [user.tenant_id]
@@ -216,7 +216,7 @@ export async function getInventoryAlerts() {
     if (!user) return { error: 'Token inválido' }
 
     await setUserContext(user.id)
-    const db = getDb()
+    const db = await getDb()
 
     const result = await db`
       SELECT a.*, i.name as item_name, i.current_stock, i.min_stock, i.unit
@@ -243,7 +243,7 @@ export async function getInventoryMovements(item_id?: string, limit: number = 50
     if (!user) return { error: 'Token inválido' }
 
     await setUserContext(user.id)
-    const db = getDb()
+    const db = await getDb()
 
     let query = `
       SELECT m.*, i.name as item_name, u.name as user_name

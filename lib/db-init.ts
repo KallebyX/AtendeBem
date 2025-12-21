@@ -119,6 +119,16 @@ CREATE TABLE IF NOT EXISTS ai_messages (
 )
 `
 
+// Migrações para adicionar colunas que podem estar faltando
+const MIGRATIONS = [
+  // Adicionar colunas laterality e location à tabela procedures
+  `ALTER TABLE procedures ADD COLUMN IF NOT EXISTS laterality VARCHAR(50)`,
+  `ALTER TABLE procedures ADD COLUMN IF NOT EXISTS location VARCHAR(100)`,
+  // Adicionar colunas context e urgency à tabela appointments
+  `ALTER TABLE appointments ADD COLUMN IF NOT EXISTS context VARCHAR(50)`,
+  `ALTER TABLE appointments ADD COLUMN IF NOT EXISTS urgency VARCHAR(50)`,
+]
+
 export async function ensureTablesExist() {
   if (tablesInitialized) {
     return { success: true, message: "Tables already initialized" }
@@ -138,6 +148,18 @@ export async function ensureTablesExist() {
     for (const stmt of aiStatements) {
       if (stmt.trim()) {
         await sql.unsafe(stmt)
+      }
+    }
+
+    // Executar migrações para adicionar colunas faltantes
+    for (const migration of MIGRATIONS) {
+      try {
+        await sql.unsafe(migration)
+      } catch (migrationError: any) {
+        // Ignorar erros de coluna já existente
+        if (!migrationError.message.includes("already exists")) {
+          console.warn("[db-init] Migration warning:", migrationError.message)
+        }
       }
     }
 

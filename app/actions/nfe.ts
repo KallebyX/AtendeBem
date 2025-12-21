@@ -15,7 +15,7 @@ export async function getNFeConfiguration() {
     if (!user) return { error: "Token inválido" }
 
     await setUserContext(user.id)
-    const db = getDb()
+    const db = await getDb()
 
     const result = await db`
       SELECT * FROM nfe_configuration
@@ -49,7 +49,7 @@ export async function updateNFeConfiguration(data: {
     if (!user) return { error: "Token inválido" }
 
     await setUserContext(user.id)
-    const db = getDb()
+    const db = await getDb()
 
     // Verificar se já existe configuração
     const existing = await db`
@@ -122,7 +122,7 @@ export async function createNFe(data: {
     if (!user) return { error: "Token inválido" }
 
     await setUserContext(user.id)
-    const db = getDb()
+    const db = await getDb()
 
     // Buscar dados do paciente
     const patient = await db`
@@ -197,7 +197,7 @@ export async function getNFeInvoices(filters?: {
     if (!user) return { error: "Token inválido" }
 
     await setUserContext(user.id)
-    const db = getDb()
+    const db = await getDb()
 
     const result = await db`
       SELECT n.*, p.name as patient_name
@@ -239,7 +239,7 @@ export async function sendNFeToAPI(invoice_id: string) {
     if (!user) return { error: "Token inválido" }
 
     await setUserContext(user.id)
-    const db = getDb()
+    const db = await getDb()
 
     // Buscar nota e configuração
     const invoice = await db`
@@ -295,7 +295,7 @@ export async function sendNFeToAPI(invoice_id: string) {
   } catch (error: any) {
     // Registrar erro
     await setUserContext((await verifyToken((await cookies()).get("session")?.value || ""))?.id || "")
-    const db = getDb()
+    const db = await getDb()
     await db`
       UPDATE nfe_invoices
       SET status = 'error', error_message = ${error.message}
@@ -316,7 +316,7 @@ export async function cancelNFe(invoice_id: string, reason: string) {
     if (!user) return { error: "Token inválido" }
 
     await setUserContext(user.id)
-    const db = getDb()
+    const db = await getDb()
 
     const result = await db`
       UPDATE nfe_invoices

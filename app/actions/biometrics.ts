@@ -61,7 +61,7 @@ export async function enrollBiometric(data: {
     if (!user) return { error: "Token inválido" }
 
     await setUserContext(user.id)
-    const db = getDb()
+    const db = await getDb()
 
     // Criptografar template biométrico
     const keyId = `bio-${Date.now()}`
@@ -106,7 +106,7 @@ export async function verifyBiometric(data: {
     if (!user) return { error: "Token inválido" }
 
     await setUserContext(user.id)
-    const db = getDb()
+    const db = await getDb()
 
     // Buscar templates ativos do paciente
     const templates = await db`
@@ -187,7 +187,7 @@ export async function getBiometricTemplates(patient_id?: string) {
     if (!user) return { error: "Token inválido" }
 
     await setUserContext(user.id)
-    const db = getDb()
+    const db = await getDb()
 
     const result = await db`
       SELECT bt.id, bt.biometric_type, bt.finger_position, bt.face_angle,
@@ -218,7 +218,7 @@ export async function deactivateBiometricTemplate(template_id: string) {
     if (!user) return { error: "Token inválido" }
 
     await setUserContext(user.id)
-    const db = getDb()
+    const db = await getDb()
 
     const result = await db`
       UPDATE biometric_templates
@@ -243,7 +243,7 @@ export async function deleteBiometricTemplate(template_id: string) {
     if (!user) return { error: "Token inválido" }
 
     await setUserContext(user.id)
-    const db = getDb()
+    const db = await getDb()
 
     const result = await db`
       DELETE FROM biometric_templates
@@ -273,7 +273,7 @@ export async function getBiometricAuditLog(filters: {
     if (!user) return { error: "Token inválido" }
 
     await setUserContext(user.id)
-    const db = getDb()
+    const db = await getDb()
 
     const result = await db`
       SELECT *

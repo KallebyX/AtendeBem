@@ -29,7 +29,7 @@ export async function createBudget(data: {
     if (!user) return { error: 'Token inválido' }
 
     await setUserContext(user.id)
-    const db = getDb()
+    const db = await getDb()
 
     // Calcular totais
     const totalAmount = data.items.reduce((sum, item) => sum + (item.quantity * item.unit_price), 0)
@@ -85,7 +85,7 @@ export async function getBudgets(filters?: { patient_id?: string; status?: strin
     if (!user) return { error: 'Token inválido' }
 
     await setUserContext(user.id)
-    const db = getDb()
+    const db = await getDb()
 
     let query = `
       SELECT b.*, p.name as patient_name,
@@ -129,7 +129,7 @@ export async function approveBudget(budget_id: string) {
     if (!user) return { error: 'Token inválido' }
 
     await setUserContext(user.id)
-    const db = getDb()
+    const db = await getDb()
 
     const result = await db`
       UPDATE budgets
