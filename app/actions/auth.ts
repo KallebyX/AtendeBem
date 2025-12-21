@@ -122,29 +122,31 @@ export async function registerAction(formData: FormData) {
 
 export async function loginAction(formData: FormData) {
   try {
-    console.log("[v0] Login attempt started")
+    console.log("[AUTH] Login attempt started")
     const email = formData.get("email") as string
     const password = formData.get("password") as string
 
     // Validate data
     if (!email || !password) {
-      console.log("[v0] Login failed: missing credentials")
+      console.log("[AUTH] Login failed: missing credentials")
       return { error: "Email e senha são obrigatórios" }
     }
 
-    console.log("[v0] Authenticating user:", email)
+    console.log("[AUTH] Authenticating user:", email)
     const user = await loginUser(email, password)
-    console.log("[v0] User authenticated successfully:", user.id)
+    console.log("[AUTH] User authenticated successfully:", { id: user.id, email: user.email })
 
+    console.log("[AUTH] Creating session token...")
     const token = await createSession(user)
-    console.log("[v0] Session token created, length:", token.length)
+    console.log("[AUTH] Session token created, length:", token.length)
 
+    console.log("[AUTH] Setting session cookie...")
     await setSessionCookie(token)
-    console.log("[v0] Session cookie set successfully")
+    console.log("[AUTH] Login completed successfully")
 
     return { success: true, user }
   } catch (error: any) {
-    console.error("[v0] Login error:", error)
+    console.error("[AUTH] Login error:", error)
     return { error: error.message || "Erro ao fazer login" }
   }
 }

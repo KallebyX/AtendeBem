@@ -22,9 +22,7 @@ export async function proxy(request: NextRequest) {
   const token = request.cookies.get("session")?.value
 
   if (!token) {
-    if (pathname !== "/dashboard") {
-      console.log("[MIDDLEWARE] No token, redirecting:", pathname)
-    }
+    console.log("[MIDDLEWARE] No token found, redirecting:", pathname)
     return NextResponse.redirect(new URL("/login", request.url))
   }
 
@@ -33,14 +31,15 @@ export async function proxy(request: NextRequest) {
     const user = await verifySession(token)
 
     if (!user) {
-      console.log("[MIDDLEWARE] Invalid token, clearing and redirecting:", pathname)
+      console.log("[MIDDLEWARE] Token verification failed (invalid or expired), redirecting:", pathname)
       const response = NextResponse.redirect(new URL("/login", request.url))
       response.cookies.delete("session")
       return response
     }
 
-    if (pathname === "/dashboard") {
-      console.log("[MIDDLEWARE] ✓ Authenticated:", user.email)
+    // Only log on specific routes to reduce noise
+    if (pathname === "/dashboard" || pathname.includes("/clinicas") || pathname.includes("/agenda")) {
+      console.log("[MIDDLEWARE] ✓ Authenticated:", user.email, "accessing:", pathname)
     }
 
     return NextResponse.next()

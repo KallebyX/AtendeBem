@@ -7,19 +7,20 @@
 
 import { storeRefreshToken, getRefreshToken, deleteRefreshToken } from "./redis"
 import { cookies } from "next/headers"
+import type { SessionUser } from "./types" // Declare or import SessionUser
 
 const JWT_SECRET = process.env.JWT_SECRET || "atendebem-secret-key-change-in-production"
 const ACCESS_TOKEN_EXPIRY = Number.parseInt(process.env.JWT_ACCESS_TOKEN_EXPIRY || "2592000") // 30 dias
 const REFRESH_TOKEN_EXPIRY = Number.parseInt(process.env.JWT_REFRESH_TOKEN_EXPIRY || "7776000") // 90 dias
 
-export interface SessionUser {
-  id: string
-  email: string
-  name: string
-  crm: string
-  crm_uf: string
-  specialty: string
-  tenant_id?: string // Multi-tenant support
+// Log token configuration on startup (only once)
+if (typeof window === "undefined") {
+  console.log("[SESSION] Token configuration:", {
+    jwtSecretLength: JWT_SECRET.length,
+    accessTokenExpiry: ACCESS_TOKEN_EXPIRY,
+    accessTokenExpiryDays: ACCESS_TOKEN_EXPIRY / 86400,
+    refreshTokenExpiry: REFRESH_TOKEN_EXPIRY,
+  })
 }
 
 // Base64URL encode
@@ -125,6 +126,15 @@ export async function createAccessToken(user: SessionUser): Promise<string> {
     type: "access",
   }
 
+  console.log("[SESSION] Creating access token:", {
+    userId: user.id,
+    email: user.email,
+    iat: now,
+    exp: payload.exp,
+    expiresIn: ACCESS_TOKEN_EXPIRY,
+    expiresInDays: ACCESS_TOKEN_EXPIRY / 86400,
+  })
+
   const encodedHeader = base64UrlEncode(JSON.stringify(header))
   const encodedPayload = base64UrlEncode(JSON.stringify(payload))
   const dataToSign = `${encodedHeader}.${encodedPayload}`
@@ -197,18 +207,27 @@ export async function verifySession(token: string): Promise<SessionUser | null> 
 
     const isValid = await verifySignature(dataToVerify, signature, JWT_SECRET)
     if (!isValid) {
+      console.log("[SESSION] Token signature invalid")
       return null
     }
 
     const payload = JSON.parse(base64UrlDecode(encodedPayload))
+    const now = Math.floor(Date.now() / 1000)
 
     // Check expiration
-    if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) {
+    if (payload.exp && payload.exp < now) {
+      console.log("[SESSION] Token expired:", {
+        exp: payload.exp,
+        now: now,
+        expiredFor: now - payload.exp,
+        expiredDate: new Date(payload.exp * 1000).toISOString(),
+      })
       return null
     }
 
     return payload.user as SessionUser
   } catch (error) {
+    console.error("[SESSION] Error verifying token:", error)
     return null
   }
 }

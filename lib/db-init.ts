@@ -180,8 +180,9 @@ export async function ensureTablesExist() {
 export async function setUserContext(userId: string) {
   try {
     const sql = await getDb()
-    await sql`SET LOCAL app.current_user_id = ${userId}`
+    await sql.unsafe(`SET LOCAL app.current_user_id = '${userId}'`)
   } catch (error) {
-    console.error("[db-init] Error setting user context:", error)
+    // This error was causing "syntax error at or near $1" in production
+    console.warn("[db-init] Could not set user context (non-critical):", error)
   }
 }

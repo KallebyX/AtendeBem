@@ -26,17 +26,24 @@ export async function setSessionCookie(token: string) {
   try {
     const cookieStore = await cookies()
 
+    const isProduction = process.env.NODE_ENV === "production"
+
     cookieStore.set("session", token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      maxAge: 60 * 60 * 24 * 30, // 30 days instead of 7
+      secure: isProduction, // Only HTTPS in production
+      sameSite: "lax", // Allow navigation from external sites
+      maxAge: 60 * 60 * 24 * 30, // 30 days
       path: "/",
+      // Setting domain can cause issues with www vs non-www
     })
 
-    console.log("[SERVER] Session cookie set successfully with 30 day expiry")
+    console.log("[v0] Session cookie set successfully with 30 day expiry", {
+      secure: isProduction,
+      sameSite: "lax",
+      maxAge: 2592000,
+    })
   } catch (error) {
-    console.error("[SERVER] Error setting session cookie:", error)
+    console.error("[v0] Error setting session cookie:", error)
     throw error
   }
 }
