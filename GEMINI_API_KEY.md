@@ -10,9 +10,9 @@ A API Key anterior foi detectada como vazada pelo Google e foi bloqueada.
 4. Copie a chave gerada
 
 5. Adicione ao arquivo `.env.local`:
-   ```bash
+   \`\`\`bash
    GOOGLE_GENERATIVE_AI_API_KEY=sua_nova_chave_aqui
-   ```
+   \`\`\`
 
 6. Reinicie o servidor: `npm run dev`
 

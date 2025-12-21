@@ -26,10 +26,10 @@ Este documento lista todos os serviços externos que precisam ser configurados c
   2. Create Database → Choose Region: US East (mesma região do Neon)
   3. Copiar `UPSTASH_REDIS_REST_URL` e `UPSTASH_REDIS_REST_TOKEN`
 - **Variáveis:**
-  ```
+  \`\`\`
   UPSTASH_REDIS_REST_URL=https://YOUR-REDIS.upstash.io
   UPSTASH_REDIS_REST_TOKEN=AXXXXxxx...
-  ```
+  \`\`\`
 - **Plano Recomendado:** Free (10k comandos/dia) ou Pay-as-you-go
 
 ---
@@ -42,13 +42,13 @@ Este documento lista todos os serviços externos que precisam ser configurados c
   3. Security Credentials → Create Access Key
   4. S3 → Create Bucket: `atendebem-production` (ou nome de sua escolha)
 - **Variáveis:**
-  ```
+  \`\`\`
   AWS_REGION=us-east-1
   AWS_ACCESS_KEY_ID=AKIAXXXXXXXXXXXXXXXX
   AWS_SECRET_ACCESS_KEY=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
   S3_BUCKET=atendebem-production
   S3_CDN_URL= (deixar vazio por ora, depois configurar CloudFront)
-  ```
+  \`\`\`
 - **Plano Recomendado:** Free Tier (5GB storage, 20k GET, 2k PUT por mês)
 
 ---
@@ -56,13 +56,13 @@ Este documento lista todos os serviços externos que precisam ser configurados c
 ### 5. **Encryption Key** (CRÍTICO - PII Data)
 - **Não é um serviço externo, apenas gerar chave**
 - **Comando:** 
-  ```bash
+  \`\`\`bash
   openssl rand -hex 32
-  ```
+  \`\`\`
 - **Variável:**
-  ```
+  \`\`\`
   ENCRYPTION_KEY=<resultado do comando acima - 64 caracteres hex>
-  ```
+  \`\`\`
 
 ---
 
@@ -73,11 +73,11 @@ Este documento lista todos os serviços externos que precisam ser configurados c
   2. Settings → API Keys → Create API Key (Full Access)
   3. Sender Authentication → Verify Single Sender (verificar email)
 - **Variáveis:**
-  ```
+  \`\`\`
   SENDGRID_API_KEY=SG.xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
   SENDGRID_FROM_EMAIL=contato@seudominio.com.br
   SENDGRID_FROM_NAME=AtendeBem
-  ```
+  \`\`\`
 - **Plano Recomendado:** Free (100 emails/dia) ou Essentials ($19.95/mês - 50k emails)
 
 ---
@@ -89,11 +89,11 @@ Este documento lista todos os serviços externos que precisam ser configurados c
   2. Get a Twilio Phone Number
   3. Account → API Credentials
 - **Variáveis:**
-  ```
+  \`\`\`
   TWILIO_ACCOUNT_SID=ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
   TWILIO_AUTH_TOKEN=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
   TWILIO_PHONE_NUMBER=+5511999999999
-  ```
+  \`\`\`
 - **Plano Recomendado:** Pay-as-you-go (~R$0,07/SMS no Brasil)
 - **Alternativa Brasil:** Zenvia (https://www.zenvia.com/)
 
@@ -107,11 +107,11 @@ Este documento lista todos os serviços externos que precisam ser configurados c
   3. Get Started → Get Permanent Token
   4. Criar templates de mensagem e aguardar aprovação (24-48h)
 - **Variáveis:**
-  ```
+  \`\`\`
   WHATSAPP_BUSINESS_PHONE_ID=123456789012345
   WHATSAPP_ACCESS_TOKEN=EAAxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
   WHATSAPP_VERIFY_TOKEN=<escolha-uma-senha-qualquer>
-  ```
+  \`\`\`
 - **Plano Recomendado:** Free (1000 conversas/mês), depois ~R$0,30/conversa
 - **Alternativa:** Twilio WhatsApp ou Evolution API (self-hosted)
 
@@ -124,12 +124,12 @@ Este documento lista todos os serviços externos que precisam ser configurados c
   2. Contratar plano corporativo
   3. Receber credenciais de integração
 - **Variáveis:**
-  ```
+  \`\`\`
   VIDAAS_CLIENT_ID=<fornecido pela Valid>
   VIDAAS_CLIENT_SECRET=<fornecido pela Valid>
   VIDAAS_REDIRECT_URI=https://seudominio.com.br/api/signature/callback
   VIDAAS_ENVIRONMENT=sandbox (ou production)
-  ```
+  \`\`\`
 - **Plano Recomendado:** A partir de R$1.500/mês (100 assinaturas)
 - **Alternativa Gratuita (DEV):** Deixar em sandbox por ora
 
@@ -142,10 +142,10 @@ Este documento lista todos os serviços externos que precisam ser configurados c
   2. Developers → API Keys → Create
   3. Rooms → Create Domain (ex: atendebem.daily.co)
 - **Variáveis:**
-  ```
+  \`\`\`
   DAILY_API_KEY=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
   DAILY_DOMAIN=atendebem.daily.co
-  ```
+  \`\`\`
 - **Plano Recomendado:** Free (até 10 participantes, 10k minutos/mês) ou Scale ($99/mês)
 
 ---
@@ -158,11 +158,11 @@ Este documento lista todos os serviços externos que precisam ser configurados c
   3. Create Credentials → OAuth 2.0 Client ID (Web Application)
   4. Authorized redirect URIs: `http://localhost:3000/api/calendar/callback`
 - **Variáveis:**
-  ```
+  \`\`\`
   GOOGLE_CALENDAR_CLIENT_ID=xxxxxxxxx-xxxxxxxxxxxxxxxxxxxxxxxx.apps.googleusercontent.com
   GOOGLE_CALENDAR_CLIENT_SECRET=GOCSPX-xxxxxxxxxxxxxxxxxxxxxxxxxxxx
   GOOGLE_CALENDAR_REDIRECT_URI=http://localhost:3000/api/calendar/callback
-  ```
+  \`\`\`
 - **Plano Recomendado:** Free (Google Workspace ou conta pessoal)
 
 ---
@@ -174,11 +174,11 @@ Este documento lista todos os serviços externos que precisam ser configurados c
   2. Developers → API Keys
   3. Configurar webhooks: `https://seudominio.com.br/api/webhooks/stripe`
 - **Variáveis:**
-  ```
+  \`\`\`
   STRIPE_SECRET_KEY=sk_test_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
   STRIPE_PUBLISHABLE_KEY=pk_test_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
   STRIPE_WEBHOOK_SECRET=whsec_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-  ```
+  \`\`\`
 - **Plano Recomendado:** Pay-as-you-go (2,9% + R$0,39 por transação)
 - **Alternativa Brasil:** Mercado Pago, PagSeguro, Asaas
 
@@ -192,11 +192,11 @@ Este documento lista todos os serviços externos que precisam ser configurados c
   2. Configurar certificado digital A1
   3. API → Gerar token
 - **Variáveis:**
-  ```
+  \`\`\`
   NFE_PROVIDER=focus
   NFE_API_KEY=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
   NFE_CNPJ=00000000000000
-  ```
+  \`\`\`
 - **Plano Recomendado:** A partir de R$49/mês (50 notas)
 
 ---

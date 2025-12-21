@@ -58,11 +58,11 @@
 - Exportação PDF
 
 **Server Actions disponíveis**:
-```typescript
+\`\`\`typescript
 createBudget(data) // Cria orçamento com itens
 getBudgets(filters) // Lista com filtros
 approveBudget(budget_id) // Aprova orçamento
-```
+\`\`\`
 
 ---
 
@@ -80,12 +80,12 @@ approveBudget(budget_id) // Aprova orçamento
 - Listagem de contratos assinados
 
 **Server Actions disponíveis**:
-```typescript
+\`\`\`typescript
 createContract(data) // Cria contrato
 getContracts(filters) // Lista contratos
 getContractTemplates() // Busca templates
 signContract(contract_id, signature_data) // Assina
-```
+\`\`\`
 
 **Templates seedados**:
 1. Consentimento Informado
@@ -108,12 +108,12 @@ signContract(contract_id, signature_data) // Assina
 - Histórico de pedidos por paciente
 
 **Server Actions disponíveis**:
-```typescript
+\`\`\`typescript
 createLabOrder(data) // Cria pedido + exames
 getLabOrders(filters) // Lista pedidos
 updateExamResult(exam_id, result_data) // Atualiza resultado
 getLabTemplates() // Busca templates
-```
+\`\`\`
 
 ---
 
@@ -131,12 +131,12 @@ getLabTemplates() // Busca templates
 - Comparação lado-a-lado de estudos
 
 **Server Actions disponíveis**:
-```typescript
+\`\`\`typescript
 createMedicalImage(data) // Cria estudo DICOM
 getMedicalImages(filters) // Lista estudos
 addImageReport(image_id, report_data) // Adiciona laudo
 createImageAnnotation(annotation_data) // Cria anotação
-```
+\`\`\`
 
 **Modalidades suportadas**: CR, CT, MR, US, XA, DX
 
@@ -156,7 +156,7 @@ createImageAnnotation(annotation_data) // Cria anotação
 - Visualização de horário de funcionamento
 
 **Server Actions disponíveis**:
-```typescript
+\`\`\`typescript
 createClinic(data) // Cadastra clínica
 getClinics() // Lista clínicas
 createRoom(data) // Cadastra sala
@@ -164,7 +164,7 @@ getRoomsByClinic(clinic_id) // Lista salas
 updateRoomStatus(room_id, status) // Atualiza status
 createStaffSchedule(data) // Define horário
 getStaffSchedules(user_id) // Busca horários
-```
+\`\`\`
 
 ---
 
@@ -183,7 +183,7 @@ getStaffSchedules(user_id) // Busca horários
 - Resumo clínico
 
 **Server Actions disponíveis**:
-```typescript
+\`\`\`typescript
 getEMR(patient_id) // Busca prontuário completo
 updateEMR(data) // Atualiza dados consolidados
 createClinicalNote(data) // Cria nota SOAP
@@ -191,7 +191,7 @@ getClinicalNotes(patient_id) // Lista notas
 signClinicalNote(note_id) // Assina nota
 addProblem(data) // Adiciona problema
 getActiveProblems(patient_id) // Lista problemas ativos
-```
+\`\`\`
 
 ---
 
@@ -205,10 +205,10 @@ getActiveProblems(patient_id) // Lista problemas ativos
 1. Criar conta em https://console.upstash.com
 2. Criar database Redis
 3. Copiar credenciais para `.env.local`:
-   ```bash
+   \`\`\`bash
    UPSTASH_REDIS_REST_URL=https://xxxxx.upstash.io
    UPSTASH_REDIS_REST_TOKEN=xxxxxxxxxx
-   ```
+   \`\`\`
 
 **Impacto**: Baixo - código funciona sem Redis (degrada gracefully)
 
@@ -223,12 +223,12 @@ getActiveProblems(patient_id) // Lista problemas ativos
 2. Criar IAM user com permissões S3
 3. Gerar access keys
 4. Adicionar a `.env.local`:
-   ```bash
+   \`\`\`bash
    AWS_ACCESS_KEY_ID=AKIAXXXXXXXX
    AWS_SECRET_ACCESS_KEY=xxxxxxxxxxxxxxxx
    AWS_REGION=us-east-1
    AWS_BUCKET_NAME=atendebem-production
-   ```
+   \`\`\`
 
 **Impacto**: Médio - necessário para uploads de imagens/PDFs
 
@@ -243,9 +243,9 @@ getActiveProblems(patient_id) // Lista problemas ativos
 2. Contratar plano NFe/NFSe
 3. Obter token de API
 4. Adicionar a `.env.local`:
-   ```bash
+   \`\`\`bash
    API_BRASIL_TOKEN=xxxxxxxxxxxxxxxxx
-   ```
+   \`\`\`
 
 **Impacto**: Baixo - opcional para quem não emite notas fiscais
 
@@ -259,11 +259,11 @@ getActiveProblems(patient_id) // Lista problemas ativos
 1. Registrar aplicação em https://valid.com.br
 2. Obter Client ID e Client Secret
 3. Adicionar a `.env.local`:
-   ```bash
+   \`\`\`bash
    VIDAAS_CLIENT_ID=xxxxxxxx
    VIDAAS_CLIENT_SECRET=xxxxxxxxxxxxxxxx
    VIDAAS_PRODUCTION=false  # true para produção
-   ```
+   \`\`\`
 
 **Impacto**: Médio - necessário para assinatura de documentos legais
 
@@ -277,9 +277,9 @@ getActiveProblems(patient_id) // Lista problemas ativos
 1. Criar conta em https://daily.co
 2. Obter API key
 3. Adicionar a `.env.local`:
-   ```bash
+   \`\`\`bash
    DAILY_API_KEY=xxxxxxxxxxxxxxxx
-   ```
+   \`\`\`
 
 **Impacto**: Médio - necessário para criar salas de vídeo
 
@@ -314,24 +314,24 @@ getActiveProblems(patient_id) // Lista problemas ativos
 ### Bibliotecas Recomendadas para Frontends Pendentes
 
 **MOD-IMG (DICOM Viewer)**:
-```bash
+\`\`\`bash
 npm install cornerstone-core cornerstone-tools dicom-parser
 # OU usar OHIF Viewer (mais completo)
 npm install @ohif/viewer
-```
+\`\`\`
 
 **MOD-GES (Schedule/Calendar)**:
-```bash
+\`\`\`bash
 npm install @fullcalendar/react @fullcalendar/daygrid
 # OU
 npm install react-big-calendar
-```
+\`\`\`
 
 **MOD-ORÇ/CON (PDF Preview)**:
-```bash
+\`\`\`bash
 npm install react-pdf
 # Ou usar jsPDF já instalado
-```
+\`\`\`
 
 ---
 

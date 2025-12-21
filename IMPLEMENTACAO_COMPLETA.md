@@ -34,11 +34,11 @@ Este documento detalha todas as implementações realizadas para completar as fu
 ## 2. APIs Implementadas
 
 ### 2.1 API de Pacientes (`/api/patients`)
-```
+\`\`\`
 GET  /api/patients                    - Lista pacientes
 GET  /api/patients?search=termo       - Busca pacientes
 POST /api/patients                    - Cadastra paciente
-```
+\`\`\`
 
 **Campos suportados:**
 - Nome completo, CPF, data de nascimento
@@ -49,45 +49,45 @@ POST /api/patients                    - Cadastra paciente
 - Contato de emergência
 
 ### 2.2 API de TUSS (`/api/tuss`)
-```
+\`\`\`
 GET /api/tuss?search=termo            - Busca procedimentos
 GET /api/tuss?code=10101012           - Busca por código
 GET /api/tuss?stats=true              - Estatísticas da base
-```
+\`\`\`
 
 ### 2.3 API de CID-10 (`/api/cid`)
-```
+\`\`\`
 GET /api/cid?search=termo             - Busca diagnósticos
 GET /api/cid?code=A00                 - Busca por código
 GET /api/cid?category=A               - Filtra por categoria
 GET /api/cid?stats=true               - Estatísticas da base
-```
+\`\`\`
 
 ### 2.4 API de Medicamentos (`/api/medications`)
-```
+\`\`\`
 GET /api/medications?search=termo     - Busca medicamentos
 GET /api/medications?name=paracetamol - Busca por nome
 GET /api/medications?category=cat     - Filtra por categoria
 GET /api/medications?stats=true       - Estatísticas da base
-```
+\`\`\`
 
 ### 2.5 API de Assinatura Digital (`/api/signature`)
-```
+\`\`\`
 GET  /api/signature?action=check-certificate  - Verifica certificado
 GET  /api/signature?action=authorize          - Inicia autorização
 POST /api/signature (action=sign)             - Assina documento
 POST /api/signature (action=sign-mock)        - Assinatura mock (dev)
-```
+\`\`\`
 
 ### 2.6 API de Exportação (`/api/export`)
-```
+\`\`\`
 GET /api/export?type=prescription&id=xxx      - Exporta receita HTML
 GET /api/export?type=appointment&id=xxx       - Exporta atendimento HTML
 GET /api/export?type=procedures&format=csv    - Exporta procedimentos CSV
 GET /api/export?type=procedures&format=xml    - Exporta XML TISS
 GET /api/export?type=patients&format=csv      - Exporta pacientes CSV
 GET /api/export?type=prescriptions&format=csv - Exporta receitas CSV
-```
+\`\`\`
 
 ---
 
@@ -115,12 +115,12 @@ Implementada integração completa com a API VIDaaS para assinatura digital em n
 6. Assinar documento com token
 
 **Configuração necessária:**
-```env
+\`\`\`env
 VIDAAS_CLIENT_ID=seu_client_id
 VIDAAS_CLIENT_SECRET=seu_client_secret
 VIDAAS_REDIRECT_URI=https://seusite.com/api/signature/callback
 VIDAAS_PRODUCTION=false  # true para produção
-```
+\`\`\`
 
 ### 3.2 Modo Mock (Desenvolvimento)
 Para desenvolvimento sem certificado digital real, use `action=sign-mock`.
@@ -152,7 +152,7 @@ Para desenvolvimento sem certificado digital real, use `action=sign-mock`.
 
 ### Novas funcionalidades em `app/actions/appointments.ts`:
 
-```typescript
+\`\`\`typescript
 createAppointment(data)       // Criar atendimento
 getAppointmentHistory()       // Listar histórico
 getAppointmentDetails(id)     // Detalhes do atendimento
@@ -160,7 +160,7 @@ updateAppointment(id, data)   // Atualizar atendimento
 deleteAppointment(id)         // Arquivar atendimento (soft delete)
 duplicateAppointment(id)      // Duplicar atendimento
 searchAppointments(query)     // Buscar atendimentos
-```
+\`\`\`
 
 ---
 
@@ -178,7 +178,7 @@ searchAppointments(query)     // Buscar atendimentos
 
 ### 7.1 Variáveis de Ambiente Necessárias
 
-```env
+\`\`\`env
 # Banco de dados
 DATABASE_URL=postgresql://...
 
@@ -190,7 +190,7 @@ VIDAAS_PRODUCTION=true
 
 # Opcional
 NEXT_PUBLIC_APP_URL=https://atendebem.com.br
-```
+\`\`\`
 
 ### 7.2 Cadastro na Valid Certificadora
 
@@ -228,7 +228,7 @@ Para usar assinatura digital em produção:
 
 ## 9. Estrutura de Arquivos Criados
 
-```
+\`\`\`
 AtendeBem/
 ├── app/
 │   └── api/
@@ -251,7 +251,7 @@ AtendeBem/
 ├── GAPS_ANALISE.md                # Análise de gaps
 ├── IMPLEMENTACAO_COMPLETA.md      # Este documento
 └── analise_atendebem.md           # Análise inicial do projeto
-```
+\`\`\`
 
 ---
 

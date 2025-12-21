@@ -28,7 +28,7 @@ O **AtendeBem** é uma plataforma SaaS (Software as a Service) de gestão comple
 
 ### 1.3 Princípios Arquiteturais
 
-```
+\`\`\`
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                         PRINCÍPIOS FUNDAMENTAIS                              │
 ├─────────────────────────────────────────────────────────────────────────────┤
@@ -43,7 +43,7 @@ O **AtendeBem** é uma plataforma SaaS (Software as a Service) de gestão comple
 │  7. OFFLINE-FIRST - Funcionalidades críticas operam sem internet            │
 │  8. API-FIRST - Todo módulo expõe APIs RESTful documentadas                 │
 └─────────────────────────────────────────────────────────────────────────────┘
-```
+\`\`\`
 
 ---
 
@@ -51,7 +51,7 @@ O **AtendeBem** é uma plataforma SaaS (Software as a Service) de gestão comple
 
 ### 2.1 Diagrama de Contexto (C4 - Nível 1)
 
-```
+\`\`\`
                                     ┌──────────────────────┐
                                     │     PROFISSIONAIS    │
                                     │  (Médicos, Dentistas,│
@@ -71,11 +71,11 @@ O **AtendeBem** é uma plataforma SaaS (Software as a Service) de gestão comple
           │   LABORATÓRIOS  │      │   CERTIFICADORAS    │      │     FARMÁCIAS   │
           │   (Resultados)  │      │    (ICP-Brasil)     │      │   (e-Prescrição)│
           └─────────────────┘      └─────────────────────┘      └─────────────────┘
-```
+\`\`\`
 
 ### 2.2 Diagrama de Containers (C4 - Nível 2)
 
-```
+\`\`\`
 ┌─────────────────────────────────────────────────────────────────────────────────────────────┐
 │                                      ATENDEBEM PLATFORM                                      │
 ├─────────────────────────────────────────────────────────────────────────────────────────────┤
@@ -124,7 +124,7 @@ O **AtendeBem** é uma plataforma SaaS (Software as a Service) de gestão comple
 │ • Receita Federal   │      │ • FCM (Push)        │      │ • Med-PaLM 2        │
 │ • CFM               │      │ • WebSocket (Real)  │      │ • Vertex AI         │
 └─────────────────────┘      └─────────────────────┘      └─────────────────────┘
-```
+\`\`\`
 
 ---
 
@@ -132,7 +132,7 @@ O **AtendeBem** é uma plataforma SaaS (Software as a Service) de gestão comple
 
 ### 3.1 Mapa de Módulos e Integrações
 
-```
+\`\`\`
 ┌─────────────────────────────────────────────────────────────────────────────────────────────┐
 │                                    MÓDULOS ATENDEBEM                                         │
 ├─────────────────────────────────────────────────────────────────────────────────────────────┤
@@ -180,7 +180,7 @@ O **AtendeBem** é uma plataforma SaaS (Software as a Service) de gestão comple
 │ └─────────────────────┘   └─────────────────────────────────┘   └─────────────────────┘    │
 │                                                                                             │
 └─────────────────────────────────────────────────────────────────────────────────────────────┘
-```
+\`\`\`
 
 ### 3.2 Lista Completa de Módulos
 
@@ -215,7 +215,7 @@ O **AtendeBem** é uma plataforma SaaS (Software as a Service) de gestão comple
 
 ### 4.1 Stack Completa de Produção
 
-```yaml
+\`\`\`yaml
 # FRONTEND
 frontend:
   framework: Next.js 16.x
@@ -289,11 +289,11 @@ realtime:
   websocket: Socket.io
   webrtc: Daily.co (primary) / LiveKit (fallback)
   push: Firebase Cloud Messaging
-```
+\`\`\`
 
 ### 4.2 Diagrama de Dependências
 
-```
+\`\`\`
 ┌─────────────────────────────────────────────────────────────────┐
 │                    DEPENDENCY GRAPH                              │
 ├─────────────────────────────────────────────────────────────────┤
@@ -315,7 +315,7 @@ realtime:
 │  └──────────────┘      └──────────────┘      └──────────────┘   │
 │                                                                  │
 └─────────────────────────────────────────────────────────────────┘
-```
+\`\`\`
 
 ---
 
@@ -325,7 +325,7 @@ realtime:
 
 O AtendeBem utiliza **Row-Level Security (RLS)** no PostgreSQL para isolamento de dados entre tenants (organizações/clínicas).
 
-```sql
+\`\`\`sql
 -- Estrutura de Tenant
 CREATE TABLE tenants (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -357,13 +357,13 @@ Fluxo geral:
 2. A cada requisição, o backend determina o `tenant_id` ativo (por exemplo, a partir do token ou de uma seleção de clínica previamente salva), **valida** se o usuário realmente tem permissão para esse tenant e, só então, define o contexto de tenant na conexão com o banco.
 3. O contexto é definido usando comando de sessão transacional, por exemplo:
 
-   ```sql
+   \`\`\`sql
    -- Executado pelo backend no início da transação / requisição
    SET LOCAL app.current_tenant = $1; -- $1 = UUID já validado pelo backend
 
 ### 5.2 Hierarquia de Acesso
 
-```
+\`\`\`
 ┌─────────────────────────────────────────────────────────────────┐
 │                    HIERARQUIA MULTI-TENANT                       │
 ├─────────────────────────────────────────────────────────────────┤
@@ -389,7 +389,7 @@ Fluxo geral:
 │      └── Apenas leitura de relatórios                            │
 │                                                                  │
 └─────────────────────────────────────────────────────────────────┘
-```
+\`\`\`
 
 ### 5.3 Modelo de Planos
 
@@ -406,7 +406,7 @@ Fluxo geral:
 
 ### 6.1 Fluxo Principal - Atendimento
 
-```
+\`\`\`
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                      FLUXO DE ATENDIMENTO MÉDICO                             │
 ├─────────────────────────────────────────────────────────────────────────────┤
@@ -442,11 +442,11 @@ Fluxo geral:
 │                          └─────────────────┘                                 │
 │                                                                              │
 └─────────────────────────────────────────────────────────────────────────────┘
-```
+\`\`\`
 
 ### 6.2 Fluxo de Integração entre Módulos
 
-```
+\`\`\`
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                        INTEGRAÇÃO ENTRE MÓDULOS                              │
 ├─────────────────────────────────────────────────────────────────────────────┤
@@ -472,7 +472,7 @@ Fluxo geral:
 │           └──► 8. Auditoria: Registra log imutável                           │
 │                                                                              │
 └─────────────────────────────────────────────────────────────────────────────┘
-```
+\`\`\`
 
 ---
 
@@ -480,7 +480,7 @@ Fluxo geral:
 
 ### 7.1 Camadas de Segurança
 
-```
+\`\`\`
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                        ARQUITETURA DE SEGURANÇA                              │
 ├─────────────────────────────────────────────────────────────────────────────┤
@@ -522,11 +522,11 @@ Fluxo geral:
 │  └────────────────────────────────────────────────────────────────────┘     │
 │                                                                              │
 └─────────────────────────────────────────────────────────────────────────────┘
-```
+\`\`\`
 
 ### 7.2 Conformidade LGPD
 
-```
+\`\`\`
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                          COMPLIANCE LGPD                                     │
 ├─────────────────────────────────────────────────────────────────────────────┤
@@ -576,7 +576,7 @@ Fluxo geral:
 │      • Relatório de impacto (RIPD)                                           │
 │                                                                              │
 └─────────────────────────────────────────────────────────────────────────────┘
-```
+\`\`\`
 
 ---
 
@@ -584,7 +584,7 @@ Fluxo geral:
 
 ### 8.1 Estratégia de Escala
 
-```
+\`\`\`
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                      ESTRATÉGIA DE ESCALABILIDADE                            │
 ├─────────────────────────────────────────────────────────────────────────────┤
@@ -640,7 +640,7 @@ Fluxo geral:
 │  └─────────────────────────────────────────────────────────────────────┘    │
 │                                                                              │
 └─────────────────────────────────────────────────────────────────────────────┘
-```
+\`\`\`
 
 ### 8.2 Métricas de Capacidade
 
@@ -660,7 +660,7 @@ Fluxo geral:
 
 ### 9.1 Stack de Monitoramento
 
-```
+\`\`\`
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                          OBSERVABILITY STACK                                 │
 ├─────────────────────────────────────────────────────────────────────────────┤
@@ -696,7 +696,7 @@ Fluxo geral:
 │  └───────────────────────────────────────────────────────────────────────┘  │
 │                                                                              │
 └─────────────────────────────────────────────────────────────────────────────┘
-```
+\`\`\`
 
 ---
 

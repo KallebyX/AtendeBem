@@ -20,11 +20,11 @@
 - **Contexto de Usuário**: Definido via `setUserContext(userId)` para ativar RLS no Postgres
 
 **Padrão no código:**
-```typescript
+\`\`\`typescript
 const user = await verifyToken(token)
 await setUserContext(user.id)
 // Queries SQL herdam automaticamente isolamento por usuário
-```
+\`\`\`
 
 ### 2. **Banco de Dados e RLS**
 - **Inicialização:** `lib/db-init.ts` cria tabelas automaticamente se não existirem
@@ -95,9 +95,9 @@ AtendeBem herda significativas bibliotecas de código clínico/administrativo. E
 
 ### Padrão de Erro
 Todas as Server Actions retornam:
-```typescript
+\`\`\`typescript
 { error?: string, data?: T, success?: boolean }
-```
+\`\`\`
 
 ### Validação
 - **Frontend:** Zod schemas nas páginas (ex: prescrição, cadastro)
@@ -144,13 +144,13 @@ Todas as Server Actions retornam:
 
 ## Comandos Essenciais
 
-```bash
+\`\`\`bash
 npm run dev          # Inicia servidor dev (localhost:3000)
 npm run build        # Build para produção
 npm run lint         # ESLint (TypeScript)
 npm start            # Inicia servidor produção
 # Setup DB: GET http://localhost:3000/api/setup-db?key=SETUP_KEY
-```
+\`\`\`
 
 ---
 
