@@ -3,7 +3,6 @@
 import { getDb } from "@/lib/db"
 import { verifySession } from "@/lib/session"
 import { cookies } from "next/headers"
-import { ensureTablesExist } from "@/lib/db-init"
 
 export async function getPatientsList() {
   const cookieStore = await cookies()
@@ -21,23 +20,37 @@ export async function getPatientsList() {
   const userId = session.id
 
   try {
-    // Garantir que as tabelas existam
-    await ensureTablesExist()
-    
     const sql = await getDb()
+
+    // Query simplificada - sem JOINs complexos para evitar travamento
     const patients = await sql`
-      SELECT 
-        p.*,
-        COUNT(DISTINCT a.id) as total_appointments,
-        COUNT(DISTINCT pr.id) as total_prescriptions,
-        MAX(a.appointment_date) as last_appointment
-      FROM patients p
-      LEFT JOIN appointments a ON a.user_id = p.user_id AND 
-        (a.patient_cpf = p.cpf OR a.patient_name = p.full_name)
-      LEFT JOIN medical_prescriptions pr ON pr.patient_id = p.id
-      WHERE p.user_id = ${userId}
-      GROUP BY p.id
-      ORDER BY p.created_at DESC
+      SELECT
+        id,
+        user_id,
+        full_name,
+        cpf,
+        date_of_birth,
+        gender,
+        phone,
+        email,
+        address,
+        city,
+        state,
+        cep,
+        insurance_provider,
+        insurance_number,
+        blood_type,
+        allergies,
+        chronic_conditions,
+        emergency_contact_name,
+        emergency_contact_phone,
+        is_active,
+        created_at,
+        updated_at
+      FROM patients
+      WHERE user_id = ${userId} AND is_active = true
+      ORDER BY created_at DESC
+      LIMIT 100
     `
 
     return { success: true, patients }
@@ -365,11 +378,8 @@ export async function createPatient(data: {
   const userId = session.id
 
   try {
-    // Garantir que as tabelas existam
-    await ensureTablesExist()
-    
     const sql = await getDb()
-    
+
     // Log para debug
     console.log('[createPatient] Creating patient:', data.fullName, 'for user:', userId)
     

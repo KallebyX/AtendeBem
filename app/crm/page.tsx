@@ -4,16 +4,18 @@ import { NavigationHeader } from "@/components/navigation-header"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Users, TrendingUp, Calendar, DollarSign, Search, Plus } from "lucide-react"
+import { Users, TrendingUp, Calendar, DollarSign, Search, Plus, AlertCircle, RefreshCw } from "lucide-react"
 import { useEffect, useState } from "react"
 import { getPatientsList, getFinancialDashboard } from "@/app/actions/crm"
 import Link from "next/link"
+import { toast } from "sonner"
 
 export default function CRMPage() {
   const [patients, setPatients] = useState<any[]>([])
   const [metrics, setMetrics] = useState<any>(null)
   const [searchTerm, setSearchTerm] = useState("")
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     loadData()
@@ -21,17 +23,32 @@ export default function CRMPage() {
 
   async function loadData() {
     setLoading(true)
-    const [patientsResult, dashboardResult] = await Promise.all([getPatientsList(), getFinancialDashboard()])
+    setError(null)
 
-    if (patientsResult.success) {
-      setPatients(patientsResult.patients || [])
+    try {
+      const [patientsResult, dashboardResult] = await Promise.all([
+        getPatientsList(),
+        getFinancialDashboard()
+      ])
+
+      if (patientsResult.success) {
+        setPatients(patientsResult.patients || [])
+      } else {
+        console.error("Erro ao carregar pacientes:", patientsResult.error)
+        setError(patientsResult.error || "Erro ao carregar pacientes")
+        toast.error(patientsResult.error || "Erro ao carregar pacientes")
+      }
+
+      if (dashboardResult.success) {
+        setMetrics(dashboardResult.metrics)
+      }
+    } catch (err: any) {
+      console.error("Erro ao carregar dados:", err)
+      setError("Erro de conexão. Tente novamente.")
+      toast.error("Erro de conexão. Tente novamente.")
+    } finally {
+      setLoading(false)
     }
-
-    if (dashboardResult.success) {
-      setMetrics(dashboardResult.metrics)
-    }
-
-    setLoading(false)
   }
 
   const filteredPatients = patients.filter(
@@ -140,7 +157,19 @@ export default function CRMPage() {
           </CardHeader>
           <CardContent>
             {loading ? (
-              <p className="text-center text-muted-foreground py-8">Carregando pacientes...</p>
+              <div className="text-center py-8">
+                <RefreshCw className="w-6 h-6 animate-spin mx-auto text-muted-foreground mb-2" />
+                <p className="text-muted-foreground">Carregando pacientes...</p>
+              </div>
+            ) : error ? (
+              <div className="text-center py-8">
+                <AlertCircle className="w-8 h-8 text-destructive mx-auto mb-2" />
+                <p className="text-destructive mb-4">{error}</p>
+                <Button onClick={loadData} variant="outline" className="rounded-xl">
+                  <RefreshCw className="w-4 h-4 mr-2" />
+                  Tentar novamente
+                </Button>
+              </div>
             ) : filteredPatients.length === 0 ? (
               <p className="text-center text-muted-foreground py-8">
                 {searchTerm ? "Nenhum paciente encontrado" : "Nenhum paciente cadastrado ainda"}

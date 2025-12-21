@@ -3,6 +3,7 @@ import type { Metadata } from "next"
 
 import { Analytics } from "@vercel/analytics/next"
 import { ThemeProvider } from "@/components/theme-provider"
+import { Toaster } from "sonner"
 import "./globals.css"
 
 import { Inter } from 'next/font/google'
@@ -32,6 +33,7 @@ export default function RootLayout({
       <body className={`${inter.className} font-sans antialiased`}>
         <ThemeProvider attribute="class" defaultTheme="light" enableSystem disableTransitionOnChange>
           {children}
+          <Toaster position="top-right" richColors closeButton />
           <Analytics />
         </ThemeProvider>
       </body>
