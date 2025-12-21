@@ -3,7 +3,6 @@
 import { getDb } from "@/lib/db"
 import { cookies } from "next/headers"
 import { verifyToken } from "@/lib/session"
-import { ensureTablesExist } from "@/lib/db-init"
 
 export async function createAppointment(data: {
   patientName: string
@@ -34,9 +33,6 @@ export async function createAppointment(data: {
       return { error: "Token inválido" }
     }
 
-    // Garantir que as tabelas existam
-    await ensureTablesExist()
-    
     const sql = await getDb()
 
     // Criar registro de atendimento

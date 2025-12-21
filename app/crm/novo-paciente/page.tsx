@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { createPatient } from "@/app/actions/crm"
+import { toast } from "sonner"
 
 export default function NewPatientPage() {
   const router = useRouter()
@@ -47,32 +48,42 @@ export default function NewPatientPage() {
     // Validações básicas
     if (!formData.full_name || !formData.cpf || !formData.date_of_birth) {
       setError("Nome completo, CPF e data de nascimento são obrigatórios")
+      toast.error("Preencha todos os campos obrigatórios")
       setLoading(false)
       return
     }
 
-    const result = await createPatient({
-      fullName: formData.full_name,
-      cpf: formData.cpf,
-      dateOfBirth: formData.date_of_birth,
-      gender: formData.gender,
-      phone: formData.phone,
-      email: formData.email,
-      address: formData.address,
-      city: formData.city,
-      state: formData.state,
-      cep: formData.zip_code,
-      bloodType: formData.blood_type,
-      allergies: formData.allergies,
-      chronicConditions: formData.chronic_conditions,
-      emergencyContactName: formData.emergency_contact,
-      emergencyContactPhone: formData.emergency_phone,
-    })
+    try {
+      const result = await createPatient({
+        fullName: formData.full_name,
+        cpf: formData.cpf,
+        dateOfBirth: formData.date_of_birth,
+        gender: formData.gender,
+        phone: formData.phone,
+        email: formData.email,
+        address: formData.address,
+        city: formData.city,
+        state: formData.state,
+        cep: formData.zip_code,
+        bloodType: formData.blood_type,
+        allergies: formData.allergies,
+        chronicConditions: formData.chronic_conditions,
+        emergencyContactName: formData.emergency_contact,
+        emergencyContactPhone: formData.emergency_phone,
+      })
 
-    if (result.success) {
-      router.push(`/crm/${result.patient?.id}`)
-    } else {
-      setError(result.error || "Erro ao cadastrar paciente")
+      if (result.success) {
+        toast.success("Paciente cadastrado com sucesso!")
+        router.push(`/crm/${result.patient?.id}`)
+      } else {
+        setError(result.error || "Erro ao cadastrar paciente")
+        toast.error(result.error || "Erro ao cadastrar paciente")
+        setLoading(false)
+      }
+    } catch (err: any) {
+      console.error("Erro ao cadastrar paciente:", err)
+      setError("Erro de conexão. Tente novamente.")
+      toast.error("Erro de conexão. Tente novamente.")
       setLoading(false)
     }
   }
