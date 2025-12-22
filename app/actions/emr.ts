@@ -5,77 +5,277 @@ import { verifyToken } from '@/lib/session'
 import { cookies } from 'next/headers'
 import { setUserContext } from '@/lib/db-init'
 
+// Get comprehensive EMR data for a patient
 export async function getEMR(patient_id: string) {
   try {
     const cookieStore = await cookies()
     const token = cookieStore.get('session')?.value
-    
-    if (!token) return { error: 'Não autenticado' }
+
+    if (!token) return { error: 'Nao autenticado' }
     const user = await verifyToken(token)
-    if (!user) return { error: 'Token inválido' }
+    if (!user) return { error: 'Token invalido' }
 
     await setUserContext(user.id)
     const db = await getDb()
 
-    const result = await db`
-      SELECT e.*, p.name as patient_name
-      FROM electronic_medical_records e
-      JOIN patients p ON e.patient_id = p.id
-      WHERE e.patient_id = ${patient_id} AND e.tenant_id = ${user.tenant_id}
+    // Get patient basic info
+    const patient = await db`
+      SELECT * FROM patients
+      WHERE id = ${patient_id} AND user_id = ${user.id}
     `
 
-    return { success: true, data: result[0] }
+    if (patient.length === 0) {
+      return { error: 'Paciente nao encontrado' }
+    }
+
+    // Get recent appointments (clinical history)
+    const appointments = await db`
+      SELECT * FROM appointments
+      WHERE user_id = ${user.id}
+      AND patient_cpf = ${patient[0].cpf}
+      ORDER BY appointment_date DESC
+      LIMIT 20
+    `
+
+    // Get medical history (diagnoses)
+    const medicalHistory = await db`
+      SELECT * FROM patient_medical_history
+      WHERE patient_id = ${patient_id}
+      ORDER BY diagnosis_date DESC
+    `
+
+    // Get exams
+    const exams = await db`
+      SELECT * FROM patient_exams
+      WHERE patient_id = ${patient_id} AND user_id = ${user.id}
+      ORDER BY exam_date DESC
+      LIMIT 50
+    `
+
+    // Get prescriptions
+    const prescriptions = await db`
+      SELECT * FROM medical_prescriptions
+      WHERE patient_id = ${patient_id} AND user_id = ${user.id}
+      ORDER BY prescription_date DESC
+      LIMIT 50
+    `
+
+    // Build EMR response
+    const emr = {
+      patient: patient[0],
+      allergies: patient[0].allergies ? patient[0].allergies.split(',').map((a: string) => a.trim()) : [],
+      chronic_conditions: patient[0].chronic_conditions ? patient[0].chronic_conditions.split(',').map((c: string) => c.trim()) : [],
+      blood_type: patient[0].blood_type,
+      appointments,
+      medical_history: medicalHistory,
+      exams,
+      prescriptions,
+      last_visit: appointments.length > 0 ? appointments[0].appointment_date : null
+    }
+
+    return { success: true, data: emr }
   } catch (error: any) {
+    console.error('Erro ao buscar prontuario:', error)
     return { error: error.message }
   }
 }
 
+// Update patient medical info
 export async function updateEMR(data: {
   patient_id: string
-  allergies?: any[]
-  active_problems?: any[]
-  current_medications?: any[]
-  immunizations?: any[]
-  family_history?: any
-  social_history?: any
-  clinical_summary?: string
+  allergies?: string[]
+  chronic_conditions?: string[]
+  blood_type?: string
+  emergency_contact_name?: string
+  emergency_contact_phone?: string
 }) {
   try {
     const cookieStore = await cookies()
     const token = cookieStore.get('session')?.value
-    
-    if (!token) return { error: 'Não autenticado' }
+
+    if (!token) return { error: 'Nao autenticado' }
     const user = await verifyToken(token)
-    if (!user) return { error: 'Token inválido' }
+    if (!user) return { error: 'Token invalido' }
 
     await setUserContext(user.id)
     const db = await getDb()
 
     const result = await db`
-      UPDATE electronic_medical_records
-      SET 
-        allergies = COALESCE(${data.allergies ? JSON.stringify(data.allergies) : null}::jsonb, allergies),
-        active_problems = COALESCE(${data.active_problems ? JSON.stringify(data.active_problems) : null}::jsonb, active_problems),
-        current_medications = COALESCE(${data.current_medications ? JSON.stringify(data.current_medications) : null}::jsonb, current_medications),
-        immunizations = COALESCE(${data.immunizations ? JSON.stringify(data.immunizations) : null}::jsonb, immunizations),
-        family_history = COALESCE(${data.family_history ? JSON.stringify(data.family_history) : null}::jsonb, family_history),
-        social_history = COALESCE(${data.social_history ? JSON.stringify(data.social_history) : null}::jsonb, social_history),
-        clinical_summary = COALESCE(${data.clinical_summary}, clinical_summary),
-        last_updated_by = ${user.id},
+      UPDATE patients
+      SET
+        allergies = COALESCE(${data.allergies?.join(', ') || null}, allergies),
+        chronic_conditions = COALESCE(${data.chronic_conditions?.join(', ') || null}, chronic_conditions),
+        blood_type = COALESCE(${data.blood_type || null}, blood_type),
+        emergency_contact_name = COALESCE(${data.emergency_contact_name || null}, emergency_contact_name),
+        emergency_contact_phone = COALESCE(${data.emergency_contact_phone || null}, emergency_contact_phone),
         updated_at = NOW()
-      WHERE patient_id = ${data.patient_id} AND tenant_id = ${user.tenant_id}
+      WHERE id = ${data.patient_id} AND user_id = ${user.id}
       RETURNING *
     `
 
+    if (result.length === 0) {
+      return { error: 'Paciente nao encontrado' }
+    }
+
     return { success: true, data: result[0] }
   } catch (error: any) {
+    console.error('Erro ao atualizar prontuario:', error)
     return { error: error.message }
   }
 }
 
-export async function createClinicalNote(data: {
+// Add a new problem/diagnosis to patient history
+export async function addProblem(data: {
   patient_id: string
   appointment_id?: string
+  icd10_code?: string
+  icd11_code?: string
+  description: string
+  diagnosis_date?: string
+  status?: string
+  notes?: string
+}) {
+  try {
+    const cookieStore = await cookies()
+    const token = cookieStore.get('session')?.value
+
+    if (!token) return { error: 'Nao autenticado' }
+    const user = await verifyToken(token)
+    if (!user) return { error: 'Token invalido' }
+
+    await setUserContext(user.id)
+    const db = await getDb()
+
+    const result = await db`
+      INSERT INTO patient_medical_history (
+        patient_id, appointment_id, cid10_code, cid11_code,
+        diagnosis, diagnosis_date, status, notes, created_by
+      ) VALUES (
+        ${data.patient_id}, ${data.appointment_id || null},
+        ${data.icd10_code || null}, ${data.icd11_code || null},
+        ${data.description}, ${data.diagnosis_date || new Date().toISOString().split('T')[0]},
+        ${data.status || 'active'}, ${data.notes || null}, ${user.id}
+      ) RETURNING *
+    `
+
+    return { success: true, data: result[0] }
+  } catch (error: any) {
+    console.error('Erro ao adicionar problema:', error)
+    return { error: error.message }
+  }
+}
+
+// Get active problems for a patient
+export async function getActiveProblems(patient_id: string) {
+  try {
+    const cookieStore = await cookies()
+    const token = cookieStore.get('session')?.value
+
+    if (!token) return { error: 'Nao autenticado' }
+    const user = await verifyToken(token)
+    if (!user) return { error: 'Token invalido' }
+
+    await setUserContext(user.id)
+    const db = await getDb()
+
+    const result = await db`
+      SELECT h.*, u.name as created_by_name
+      FROM patient_medical_history h
+      LEFT JOIN users u ON h.created_by = u.id
+      WHERE h.patient_id = ${patient_id}
+      AND h.status = 'active'
+      ORDER BY h.diagnosis_date DESC
+    `
+
+    return { success: true, data: result }
+  } catch (error: any) {
+    console.error('Erro ao buscar problemas ativos:', error)
+    return { error: error.message }
+  }
+}
+
+// Update problem status
+export async function updateProblemStatus(problem_id: string, status: string) {
+  try {
+    const cookieStore = await cookies()
+    const token = cookieStore.get('session')?.value
+
+    if (!token) return { error: 'Nao autenticado' }
+    const user = await verifyToken(token)
+    if (!user) return { error: 'Token invalido' }
+
+    await setUserContext(user.id)
+    const db = await getDb()
+
+    const result = await db`
+      UPDATE patient_medical_history
+      SET status = ${status}
+      WHERE id = ${problem_id} AND created_by = ${user.id}
+      RETURNING *
+    `
+
+    if (result.length === 0) {
+      return { error: 'Problema nao encontrado' }
+    }
+
+    return { success: true, data: result[0] }
+  } catch (error: any) {
+    console.error('Erro ao atualizar status do problema:', error)
+    return { error: error.message }
+  }
+}
+
+// Get clinical notes (from appointments)
+export async function getClinicalNotes(patient_id: string, limit: number = 50) {
+  try {
+    const cookieStore = await cookies()
+    const token = cookieStore.get('session')?.value
+
+    if (!token) return { error: 'Nao autenticado' }
+    const user = await verifyToken(token)
+    if (!user) return { error: 'Token invalido' }
+
+    await setUserContext(user.id)
+    const db = await getDb()
+
+    // Get patient CPF first
+    const patient = await db`
+      SELECT cpf FROM patients WHERE id = ${patient_id} AND user_id = ${user.id}
+    `
+
+    if (patient.length === 0) {
+      return { error: 'Paciente nao encontrado' }
+    }
+
+    // Get appointments as clinical notes
+    const result = await db`
+      SELECT
+        id,
+        appointment_date as note_date,
+        appointment_type as note_type,
+        main_complaint,
+        clinical_history,
+        physical_exam,
+        diagnosis,
+        treatment_plan,
+        observations,
+        status
+      FROM appointments
+      WHERE user_id = ${user.id} AND patient_cpf = ${patient[0].cpf}
+      ORDER BY appointment_date DESC
+      LIMIT ${limit}
+    `
+
+    return { success: true, data: result }
+  } catch (error: any) {
+    console.error('Erro ao buscar evolucoes:', error)
+    return { error: error.message }
+  }
+}
+
+// Create a clinical note (creates an appointment record)
+export async function createClinicalNote(data: {
+  patient_id: string
   note_type: string
   subject?: string
   content?: string
@@ -87,164 +287,110 @@ export async function createClinicalNote(data: {
   try {
     const cookieStore = await cookies()
     const token = cookieStore.get('session')?.value
-    
-    if (!token) return { error: 'Não autenticado' }
+
+    if (!token) return { error: 'Nao autenticado' }
     const user = await verifyToken(token)
-    if (!user) return { error: 'Token inválido' }
+    if (!user) return { error: 'Token invalido' }
 
     await setUserContext(user.id)
     const db = await getDb()
 
-    // Buscar EMR ID
-    const emr = await db`
-      SELECT id FROM electronic_medical_records
-      WHERE patient_id = ${data.patient_id} AND tenant_id = ${user.tenant_id}
+    // Get patient info
+    const patient = await db`
+      SELECT full_name, cpf FROM patients
+      WHERE id = ${data.patient_id} AND user_id = ${user.id}
     `
 
-    if (!emr.length) return { error: 'Prontuário não encontrado' }
+    if (patient.length === 0) {
+      return { error: 'Paciente nao encontrado' }
+    }
 
+    // Build content from SOAP notes
+    const content = [
+      data.soap_subjective ? `S: ${data.soap_subjective}` : '',
+      data.soap_objective ? `O: ${data.soap_objective}` : '',
+      data.soap_assessment ? `A: ${data.soap_assessment}` : '',
+      data.soap_plan ? `P: ${data.soap_plan}` : '',
+      data.content || ''
+    ].filter(Boolean).join('\n\n')
+
+    // Create appointment record as clinical note
     const result = await db`
-      INSERT INTO clinical_notes (
-        tenant_id, emr_id, appointment_id, user_id, note_type,
-        subject, content, soap_subjective, soap_objective,
-        soap_assessment, soap_plan, status
+      INSERT INTO appointments (
+        user_id, patient_name, patient_cpf,
+        appointment_date, appointment_type, specialty,
+        main_complaint, diagnosis, treatment_plan, observations, status
       ) VALUES (
-        ${user.tenant_id}, ${emr[0].id}, ${data.appointment_id || null},
-        ${user.id}, ${data.note_type}, ${data.subject || null},
-        ${data.content || null}, ${data.soap_subjective || null},
-        ${data.soap_objective || null}, ${data.soap_assessment || null},
-        ${data.soap_plan || null}, 'draft'
+        ${user.id}, ${patient[0].full_name}, ${patient[0].cpf},
+        NOW(), ${data.note_type}, ${user.specialty},
+        ${data.subject || null}, ${data.soap_assessment || null},
+        ${data.soap_plan || null}, ${content}, 'completed'
       ) RETURNING *
     `
 
     return { success: true, data: result[0] }
   } catch (error: any) {
+    console.error('Erro ao criar evolucao:', error)
     return { error: error.message }
   }
 }
 
-export async function getClinicalNotes(patient_id: string, limit: number = 50) {
+// Get patient timeline (all events)
+export async function getPatientTimeline(patient_id: string) {
   try {
     const cookieStore = await cookies()
     const token = cookieStore.get('session')?.value
-    
-    if (!token) return { error: 'Não autenticado' }
+
+    if (!token) return { error: 'Nao autenticado' }
     const user = await verifyToken(token)
-    if (!user) return { error: 'Token inválido' }
+    if (!user) return { error: 'Token invalido' }
 
     await setUserContext(user.id)
     const db = await getDb()
 
-    const result = await db`
-      SELECT n.*, u.name as author_name
-      FROM clinical_notes n
-      JOIN electronic_medical_records e ON n.emr_id = e.id
-      JOIN users u ON n.user_id = u.id
-      WHERE e.patient_id = ${patient_id} AND n.tenant_id = ${user.tenant_id}
-      ORDER BY n.created_at DESC
-      LIMIT ${limit}
+    // Get patient
+    const patient = await db`
+      SELECT * FROM patients WHERE id = ${patient_id} AND user_id = ${user.id}
     `
 
-    return { success: true, data: result }
+    if (patient.length === 0) {
+      return { error: 'Paciente nao encontrado' }
+    }
+
+    // Appointments
+    const appointments = await db`
+      SELECT
+        id, 'appointment' as event_type, appointment_date as event_date,
+        appointment_type as title, diagnosis as description
+      FROM appointments
+      WHERE user_id = ${user.id} AND patient_cpf = ${patient[0].cpf}
+    `
+
+    // Exams
+    const exams = await db`
+      SELECT
+        id, 'exam' as event_type, exam_date as event_date,
+        exam_name as title, result_summary as description
+      FROM patient_exams
+      WHERE patient_id = ${patient_id} AND user_id = ${user.id}
+    `
+
+    // Diagnoses
+    const diagnoses = await db`
+      SELECT
+        id, 'diagnosis' as event_type, diagnosis_date as event_date,
+        diagnosis as title, notes as description
+      FROM patient_medical_history
+      WHERE patient_id = ${patient_id}
+    `
+
+    // Combine and sort
+    const timeline = [...appointments, ...exams, ...diagnoses]
+      .sort((a, b) => new Date(b.event_date).getTime() - new Date(a.event_date).getTime())
+
+    return { success: true, data: timeline }
   } catch (error: any) {
-    return { error: error.message }
-  }
-}
-
-export async function signClinicalNote(note_id: string) {
-  try {
-    const cookieStore = await cookies()
-    const token = cookieStore.get('session')?.value
-    
-    if (!token) return { error: 'Não autenticado' }
-    const user = await verifyToken(token)
-    if (!user) return { error: 'Token inválido' }
-
-    await setUserContext(user.id)
-    const db = await getDb()
-
-    const result = await db`
-      UPDATE clinical_notes
-      SET status = 'signed', signed_at = NOW(), updated_at = NOW()
-      WHERE id = ${note_id} AND user_id = ${user.id} AND tenant_id = ${user.tenant_id}
-      RETURNING *
-    `
-
-    return { success: true, data: result[0] }
-  } catch (error: any) {
-    return { error: error.message }
-  }
-}
-
-export async function addProblem(data: {
-  patient_id: string
-  icd10_code?: string
-  description: string
-  problem_type: string
-  severity?: string
-  onset_date?: string
-  notes?: string
-}) {
-  try {
-    const cookieStore = await cookies()
-    const token = cookieStore.get('session')?.value
-    
-    if (!token) return { error: 'Não autenticado' }
-    const user = await verifyToken(token)
-    if (!user) return { error: 'Token inválido' }
-
-    await setUserContext(user.id)
-    const db = await getDb()
-
-    // Buscar EMR ID
-    const emr = await db`
-      SELECT id FROM electronic_medical_records
-      WHERE patient_id = ${data.patient_id} AND tenant_id = ${user.tenant_id}
-    `
-
-    if (!emr.length) return { error: 'Prontuário não encontrado' }
-
-    const result = await db`
-      INSERT INTO problem_list (
-        emr_id, tenant_id, icd10_code, description, problem_type,
-        severity, onset_date, notes, created_by, status
-      ) VALUES (
-        ${emr[0].id}, ${user.tenant_id}, ${data.icd10_code || null},
-        ${data.description}, ${data.problem_type}, ${data.severity || null},
-        ${data.onset_date || null}, ${data.notes || null}, ${user.id}, 'active'
-      ) RETURNING *
-    `
-
-    return { success: true, data: result[0] }
-  } catch (error: any) {
-    return { error: error.message }
-  }
-}
-
-export async function getActiveProblems(patient_id: string) {
-  try {
-    const cookieStore = await cookies()
-    const token = cookieStore.get('session')?.value
-    
-    if (!token) return { error: 'Não autenticado' }
-    const user = await verifyToken(token)
-    if (!user) return { error: 'Token inválido' }
-
-    await setUserContext(user.id)
-    const db = await getDb()
-
-    const result = await db`
-      SELECT p.*
-      FROM problem_list p
-      JOIN electronic_medical_records e ON p.emr_id = e.id
-      WHERE e.patient_id = ${patient_id} 
-        AND p.tenant_id = ${user.tenant_id}
-        AND p.status = 'active'
-      ORDER BY p.onset_date DESC NULLS LAST, p.created_at DESC
-    `
-
-    return { success: true, data: result }
-  } catch (error: any) {
+    console.error('Erro ao buscar timeline:', error)
     return { error: error.message }
   }
 }

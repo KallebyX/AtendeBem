@@ -16,44 +16,34 @@ export async function createLabOrder(data: {
   try {
     const cookieStore = await cookies()
     const token = cookieStore.get('session')?.value
-    
-    if (!token) return { error: 'Não autenticado' }
+
+    if (!token) return { error: 'Nao autenticado' }
     const user = await verifyToken(token)
-    if (!user) return { error: 'Token inválido' }
+    if (!user) return { error: 'Token invalido' }
 
     await setUserContext(user.id)
     const db = await getDb()
 
-    // Gerar número do pedido
-    const count = await db`SELECT COUNT(*) FROM lab_orders WHERE tenant_id = ${user.tenant_id}`
-    const orderNumber = `LAB-${user.tenant_id.slice(0, 8)}-${(parseInt(count[0].count) + 1).toString().padStart(6, '0')}`
-
-    // Criar pedido
-    const order = await db`
-      INSERT INTO lab_orders (
-        tenant_id, user_id, patient_id, appointment_id, order_number,
-        lab_name, clinical_indication, expected_result_date, status
-      ) VALUES (
-        ${user.tenant_id}, ${user.id}, ${data.patient_id}, ${data.appointment_id || null},
-        ${orderNumber}, ${data.lab_name}, ${data.clinical_indication || null},
-        ${data.expected_result_date || null}, 'pending'
-      ) RETURNING *
-    `
-
-    // Criar exames
+    // Create exams using patient_exams table
+    const createdExams = []
     for (const exam of data.exams) {
-      await db`
-        INSERT INTO lab_exams (
-          order_id, tenant_id, exam_code, exam_name, exam_type, status
+      const result = await db`
+        INSERT INTO patient_exams (
+          patient_id, user_id, appointment_id, exam_type,
+          exam_name, exam_date, laboratory, requested_by, status, observations
         ) VALUES (
-          ${order[0].id}, ${user.tenant_id}, ${exam.exam_code || null},
-          ${exam.exam_name}, ${exam.exam_type || null}, 'pending'
-        )
+          ${data.patient_id}, ${user.id}, ${data.appointment_id || null},
+          ${exam.exam_type || 'laboratorio'}, ${exam.exam_name},
+          ${new Date().toISOString().split('T')[0]}, ${data.lab_name},
+          ${user.name}, 'requested', ${data.clinical_indication || null}
+        ) RETURNING *
       `
+      createdExams.push(result[0])
     }
 
-    return { success: true, data: order[0] }
+    return { success: true, data: createdExams }
   } catch (error: any) {
+    console.error('Erro ao criar pedido lab:', error)
     return { error: error.message }
   }
 }
@@ -62,81 +52,65 @@ export async function getLabOrders(filters?: { patient_id?: string; status?: str
   try {
     const cookieStore = await cookies()
     const token = cookieStore.get('session')?.value
-    
-    if (!token) return { error: 'Não autenticado' }
+
+    if (!token) return { error: 'Nao autenticado' }
     const user = await verifyToken(token)
-    if (!user) return { error: 'Token inválido' }
+    if (!user) return { error: 'Token invalido' }
 
     await setUserContext(user.id)
     const db = await getDb()
 
-    let query = `
-      SELECT o.*, p.name as patient_name, 
-        COUNT(e.id) as exams_count,
-        COUNT(CASE WHEN e.status = 'completed' THEN 1 END) as completed_exams
-      FROM lab_orders o
-      JOIN patients p ON o.patient_id = p.id
-      LEFT JOIN lab_exams e ON o.id = e.order_id
-      WHERE o.tenant_id = $1
+    const result = await db`
+      SELECT e.*, p.full_name as patient_name
+      FROM patient_exams e
+      JOIN patients p ON e.patient_id = p.id
+      WHERE e.user_id = ${user.id}
+      ${filters?.patient_id ? db`AND e.patient_id = ${filters.patient_id}` : db``}
+      ${filters?.status ? db`AND e.status = ${filters.status}` : db``}
+      ORDER BY e.exam_date DESC
+      LIMIT 100
     `
-    const params = [user.tenant_id]
-    let paramIndex = 2
 
-    if (filters?.patient_id) {
-      query += ` AND o.patient_id = $${paramIndex}`
-      params.push(filters.patient_id)
-      paramIndex++
-    }
-
-    if (filters?.status) {
-      query += ` AND o.status = $${paramIndex}`
-      params.push(filters.status)
-      paramIndex++
-    }
-
-    query += ` GROUP BY o.id, p.name ORDER BY o.created_at DESC`
-
-    const result = await db.query(query, params)
-    return { success: true, data: result.rows }
+    return { success: true, data: result }
   } catch (error: any) {
+    console.error('Erro ao buscar pedidos lab:', error)
     return { error: error.message }
   }
 }
 
 export async function updateExamResult(data: {
   exam_id: string
-  result_value?: string
-  result_text?: string
-  is_abnormal?: boolean
+  result_summary?: string
   result_file_url?: string
+  status?: string
 }) {
   try {
     const cookieStore = await cookies()
     const token = cookieStore.get('session')?.value
-    
-    if (!token) return { error: 'Não autenticado' }
+
+    if (!token) return { error: 'Nao autenticado' }
     const user = await verifyToken(token)
-    if (!user) return { error: 'Token inválido' }
+    if (!user) return { error: 'Token invalido' }
 
     await setUserContext(user.id)
     const db = await getDb()
 
     const result = await db`
-      UPDATE lab_exams
-      SET 
-        result_value = COALESCE(${data.result_value}, result_value),
-        result_text = COALESCE(${data.result_text}, result_text),
-        is_abnormal = COALESCE(${data.is_abnormal}, is_abnormal),
-        result_file_url = COALESCE(${data.result_file_url}, result_file_url),
-        status = 'completed',
-        resulted_at = NOW(),
+      UPDATE patient_exams
+      SET
+        result_summary = COALESCE(${data.result_summary || null}, result_summary),
+        result_file_url = COALESCE(${data.result_file_url || null}, result_file_url),
+        result_date = CASE WHEN ${data.result_summary} IS NOT NULL THEN CURRENT_DATE ELSE result_date END,
+        status = COALESCE(${data.status || null}, 'completed'),
         updated_at = NOW()
-      WHERE id = ${data.exam_id} AND tenant_id = ${user.tenant_id}
+      WHERE id = ${data.exam_id} AND user_id = ${user.id}
       RETURNING *
     `
 
+    if (result.length === 0) return { error: 'Exame nao encontrado' }
     return { success: true, data: result[0] }
   } catch (error: any) {
+    console.error('Erro ao atualizar resultado:', error)
     return { error: error.message }
   }
 }
@@ -145,23 +119,53 @@ export async function getLabTemplates() {
   try {
     const cookieStore = await cookies()
     const token = cookieStore.get('session')?.value
-    
-    if (!token) return { error: 'Não autenticado' }
+
+    if (!token) return { error: 'Nao autenticado' }
     const user = await verifyToken(token)
-    if (!user) return { error: 'Token inválido' }
+    if (!user) return { error: 'Token invalido' }
+
+    // Return common lab exam templates
+    const templates = [
+      { id: '1', name: 'Hemograma Completo', exam_type: 'hematologia', is_public: true },
+      { id: '2', name: 'Glicemia de Jejum', exam_type: 'bioquimica', is_public: true },
+      { id: '3', name: 'Colesterol Total e Fracoes', exam_type: 'bioquimica', is_public: true },
+      { id: '4', name: 'TSH e T4 Livre', exam_type: 'hormonal', is_public: true },
+      { id: '5', name: 'Ureia e Creatinina', exam_type: 'bioquimica', is_public: true },
+      { id: '6', name: 'TGO e TGP', exam_type: 'bioquimica', is_public: true },
+      { id: '7', name: 'Urina Tipo I (EAS)', exam_type: 'urinario', is_public: true },
+      { id: '8', name: 'Vitamina D', exam_type: 'bioquimica', is_public: true },
+      { id: '9', name: 'Vitamina B12', exam_type: 'bioquimica', is_public: true },
+      { id: '10', name: 'Ferritina', exam_type: 'hematologia', is_public: true }
+    ]
+
+    return { success: true, data: templates }
+  } catch (error: any) {
+    console.error('Erro ao buscar templates:', error)
+    return { error: error.message }
+  }
+}
+
+export async function getExamsByPatient(patient_id: string) {
+  try {
+    const cookieStore = await cookies()
+    const token = cookieStore.get('session')?.value
+
+    if (!token) return { error: 'Nao autenticado' }
+    const user = await verifyToken(token)
+    if (!user) return { error: 'Token invalido' }
 
     await setUserContext(user.id)
     const db = await getDb()
 
     const result = await db`
-      SELECT * FROM lab_templates
-      WHERE (tenant_id = ${user.tenant_id} OR is_public = true)
-        AND is_active = true
-      ORDER BY is_public DESC, name ASC
+      SELECT * FROM patient_exams
+      WHERE patient_id = ${patient_id} AND user_id = ${user.id}
+      ORDER BY exam_date DESC
     `
 
     return { success: true, data: result }
   } catch (error: any) {
+    console.error('Erro ao buscar exames do paciente:', error)
     return { error: error.message }
   }
 }
