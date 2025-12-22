@@ -1,8 +1,8 @@
 "use client"
 
-import { useRef } from "react"
+import { useRef, useState } from "react"
 import { Button } from "@/components/ui/button"
-import { Download, Printer, FileText } from "lucide-react"
+import { Download, Printer, FileText, CheckCircle2, Calendar, User, Building2, Loader2 } from "lucide-react"
 import { jsPDF } from "jspdf"
 
 interface ContractPDFViewerProps {
@@ -32,232 +32,545 @@ const contractTypeLabels: Record<string, string> = {
   other: "Outro",
 }
 
+// Função para processar Markdown básico para texto
+function parseMarkdownForPDF(content: string): { type: 'heading' | 'subheading' | 'paragraph' | 'list-item' | 'empty', text: string }[] {
+  const lines = content.split('\n')
+  const result: { type: 'heading' | 'subheading' | 'paragraph' | 'list-item' | 'empty', text: string }[] = []
+
+  for (const line of lines) {
+    const trimmed = line.trim()
+
+    if (trimmed === '') {
+      result.push({ type: 'empty', text: '' })
+    } else if (trimmed.startsWith('### ')) {
+      result.push({ type: 'subheading', text: trimmed.replace(/^###\s+/, '') })
+    } else if (trimmed.startsWith('## ')) {
+      result.push({ type: 'heading', text: trimmed.replace(/^##\s+/, '') })
+    } else if (trimmed.startsWith('# ')) {
+      result.push({ type: 'heading', text: trimmed.replace(/^#\s+/, '') })
+    } else if (trimmed.startsWith('- ') || trimmed.startsWith('* ') || /^\d+\.\s/.test(trimmed)) {
+      result.push({ type: 'list-item', text: trimmed.replace(/^[-*]\s+/, '').replace(/^\d+\.\s+/, '') })
+    } else if (/^[A-ZÁÉÍÓÚÂÊÎÔÛÃÕÇ\d\.\)]+(\s|$)/.test(trimmed) && trimmed.length < 80) {
+      // Título em maiúsculas ou numerado
+      result.push({ type: 'heading', text: trimmed })
+    } else {
+      // Remove formatação inline de markdown (**bold**, *italic*)
+      const cleanText = trimmed
+        .replace(/\*\*([^*]+)\*\*/g, '$1')
+        .replace(/\*([^*]+)\*/g, '$1')
+        .replace(/__([^_]+)__/g, '$1')
+        .replace(/_([^_]+)_/g, '$1')
+      result.push({ type: 'paragraph', text: cleanText })
+    }
+  }
+
+  return result
+}
+
+// Função para renderizar Markdown para HTML
+function renderMarkdownToHTML(content: string): string {
+  let html = content
+    // Escape HTML first
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    // Headers
+    .replace(/^### (.+)$/gm, '<h4 class="text-base font-semibold text-gray-800 mt-4 mb-2">$1</h4>')
+    .replace(/^## (.+)$/gm, '<h3 class="text-lg font-bold text-gray-900 mt-6 mb-3">$1</h3>')
+    .replace(/^# (.+)$/gm, '<h2 class="text-xl font-bold text-gray-900 mt-8 mb-4 pb-2 border-b">$1</h2>')
+    // Bold and italic
+    .replace(/\*\*([^*]+)\*\*/g, '<strong class="font-semibold">$1</strong>')
+    .replace(/\*([^*]+)\*/g, '<em>$1</em>')
+    .replace(/__([^_]+)__/g, '<strong class="font-semibold">$1</strong>')
+    .replace(/_([^_]+)_/g, '<em>$1</em>')
+    // Lists
+    .replace(/^[-*]\s+(.+)$/gm, '<li class="ml-4 mb-1">• $1</li>')
+    .replace(/^\d+\.\s+(.+)$/gm, '<li class="ml-4 mb-1 list-decimal">$1</li>')
+    // Line breaks - convert double newlines to paragraph breaks
+    .replace(/\n\n/g, '</p><p class="text-gray-700 leading-relaxed mb-3 text-justify">')
+    // Single line breaks
+    .replace(/\n/g, '<br/>')
+
+  // Wrap in paragraph if not already wrapped
+  if (!html.startsWith('<')) {
+    html = `<p class="text-gray-700 leading-relaxed mb-3 text-justify">${html}</p>`
+  }
+
+  return html
+}
+
 export function ContractPDFViewer({ contract }: ContractPDFViewerProps) {
   const contentRef = useRef<HTMLDivElement>(null)
+  const [isGenerating, setIsGenerating] = useState(false)
 
   async function handleDownloadPDF() {
-    const doc = new jsPDF({
-      orientation: "portrait",
-      unit: "mm",
-      format: "a4",
-    })
+    setIsGenerating(true)
 
-    const pageWidth = doc.internal.pageSize.getWidth()
-    const margin = 20
-    const contentWidth = pageWidth - margin * 2
-    let yPosition = 20
+    try {
+      const doc = new jsPDF({
+        orientation: "portrait",
+        unit: "mm",
+        format: "a4",
+      })
 
-    // Header
-    doc.setFontSize(18)
-    doc.setFont("helvetica", "bold")
-    doc.text(contract.title, pageWidth / 2, yPosition, { align: "center" })
-    yPosition += 10
+      const pageWidth = doc.internal.pageSize.getWidth()
+      const pageHeight = doc.internal.pageSize.getHeight()
+      const margin = 20
+      const contentWidth = pageWidth - margin * 2
+      let yPosition = 20
+      let pageNumber = 1
 
-    // Contract number
-    doc.setFontSize(10)
-    doc.setFont("helvetica", "normal")
-    doc.setTextColor(100, 100, 100)
-    doc.text(`Contrato: ${contract.contract_number}`, pageWidth / 2, yPosition, { align: "center" })
-    yPosition += 15
+      // Função para adicionar cabeçalho em cada página
+      function addHeader() {
+        // Background do cabeçalho
+        doc.setFillColor(59, 130, 246) // Blue-500
+        doc.rect(0, 0, pageWidth, 35, 'F')
 
-    // Line
-    doc.setDrawColor(200, 200, 200)
-    doc.line(margin, yPosition, pageWidth - margin, yPosition)
-    yPosition += 10
+        // Nome da clínica
+        doc.setTextColor(255, 255, 255)
+        doc.setFontSize(20)
+        doc.setFont("helvetica", "bold")
+        doc.text("AtendeBem", margin, 15)
 
-    // Info section
-    doc.setTextColor(0, 0, 0)
-    doc.setFontSize(11)
-    doc.text(`Paciente: ${contract.patient_name}`, margin, yPosition)
-    yPosition += 6
-    doc.text(`Tipo: ${contractTypeLabels[contract.contract_type] || contract.contract_type}`, margin, yPosition)
-    yPosition += 6
-    doc.text(`Data: ${new Date(contract.created_at).toLocaleDateString("pt-BR")}`, margin, yPosition)
-    yPosition += 15
+        // Subtítulo
+        doc.setFontSize(10)
+        doc.setFont("helvetica", "normal")
+        doc.text("Sistema de Gestão em Saúde", margin, 22)
 
-    // Content
-    doc.setFontSize(11)
-    const paragraphs = contract.content.split("\n")
+        // Tipo do documento
+        doc.setFontSize(9)
+        doc.text(contractTypeLabels[contract.contract_type] || contract.contract_type, margin, 29)
 
-    for (const paragraph of paragraphs) {
-      if (paragraph.trim() === "") {
-        yPosition += 5
-        continue
+        // Número do contrato (direita)
+        doc.setFontSize(10)
+        doc.text(contract.contract_number, pageWidth - margin, 22, { align: "right" })
+
+        yPosition = 45
       }
 
-      const lines = doc.splitTextToSize(paragraph, contentWidth)
+      // Função para adicionar rodapé
+      function addFooter() {
+        const footerY = pageHeight - 15
 
-      for (const line of lines) {
-        if (yPosition > 270) {
+        // Linha separadora
+        doc.setDrawColor(200, 200, 200)
+        doc.line(margin, footerY - 5, pageWidth - margin, footerY - 5)
+
+        // Texto do rodapé
+        doc.setTextColor(120, 120, 120)
+        doc.setFontSize(8)
+        doc.text("Documento gerado eletronicamente pelo sistema AtendeBem", margin, footerY)
+        doc.text("Válido conforme Lei 14.063/2020", margin, footerY + 4)
+
+        // Número da página
+        doc.text(`Página ${pageNumber}`, pageWidth - margin, footerY, { align: "right" })
+      }
+
+      // Função para verificar e adicionar nova página se necessário
+      function checkNewPage(neededSpace: number = 20) {
+        if (yPosition > pageHeight - 30 - neededSpace) {
+          addFooter()
           doc.addPage()
-          yPosition = 20
+          pageNumber++
+          addHeader()
         }
-        doc.text(line, margin, yPosition)
-        yPosition += 6
       }
-    }
 
-    // Signatures
-    yPosition += 20
-    if (yPosition > 220) {
-      doc.addPage()
-      yPosition = 20
-    }
+      // Primeira página
+      addHeader()
 
-    doc.setDrawColor(150, 150, 150)
-    doc.line(margin, yPosition, margin + 70, yPosition)
-    doc.line(pageWidth - margin - 70, yPosition, pageWidth - margin, yPosition)
-    yPosition += 5
+      // Título do documento
+      doc.setTextColor(0, 0, 0)
+      doc.setFontSize(18)
+      doc.setFont("helvetica", "bold")
 
-    doc.setFontSize(10)
-    doc.text("Profissional", margin, yPosition)
-    doc.text("Paciente", pageWidth - margin - 70, yPosition)
-    yPosition += 4
+      const titleLines = doc.splitTextToSize(contract.title, contentWidth)
+      for (const line of titleLines) {
+        doc.text(line, pageWidth / 2, yPosition, { align: "center" })
+        yPosition += 8
+      }
+      yPosition += 5
 
-    if (contract.professional_signed_at) {
+      // Caixa de informações
+      doc.setFillColor(248, 250, 252) // Gray-50
+      doc.setDrawColor(226, 232, 240) // Gray-200
+      const infoBoxHeight = 28
+      doc.roundedRect(margin, yPosition, contentWidth, infoBoxHeight, 3, 3, 'FD')
+
+      yPosition += 8
+      doc.setFontSize(9)
+      doc.setFont("helvetica", "bold")
+      doc.setTextColor(100, 116, 139) // Gray-500
+
+      // Coluna 1
+      doc.text("PACIENTE", margin + 5, yPosition)
+      doc.text("DATA DE CRIAÇÃO", margin + contentWidth/2, yPosition)
+
+      yPosition += 5
+      doc.setFont("helvetica", "normal")
+      doc.setTextColor(30, 41, 59) // Gray-800
+      doc.setFontSize(10)
+      doc.text(contract.patient_name, margin + 5, yPosition)
+      doc.text(new Date(contract.created_at).toLocaleDateString("pt-BR"), margin + contentWidth/2, yPosition)
+
+      yPosition += 5
+      doc.setFontSize(9)
+      doc.setFont("helvetica", "bold")
+      doc.setTextColor(100, 116, 139)
+      doc.text("TIPO", margin + 5, yPosition)
+      if (contract.valid_until) {
+        doc.text("VALIDADE", margin + contentWidth/2, yPosition)
+      }
+
+      yPosition += 5
+      doc.setFont("helvetica", "normal")
+      doc.setTextColor(30, 41, 59)
+      doc.setFontSize(10)
+      doc.text(contractTypeLabels[contract.contract_type] || contract.contract_type, margin + 5, yPosition)
+      if (contract.valid_until) {
+        doc.text(new Date(contract.valid_until).toLocaleDateString("pt-BR"), margin + contentWidth/2, yPosition)
+      }
+
+      yPosition += 15
+
+      // Linha separadora
+      doc.setDrawColor(200, 200, 200)
+      doc.line(margin, yPosition, pageWidth - margin, yPosition)
+      yPosition += 10
+
+      // Conteúdo do contrato
+      const parsedContent = parseMarkdownForPDF(contract.content)
+
+      for (const item of parsedContent) {
+        checkNewPage(item.type === 'heading' ? 15 : 10)
+
+        switch (item.type) {
+          case 'heading':
+            yPosition += 4
+            doc.setFontSize(12)
+            doc.setFont("helvetica", "bold")
+            doc.setTextColor(30, 41, 59)
+            const headingLines = doc.splitTextToSize(item.text, contentWidth)
+            for (const line of headingLines) {
+              checkNewPage()
+              doc.text(line, margin, yPosition)
+              yPosition += 6
+            }
+            yPosition += 2
+            break
+
+          case 'subheading':
+            yPosition += 2
+            doc.setFontSize(11)
+            doc.setFont("helvetica", "bold")
+            doc.setTextColor(51, 65, 85)
+            const subheadingLines = doc.splitTextToSize(item.text, contentWidth)
+            for (const line of subheadingLines) {
+              checkNewPage()
+              doc.text(line, margin, yPosition)
+              yPosition += 5
+            }
+            yPosition += 1
+            break
+
+          case 'list-item':
+            doc.setFontSize(10)
+            doc.setFont("helvetica", "normal")
+            doc.setTextColor(55, 65, 81)
+            const listLines = doc.splitTextToSize(`• ${item.text}`, contentWidth - 10)
+            for (const line of listLines) {
+              checkNewPage()
+              doc.text(line, margin + 5, yPosition)
+              yPosition += 5
+            }
+            break
+
+          case 'paragraph':
+            doc.setFontSize(10)
+            doc.setFont("helvetica", "normal")
+            doc.setTextColor(55, 65, 81)
+            const lines = doc.splitTextToSize(item.text, contentWidth)
+            for (const line of lines) {
+              checkNewPage()
+              doc.text(line, margin, yPosition)
+              yPosition += 5
+            }
+            yPosition += 2
+            break
+
+          case 'empty':
+            yPosition += 4
+            break
+        }
+      }
+
+      // Seção de assinaturas
+      checkNewPage(60)
+      yPosition += 15
+
+      // Título da seção de assinaturas
+      doc.setFillColor(248, 250, 252)
+      doc.roundedRect(margin, yPosition, contentWidth, 8, 2, 2, 'F')
+      doc.setFontSize(10)
+      doc.setFont("helvetica", "bold")
+      doc.setTextColor(51, 65, 85)
+      doc.text("ASSINATURAS", pageWidth / 2, yPosition + 5.5, { align: "center" })
+      yPosition += 18
+
+      const signatureBoxWidth = (contentWidth - 10) / 2
+      const signatureBoxHeight = 35
+
+      // Box do profissional
+      doc.setDrawColor(200, 200, 200)
+      doc.setFillColor(255, 255, 255)
+      doc.roundedRect(margin, yPosition, signatureBoxWidth, signatureBoxHeight, 2, 2, 'FD')
+
+      // Box do paciente
+      doc.roundedRect(margin + signatureBoxWidth + 10, yPosition, signatureBoxWidth, signatureBoxHeight, 2, 2, 'FD')
+
+      // Linhas de assinatura
+      const signLineY = yPosition + signatureBoxHeight - 12
+      doc.setDrawColor(180, 180, 180)
+      doc.line(margin + 5, signLineY, margin + signatureBoxWidth - 5, signLineY)
+      doc.line(margin + signatureBoxWidth + 15, signLineY, margin + signatureBoxWidth * 2 + 5, signLineY)
+
+      // Labels
+      doc.setFontSize(9)
+      doc.setFont("helvetica", "bold")
+      doc.setTextColor(100, 116, 139)
+      doc.text("Profissional Responsável", margin + signatureBoxWidth / 2, yPosition + signatureBoxHeight - 5, { align: "center" })
+      doc.text(contract.patient_name, margin + signatureBoxWidth + 10 + signatureBoxWidth / 2, yPosition + signatureBoxHeight - 5, { align: "center" })
+
+      // Status das assinaturas
       doc.setFontSize(8)
-      doc.setTextColor(100, 100, 100)
-      doc.text(new Date(contract.professional_signed_at).toLocaleString("pt-BR"), margin, yPosition)
-    }
+      doc.setFont("helvetica", "normal")
 
-    if (contract.patient_signed_at) {
-      doc.setFontSize(8)
-      doc.setTextColor(100, 100, 100)
-      doc.text(new Date(contract.patient_signed_at).toLocaleString("pt-BR"), pageWidth - margin - 70, yPosition)
-    }
+      if (contract.professional_signed_at) {
+        doc.setTextColor(22, 163, 74) // Green
+        doc.text(`Assinado em ${new Date(contract.professional_signed_at).toLocaleString("pt-BR")}`, margin + signatureBoxWidth / 2, yPosition + signatureBoxHeight, { align: "center" })
+      } else {
+        doc.setTextColor(234, 179, 8) // Yellow
+        doc.text("Pendente de assinatura", margin + signatureBoxWidth / 2, yPosition + signatureBoxHeight, { align: "center" })
+      }
 
-    doc.save(`${contract.contract_number}.pdf`)
+      if (contract.patient_signed_at) {
+        doc.setTextColor(22, 163, 74)
+        doc.text(`Assinado em ${new Date(contract.patient_signed_at).toLocaleString("pt-BR")}`, margin + signatureBoxWidth + 10 + signatureBoxWidth / 2, yPosition + signatureBoxHeight, { align: "center" })
+      } else {
+        doc.setTextColor(234, 179, 8)
+        doc.text("Pendente de assinatura", margin + signatureBoxWidth + 10 + signatureBoxWidth / 2, yPosition + signatureBoxHeight, { align: "center" })
+      }
+
+      // Adicionar rodapé na última página
+      addFooter()
+
+      doc.save(`${contract.contract_number}.pdf`)
+    } finally {
+      setIsGenerating(false)
+    }
   }
 
   function handlePrint() {
     window.print()
   }
 
+  const processedContent = renderMarkdownToHTML(contract.content)
+
   return (
     <div className="space-y-4">
       {/* Actions */}
-      <div className="flex justify-end gap-2 print:hidden">
-        <Button variant="outline" size="sm" onClick={handlePrint} className="rounded-xl">
-          <Printer className="w-4 h-4 mr-2" />
-          Imprimir
-        </Button>
-        <Button variant="outline" size="sm" onClick={handleDownloadPDF} className="rounded-xl">
-          <Download className="w-4 h-4 mr-2" />
-          Baixar PDF
-        </Button>
+      <div className="flex items-center justify-between gap-4 print:hidden">
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <FileText className="w-4 h-4" />
+          <span>Visualização do documento</span>
+        </div>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={handlePrint} className="rounded-xl">
+            <Printer className="w-4 h-4 mr-2" />
+            Imprimir
+          </Button>
+          <Button
+            size="sm"
+            onClick={handleDownloadPDF}
+            className="rounded-xl bg-blue-600 hover:bg-blue-700"
+            disabled={isGenerating}
+          >
+            {isGenerating ? (
+              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+            ) : (
+              <Download className="w-4 h-4 mr-2" />
+            )}
+            {isGenerating ? "Gerando..." : "Baixar PDF"}
+          </Button>
+        </div>
       </div>
 
       {/* PDF-style view */}
       <div
         ref={contentRef}
-        className="bg-white border rounded-xl shadow-lg mx-auto print:shadow-none print:border-0"
-        style={{ maxWidth: "210mm", minHeight: "297mm" }}
+        className="bg-white border rounded-2xl shadow-xl mx-auto overflow-hidden print:shadow-none print:border-0"
+        style={{ maxWidth: "210mm" }}
       >
-        <div className="p-8 md:p-12">
-          {/* Header */}
-          <div className="text-center mb-8 pb-6 border-b">
-            <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary/10 mb-4">
-              <FileText className="w-8 h-8 text-primary" />
+        {/* Header */}
+        <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white p-6 md:p-8">
+          <div className="flex items-start justify-between">
+            <div>
+              <div className="flex items-center gap-3 mb-2">
+                <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center">
+                  <Building2 className="w-6 h-6" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-bold">AtendeBem</h2>
+                  <p className="text-blue-100 text-sm">Sistema de Gestão em Saúde</p>
+                </div>
+              </div>
             </div>
-            <h1 className="text-2xl font-bold text-gray-900">{contract.title}</h1>
-            <p className="text-sm text-muted-foreground mt-2">
-              {contract.contract_number}
-            </p>
+            <div className="text-right">
+              <span className="inline-block px-3 py-1 bg-white/20 rounded-lg text-sm font-medium mb-1">
+                {contractTypeLabels[contract.contract_type] || contract.contract_type}
+              </span>
+              <p className="text-blue-100 text-sm mt-1">{contract.contract_number}</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="p-6 md:p-8">
+          {/* Title */}
+          <div className="text-center mb-8">
+            <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-2">{contract.title}</h1>
+            <div className="w-24 h-1 bg-blue-600 mx-auto rounded-full" />
           </div>
 
-          {/* Info */}
-          <div className="grid grid-cols-2 gap-4 mb-8 p-4 bg-gray-50 rounded-xl">
-            <div>
-              <span className="text-xs text-muted-foreground uppercase tracking-wider">Paciente</span>
-              <p className="font-medium">{contract.patient_name}</p>
+          {/* Info Cards */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
+            <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
+              <div className="flex items-center gap-2 text-gray-500 mb-1">
+                <User className="w-4 h-4" />
+                <span className="text-xs font-medium uppercase tracking-wider">Paciente</span>
+              </div>
+              <p className="font-semibold text-gray-900 truncate">{contract.patient_name}</p>
             </div>
-            <div>
-              <span className="text-xs text-muted-foreground uppercase tracking-wider">Tipo</span>
-              <p className="font-medium">{contractTypeLabels[contract.contract_type] || contract.contract_type}</p>
+
+            <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
+              <div className="flex items-center gap-2 text-gray-500 mb-1">
+                <Calendar className="w-4 h-4" />
+                <span className="text-xs font-medium uppercase tracking-wider">Data</span>
+              </div>
+              <p className="font-semibold text-gray-900">{new Date(contract.created_at).toLocaleDateString("pt-BR")}</p>
             </div>
-            <div>
-              <span className="text-xs text-muted-foreground uppercase tracking-wider">Data de Criação</span>
-              <p className="font-medium">{new Date(contract.created_at).toLocaleDateString("pt-BR")}</p>
+
+            <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
+              <div className="flex items-center gap-2 text-gray-500 mb-1">
+                <FileText className="w-4 h-4" />
+                <span className="text-xs font-medium uppercase tracking-wider">Tipo</span>
+              </div>
+              <p className="font-semibold text-gray-900 truncate">{contractTypeLabels[contract.contract_type] || contract.contract_type}</p>
             </div>
-            {contract.valid_until && (
-              <div>
-                <span className="text-xs text-muted-foreground uppercase tracking-wider">Validade</span>
-                <p className="font-medium">{new Date(contract.valid_until).toLocaleDateString("pt-BR")}</p>
+
+            {contract.valid_until ? (
+              <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
+                <div className="flex items-center gap-2 text-gray-500 mb-1">
+                  <Calendar className="w-4 h-4" />
+                  <span className="text-xs font-medium uppercase tracking-wider">Validade</span>
+                </div>
+                <p className="font-semibold text-gray-900">{new Date(contract.valid_until).toLocaleDateString("pt-BR")}</p>
+              </div>
+            ) : (
+              <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
+                <div className="flex items-center gap-2 text-gray-500 mb-1">
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span className="text-xs font-medium uppercase tracking-wider">Status</span>
+                </div>
+                <p className="font-semibold text-gray-900">
+                  {contract.professional_signed_at && contract.patient_signed_at ? "Assinado" : "Pendente"}
+                </p>
               </div>
             )}
           </div>
 
+          {/* Divider */}
+          <div className="border-t border-gray-200 my-6" />
+
           {/* Content */}
-          <div className="prose prose-sm max-w-none mb-12">
-            {contract.content.split("\n").map((paragraph, index) => {
-              if (paragraph.trim() === "") {
-                return <div key={index} className="h-4" />
-              }
+          <div
+            className="prose prose-gray max-w-none mb-12"
+            dangerouslySetInnerHTML={{ __html: processedContent }}
+          />
 
-              // Check if it's a title/heading (all caps or starts with number)
-              if (paragraph.match(/^[A-ZÁÉÍÓÚÂÊÎÔÛÃÕÇ\d\.\)]+(\s|$)/) && paragraph.length < 100) {
-                return (
-                  <h3 key={index} className="text-base font-bold mt-6 mb-2">
-                    {paragraph}
-                  </h3>
-                )
-              }
+          {/* Signatures Section */}
+          <div className="mt-12 pt-8 border-t-2 border-gray-200">
+            <div className="text-center mb-6">
+              <h3 className="text-lg font-bold text-gray-900 inline-flex items-center gap-2">
+                <span className="w-8 h-[2px] bg-gray-300" />
+                Assinaturas
+                <span className="w-8 h-[2px] bg-gray-300" />
+              </h3>
+            </div>
 
-              return (
-                <p key={index} className="text-gray-700 leading-relaxed mb-3 text-justify">
-                  {paragraph}
-                </p>
-              )
-            })}
-          </div>
-
-          {/* Signatures */}
-          <div className="mt-16 pt-8 border-t">
             <div className="grid grid-cols-2 gap-8">
               {/* Professional Signature */}
               <div className="text-center">
-                <div className="h-24 border-b-2 border-gray-300 mb-2 flex items-end justify-center pb-2">
-                  {contract.professional_signature_url && (
+                <div className="h-28 border-2 border-dashed border-gray-200 rounded-xl mb-3 flex items-end justify-center pb-4 bg-gray-50/50">
+                  {contract.professional_signature_url ? (
                     <img
                       src={contract.professional_signature_url}
                       alt="Assinatura do Profissional"
                       className="max-h-20 max-w-full object-contain"
                     />
+                  ) : (
+                    <span className="text-gray-400 text-sm">Aguardando assinatura</span>
                   )}
                 </div>
-                <p className="font-medium text-sm">Profissional Responsável</p>
-                {contract.professional_signed_at && (
-                  <p className="text-xs text-muted-foreground">
-                    Assinado em: {new Date(contract.professional_signed_at).toLocaleString("pt-BR")}
-                  </p>
-                )}
+                <div className="border-t-2 border-gray-400 pt-2 mx-4">
+                  <p className="font-semibold text-gray-900 text-sm">Profissional Responsável</p>
+                  {contract.professional_signed_at ? (
+                    <p className="text-xs text-green-600 flex items-center justify-center gap-1 mt-1">
+                      <CheckCircle2 className="w-3 h-3" />
+                      Assinado em {new Date(contract.professional_signed_at).toLocaleString("pt-BR")}
+                    </p>
+                  ) : (
+                    <p className="text-xs text-amber-600 mt-1">Pendente de assinatura</p>
+                  )}
+                </div>
               </div>
 
               {/* Patient Signature */}
               <div className="text-center">
-                <div className="h-24 border-b-2 border-gray-300 mb-2 flex items-end justify-center pb-2">
-                  {contract.patient_signature_url && (
+                <div className="h-28 border-2 border-dashed border-gray-200 rounded-xl mb-3 flex items-end justify-center pb-4 bg-gray-50/50">
+                  {contract.patient_signature_url ? (
                     <img
                       src={contract.patient_signature_url}
                       alt="Assinatura do Paciente"
                       className="max-h-20 max-w-full object-contain"
                     />
+                  ) : (
+                    <span className="text-gray-400 text-sm">Aguardando assinatura</span>
                   )}
                 </div>
-                <p className="font-medium text-sm">{contract.patient_name}</p>
-                {contract.patient_signed_at && (
-                  <p className="text-xs text-muted-foreground">
-                    Assinado em: {new Date(contract.patient_signed_at).toLocaleString("pt-BR")}
-                  </p>
-                )}
+                <div className="border-t-2 border-gray-400 pt-2 mx-4">
+                  <p className="font-semibold text-gray-900 text-sm">{contract.patient_name}</p>
+                  {contract.patient_signed_at ? (
+                    <p className="text-xs text-green-600 flex items-center justify-center gap-1 mt-1">
+                      <CheckCircle2 className="w-3 h-3" />
+                      Assinado em {new Date(contract.patient_signed_at).toLocaleString("pt-BR")}
+                    </p>
+                  ) : (
+                    <p className="text-xs text-amber-600 mt-1">Pendente de assinatura</p>
+                  )}
+                </div>
               </div>
             </div>
           </div>
 
           {/* Footer */}
-          <div className="mt-12 pt-6 border-t text-center text-xs text-muted-foreground">
-            <p>Documento gerado eletronicamente pelo sistema AtendeBem</p>
-            <p>Este documento é válido conforme Lei 14.063/2020</p>
+          <div className="mt-12 pt-6 border-t border-gray-100 text-center">
+            <div className="inline-flex items-center gap-2 text-xs text-gray-400">
+              <FileText className="w-3 h-3" />
+              <span>Documento gerado eletronicamente pelo sistema AtendeBem</span>
+            </div>
+            <p className="text-xs text-gray-400 mt-1">
+              Este documento é válido conforme Lei 14.063/2020
+            </p>
           </div>
         </div>
       </div>
