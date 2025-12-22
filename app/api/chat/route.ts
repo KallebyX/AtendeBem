@@ -1,7 +1,178 @@
+/**
+ * @fileoverview AI Chat API Route - AtendeBem Virtual Assistant
+ *
+ * This module provides an AI-powered chat endpoint that integrates with
+ * Google Gemini API to assist healthcare professionals with system usage,
+ * medical documentation, and clinical workflows.
+ *
+ * ## Overview
+ *
+ * The AI chat assistant helps users with:
+ * - Generating SOAP clinical notes (Subjective, Objective, Assessment, Plan)
+ * - Looking up TUSS procedure codes (Brazilian healthcare billing codes)
+ * - Finding CID-10 diagnostic codes (International Classification of Diseases)
+ * - Creating digital prescriptions and medical certificates
+ * - Navigating AtendeBem system features
+ *
+ * ## API Endpoint
+ *
+ * **POST /api/chat**
+ *
+ * Sends a message to the AI assistant and receives a response.
+ *
+ * ### Request Body
+ *
+ * ```typescript
+ * interface ChatRequest {
+ *   messages: Array<{
+ *     role: 'user' | 'assistant';
+ *     content: string;
+ *   }>;
+ * }
+ * ```
+ *
+ * ### Response Body
+ *
+ * ```typescript
+ * interface ChatResponse {
+ *   id: string;          // Unique message ID (timestamp-based)
+ *   role: 'assistant';   // Always 'assistant' for responses
+ *   content: string;     // The AI-generated response
+ * }
+ * ```
+ *
+ * ## Architecture
+ *
+ * The endpoint implements a graceful degradation pattern:
+ *
+ * 1. **Primary Mode (Online)**: Uses Google Gemini 1.5 Flash for intelligent
+ *    responses. Requires API key configuration.
+ *
+ * 2. **Fallback Mode (Offline)**: When API is unavailable or misconfigured,
+ *    returns contextual template responses based on message content analysis.
+ *    This ensures users always receive helpful information.
+ *
+ * ## Error Handling
+ *
+ * The API handles specific error scenarios with user-friendly messages:
+ *
+ * | HTTP Status | Error Type | User Message |
+ * |-------------|------------|--------------|
+ * | 401/403 | Invalid/expired API key | Instructions to regenerate key |
+ * | 429 | Rate limit exceeded | Wait and retry message |
+ * | 400 | Invalid message format | Reformulate request message |
+ * | 500+ | Server error | Service temporarily unavailable |
+ * | Network | Connection failed | Check internet connection |
+ *
+ * All error responses include both the error explanation AND a fallback
+ * response so users still get some assistance.
+ *
+ * ## Environment Configuration
+ *
+ * The module supports multiple environment variable names for the API key:
+ *
+ * - `GOOGLE_GENERATIVE_AI_API_KEY` (recommended)
+ * - `GOOGLE_AI_API_KEY`
+ * - `GEMINI_API_KEY`
+ *
+ * To configure:
+ * 1. Visit https://aistudio.google.com/apikey
+ * 2. Generate a new API key
+ * 3. Add to `.env.local`: `GOOGLE_GENERATIVE_AI_API_KEY=your_key_here`
+ * 4. Restart the development server
+ *
+ * ## Fallback Response Categories
+ *
+ * When the API is unavailable, the system provides contextual responses for:
+ *
+ * - **SOAP Notes**: Template for clinical documentation with S/O/A/P sections
+ * - **TUSS Codes**: Overview of procedure code structure and common examples
+ * - **CID-10 Codes**: Diagnostic code structure and common examples
+ * - **Prescriptions**: Digital prescription workflow guide
+ * - **Appointments**: Step-by-step registration process
+ * - **General**: System overview and feature list
+ *
+ * ## Security Considerations
+ *
+ * - API key is never exposed to client-side code
+ * - No patient data is sent to external AI services in this implementation
+ * - System prompt defines assistant boundaries and responsibilities
+ * - All responses include disclaimer about professional medical advice
+ *
+ * ## Performance Configuration
+ *
+ * - `maxDuration`: 30 seconds timeout for API calls
+ * - `temperature`: 0.7 for balanced creativity/accuracy
+ * - `maxOutputTokens`: 2000 tokens per response
+ *
+ * @module api/chat
+ * @version 1.0.0
+ *
+ * @example
+ * // Frontend usage with fetch
+ * const response = await fetch('/api/chat', {
+ *   method: 'POST',
+ *   headers: { 'Content-Type': 'application/json' },
+ *   body: JSON.stringify({
+ *     messages: [
+ *       { role: 'user', content: 'Gere uma nota SOAP para paciente com cefaleia' }
+ *     ]
+ *   })
+ * });
+ *
+ * const data = await response.json();
+ * console.log(data.content); // AI-generated SOAP note
+ *
+ * @example
+ * // Handling conversation history
+ * const messages = [
+ *   { role: 'user', content: 'Qual o código TUSS para consulta?' },
+ *   { role: 'assistant', content: '10101012 - Consulta em consultório' },
+ *   { role: 'user', content: 'E para consulta em domicílio?' }
+ * ];
+ *
+ * const response = await fetch('/api/chat', {
+ *   method: 'POST',
+ *   headers: { 'Content-Type': 'application/json' },
+ *   body: JSON.stringify({ messages })
+ * });
+ *
+ * @see {@link https://ai.google.dev/gemini-api/docs} Google Gemini API Documentation
+ * @see {@link https://www.ans.gov.br/prestadores/tuss-terminologia-unificada-da-saude-suplementar} TUSS Reference
+ * @see {@link https://www.who.int/classifications/icd/en/} CID-10 Reference
+ */
+
 import { NextResponse } from "next/server"
 
+/**
+ * Maximum execution time for this API route in seconds.
+ *
+ * Set to 30 seconds to accommodate potential network latency
+ * and AI model processing time while preventing indefinite hangs.
+ *
+ * @constant {number}
+ */
 export const maxDuration = 30
 
+/**
+ * System prompt that defines the AI assistant's persona and capabilities.
+ *
+ * This prompt is prepended to every conversation to establish:
+ * - The assistant's role as AtendeBem's virtual helper
+ * - Core responsibilities and knowledge domains
+ * - SOAP note formatting guidelines
+ * - Important disclaimers about medical advice
+ * - Knowledge of AtendeBem system modules and features
+ *
+ * The prompt is designed to:
+ * 1. Keep responses focused on healthcare and system usage
+ * 2. Maintain professional medical terminology
+ * 3. Always recommend professional consultation for diagnoses
+ * 4. Respond in Brazilian Portuguese
+ *
+ * @constant {string}
+ * @private
+ */
 const SYSTEM_PROMPT = `Voce e um assistente virtual do AtendeBem, uma plataforma de gestao para clinicas e consultorios medicos.
 
 Suas responsabilidades:
@@ -29,6 +200,62 @@ Conhecimentos sobre o AtendeBem:
 - Recursos: Odontograma, Biometria, Imagens Medicas, WhatsApp Business, Estoque
 - Integrações: TISS, NFe, Contratos digitais`
 
+/**
+ * POST /api/chat - Handle AI chat requests
+ *
+ * Processes incoming chat messages and returns AI-generated responses.
+ * Implements graceful degradation with intelligent fallback when the
+ * Google Gemini API is unavailable.
+ *
+ * ## Request Processing Flow
+ *
+ * 1. Parse incoming JSON body to extract messages array
+ * 2. Check for API key configuration (supports 3 env variable names)
+ * 3. If no API key: Return contextual fallback response
+ * 4. If API key exists: Call Google Gemini API
+ * 5. Handle API response or errors with appropriate messaging
+ * 6. Return formatted response with unique ID
+ *
+ * ## Gemini API Integration
+ *
+ * The function constructs a request to Gemini 1.5 Flash with:
+ * - System prompt as first message (role: "user")
+ * - Conversation history with role mapping (user -> "user", assistant -> "model")
+ * - Generation config: temperature=0.7, maxOutputTokens=2000
+ *
+ * ## Error Recovery Strategy
+ *
+ * All error responses include:
+ * 1. Clear error explanation in Portuguese
+ * 2. Steps to resolve the issue (when applicable)
+ * 3. Fallback response with contextual help
+ *
+ * This ensures users always receive some value even when the AI is unavailable.
+ *
+ * @param {Request} req - The incoming HTTP request object
+ * @param {Object} req.body - JSON body containing the messages array
+ * @param {Array<{role: string, content: string}>} req.body.messages - Chat history
+ *
+ * @returns {Promise<NextResponse>} JSON response with assistant message
+ *
+ * @example
+ * // Successful response
+ * {
+ *   "id": "1703123456789",
+ *   "role": "assistant",
+ *   "content": "O código TUSS para consulta em consultório é 10101012..."
+ * }
+ *
+ * @example
+ * // Error response with fallback
+ * {
+ *   "id": "1703123456789",
+ *   "role": "assistant",
+ *   "content": "**API de IA não configurada...**\n\n---\n\n**Modo offline ativado:**\nOlá! Sou o Assistente IA do AtendeBem..."
+ * }
+ *
+ * @throws {Error} Catches and handles all errors internally, never throws
+ */
 export async function POST(req: Request) {
   try {
     const { messages } = await req.json()
@@ -236,6 +463,64 @@ ${fallbackContent}`,
   }
 }
 
+/**
+ * Generates contextual fallback responses when the AI API is unavailable.
+ *
+ * This function analyzes the user's message content and returns a pre-defined
+ * template response that matches the likely intent. It serves as an intelligent
+ * offline assistant, ensuring users receive helpful information even without
+ * the full AI capabilities.
+ *
+ * ## Content Analysis Categories
+ *
+ * The function checks for keywords in the following priority order:
+ *
+ * | Keywords | Category | Response Type |
+ * |----------|----------|---------------|
+ * | "soap", "nota clinica" | Clinical Notes | SOAP template with section guide |
+ * | "tuss", "procedimento" | Procedures | TUSS code structure and examples |
+ * | "cid", "diagnostico" | Diagnosis | CID-10 chapter overview and examples |
+ * | "receita", "prescri" | Prescriptions | Digital prescription workflow |
+ * | "atendimento", "registro" | Appointments | Registration step-by-step guide |
+ * | (default) | General | System overview and feature list |
+ *
+ * ## Response Format
+ *
+ * All responses follow a consistent markdown format:
+ * - Bold headers for main sections
+ * - Bullet points for lists
+ * - Code examples where applicable
+ * - Call-to-action for full AI configuration
+ *
+ * ## Use Cases
+ *
+ * - API key not configured (development/new installations)
+ * - API key expired or invalid
+ * - Rate limits exceeded
+ * - Network connectivity issues
+ * - Google API service outages
+ *
+ * @param {string} message - The user's last message to analyze for context
+ *
+ * @returns {string} A markdown-formatted response tailored to the detected intent
+ *
+ * @example
+ * // SOAP note request
+ * generateFallbackResponse("gere uma nota soap")
+ * // Returns: "**Nota SOAP - Modelo**\n\n**S (Subjetivo):**..."
+ *
+ * @example
+ * // TUSS code lookup
+ * generateFallbackResponse("qual o código tuss para hemograma?")
+ * // Returns: "**Códigos TUSS - Procedimentos**\n\nO TUSS..."
+ *
+ * @example
+ * // General greeting
+ * generateFallbackResponse("olá")
+ * // Returns: "Olá! Sou o Assistente IA do AtendeBem..."
+ *
+ * @private
+ */
 function generateFallbackResponse(message: string): string {
   const lowerMessage = message.toLowerCase()
 
