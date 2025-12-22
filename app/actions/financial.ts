@@ -638,12 +638,16 @@ export async function getPaymentMethods() {
  * Criar transação financeira
  */
 export async function createFinancialTransaction(data: {
-  patientId?: string
+  type: 'income' | 'expense'
+  category?: string
   amount: number
-  paymentMethod: string
-  status: string
   description?: string
-  date: string
+  payment_method?: string
+  payment_status?: string
+  due_date?: string
+  paid_date?: string
+  notes?: string
+  patient_id?: string
 }) {
   try {
     const cookieStore = await cookies()
@@ -660,11 +664,17 @@ export async function createFinancialTransaction(data: {
 
     const db = await getDb()
 
+    // Usa a data de pagamento se pago, senão usa a data de vencimento
+    const transactionDate = data.payment_status === 'paid' && data.paid_date
+      ? data.paid_date
+      : data.due_date || new Date().toISOString().split('T')[0]
+
     const result = await db`
       INSERT INTO appointments_schedule (
         user_id,
         patient_id,
         appointment_date,
+        appointment_type,
         value,
         payment_method,
         payment_status,
@@ -672,12 +682,13 @@ export async function createFinancialTransaction(data: {
         status
       ) VALUES (
         ${user.id},
-        ${data.patientId || null},
-        ${data.date},
+        ${data.patient_id || null},
+        ${transactionDate},
+        ${data.category || (data.type === 'income' ? 'Receita Avulsa' : 'Despesa Avulsa')},
         ${data.amount},
-        ${data.paymentMethod},
-        ${data.status},
-        ${data.description || null},
+        ${data.payment_method || 'Dinheiro'},
+        ${data.payment_status || 'pending'},
+        ${data.description || data.notes || null},
         'completed'
       )
       RETURNING id
