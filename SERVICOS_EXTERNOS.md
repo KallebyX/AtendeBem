@@ -4,16 +4,25 @@ Este documento lista todos os serviços externos que precisam ser configurados c
 
 ---
 
-## ✅ JÁ CONFIGURADO
+## ⚠️ REQUER ATENÇÃO
 
 ### 1. **Neon PostgreSQL** ✅
 - **Status:** Credenciais já no `.env.local`
 - **Não precisa fazer nada**
 
-### 2. **Google Gemini AI** ✅
-- **Status:** API Key já configurada
-- **Chave:** `AIzaSyBsqcoBnsZjg_SfAMxkAmMxu-qR5nLK9bw`
-- **Não precisa fazer nada**
+### 2. **Google Gemini AI** ⚠️
+- **Link:** https://aistudio.google.com/apikey
+- **Status:** Precisa gerar nova chave (a anterior foi exposta e bloqueada)
+- **Passos:**
+  1. Acesse https://aistudio.google.com/apikey
+  2. Clique em "Create API Key"
+  3. Copie a chave gerada
+  4. Adicione ao `.env.local`:
+     ```
+     GOOGLE_GENERATIVE_AI_API_KEY=sua_chave_aqui
+     ```
+  5. Reinicie o servidor com `npm run dev`
+- **IMPORTANTE:** Nunca commitar chaves API no repositório!
 
 ---
 
@@ -205,7 +214,7 @@ Este documento lista todos os serviços externos que precisam ser configurados c
 
 ### 🔴 **CRÍTICO (implementar agora)**
 1. ✅ Neon PostgreSQL - JÁ CONFIGURADO
-2. ✅ Google Gemini - JÁ CONFIGURADO
+2. ⚠️ Google Gemini - **GERAR NOVA CHAVE** (a anterior foi bloqueada)
 3. ⚠️ Upstash Redis - **CONFIGURAR AGORA**
 4. ⚠️ AWS S3 - **CONFIGURAR AGORA**
 5. ⚠️ Encryption Key - **GERAR AGORA** (1 comando)

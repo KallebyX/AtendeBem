@@ -86,11 +86,11 @@ export async function POST(req: Request) {
       const errorData = await response.text()
       console.error("[v0] [AI CHAT] Gemini API error:", response.status, errorData)
 
+      const lastMessage = messages[messages.length - 1]?.content || ""
+      const fallbackResponse = generateFallbackResponse(lastMessage)
+
       // Handle specific error codes with helpful messages
       if (response.status === 401 || response.status === 403) {
-        const lastMessage = messages[messages.length - 1]?.content || ""
-        const fallbackResponse = generateFallbackResponse(lastMessage)
-
         return NextResponse.json({
           id: Date.now().toString(),
           role: "assistant",
@@ -120,11 +120,64 @@ ${fallbackResponse}`,
           id: Date.now().toString(),
           role: "assistant",
           content:
-            "Limite de requisicoes da API excedido. Por favor, aguarde alguns minutos e tente novamente.",
+            `**Limite de requisicoes excedido**
+
+A API do Google Gemini atingiu o limite de requisicoes. Por favor, aguarde alguns minutos e tente novamente.
+
+---
+
+**Modo offline ativado:**
+${fallbackResponse}`,
         })
       }
 
-      throw new Error(`API request failed: ${response.status} - ${errorData}`)
+      if (response.status === 400) {
+        console.error("[v0] [AI CHAT] Bad request - possible invalid message format")
+        return NextResponse.json({
+          id: Date.now().toString(),
+          role: "assistant",
+          content:
+            `**Erro na requisicao**
+
+Houve um problema ao processar sua mensagem. Tente reformular sua pergunta.
+
+---
+
+**Modo offline ativado:**
+${fallbackResponse}`,
+        })
+      }
+
+      if (response.status >= 500) {
+        return NextResponse.json({
+          id: Date.now().toString(),
+          role: "assistant",
+          content:
+            `**Servico temporariamente indisponivel**
+
+O servidor do Google Gemini esta com problemas. Por favor, tente novamente em alguns minutos.
+
+---
+
+**Modo offline ativado:**
+${fallbackResponse}`,
+        })
+      }
+
+      // Generic error with fallback
+      return NextResponse.json({
+        id: Date.now().toString(),
+        role: "assistant",
+        content:
+          `**Erro ao processar sua mensagem**
+
+Ocorreu um erro inesperado (codigo: ${response.status}). Por favor, tente novamente.
+
+---
+
+**Modo offline ativado:**
+${fallbackResponse}`,
+      })
     }
 
     const data = await response.json()
@@ -141,11 +194,44 @@ ${fallbackResponse}`,
   } catch (error: any) {
     console.error("[v0] [AI CHAT] Error:", error.message)
 
+    // Try to extract the user's message to provide a relevant fallback
+    let fallbackContent = generateFallbackResponse("")
+    try {
+      const body = await req.clone().json()
+      const lastMessage = body.messages?.[body.messages?.length - 1]?.content || ""
+      fallbackContent = generateFallbackResponse(lastMessage)
+    } catch {
+      // Ignore parse errors, use default fallback
+    }
+
+    // Check if it's a network error
+    const isNetworkError = error.message?.includes("fetch") ||
+                           error.message?.includes("network") ||
+                           error.message?.includes("ECONNREFUSED") ||
+                           error.message?.includes("ETIMEDOUT")
+
+    const errorMessage = isNetworkError
+      ? `**Erro de conexao**
+
+Nao foi possivel conectar ao servidor do Google Gemini. Verifique sua conexao com a internet.`
+      : `**Erro ao processar sua mensagem**
+
+Ocorreu um erro inesperado. Por favor, tente novamente.
+
+**Possiveis solucoes:**
+1. Verifique se a API do Google AI esta configurada em \`.env.local\`
+2. Acesse https://aistudio.google.com/apikey para gerar uma nova chave
+3. Reinicie o servidor com \`npm run dev\``
+
     return NextResponse.json({
       id: Date.now().toString(),
       role: "assistant",
-      content:
-        "❌ Desculpe, ocorreu um erro ao processar sua mensagem.\n\n**Solucoes:**\n1. Verifique se a API do Google AI esta configurada\n2. Tente novamente em alguns segundos\n3. Se o problema persistir, entre em contato com o suporte\n\n**Modo offline:** Posso responder perguntas basicas sobre TUSS, CID-10 e funcionalidades do AtendeBem.",
+      content: `${errorMessage}
+
+---
+
+**Modo offline ativado:**
+${fallbackContent}`,
     })
   }
 }
