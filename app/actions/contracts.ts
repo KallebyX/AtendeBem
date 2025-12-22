@@ -4,6 +4,7 @@ import { getDb } from '@/lib/db'
 import { verifyToken } from '@/lib/session'
 import { cookies } from 'next/headers'
 import { setFullContext } from '@/lib/db-init'
+import { createTransactionFromContract } from './financial'
 
 export async function createContract(data: {
   patient_id: string
@@ -166,6 +167,13 @@ export async function signContract(data: {
   signature_url: string
   ip_address?: string
   user_agent?: string
+  // Dados financeiros para contratos tipo payment_plan
+  payment_plan?: {
+    total_amount: number
+    installments?: number
+    payment_method?: string
+    first_due_date?: string
+  }
 }) {
   try {
     const cookieStore = await cookies()
@@ -193,7 +201,26 @@ export async function signContract(data: {
     `
 
     if (result.length === 0) return { error: 'Contrato nao encontrado' }
-    return { success: true, data: result[0] }
+
+    // INTEGRAÇÃO FINANCEIRA: Criar transações para contratos payment_plan assinados
+    let financialResult = null
+    const contract = result[0]
+    if (contract.status === 'signed' && data.payment_plan && data.payment_plan.total_amount > 0) {
+      try {
+        financialResult = await createTransactionFromContract(data.contract_id, data.payment_plan)
+        if (financialResult.error) {
+          console.warn('Aviso ao criar transação financeira do contrato:', financialResult.error)
+        }
+      } catch (err) {
+        console.warn('Aviso ao criar transação financeira:', err)
+      }
+    }
+
+    return {
+      success: true,
+      data: result[0],
+      financial: financialResult?.data || null
+    }
   } catch (error: any) {
     console.error('Erro ao assinar contrato:', error)
     return { error: error.message }
@@ -205,6 +232,13 @@ export async function signContractPatient(data: {
   signature_url: string
   ip_address?: string
   user_agent?: string
+  // Dados financeiros para contratos tipo payment_plan
+  payment_plan?: {
+    total_amount: number
+    installments?: number
+    payment_method?: string
+    first_due_date?: string
+  }
 }) {
   try {
     const db = await getDb()
@@ -226,7 +260,26 @@ export async function signContractPatient(data: {
     `
 
     if (result.length === 0) return { error: 'Contrato nao encontrado' }
-    return { success: true, data: result[0] }
+
+    // INTEGRAÇÃO FINANCEIRA: Criar transações para contratos payment_plan assinados
+    let financialResult = null
+    const contract = result[0]
+    if (contract.status === 'signed' && data.payment_plan && data.payment_plan.total_amount > 0) {
+      try {
+        financialResult = await createTransactionFromContract(data.contract_id, data.payment_plan)
+        if (financialResult.error) {
+          console.warn('Aviso ao criar transação financeira do contrato:', financialResult.error)
+        }
+      } catch (err) {
+        console.warn('Aviso ao criar transação financeira:', err)
+      }
+    }
+
+    return {
+      success: true,
+      data: result[0],
+      financial: financialResult?.data || null
+    }
   } catch (error: any) {
     console.error('Erro ao assinar contrato (paciente):', error)
     return { error: error.message }
