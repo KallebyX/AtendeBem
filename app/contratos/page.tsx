@@ -10,11 +10,13 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Plus, FileText, CheckCircle, Eye, PenTool } from "lucide-react"
+import { Plus, FileText, CheckCircle, Eye, PenTool, Clock, XCircle, AlertTriangle } from "lucide-react"
 import { useEffect, useState, useRef } from "react"
 import { createContract, getContracts, getContractTemplates, signContract } from "@/app/actions/contracts"
 import { getPatientsList } from "@/app/actions/crm"
 import { toast } from "sonner"
+import { ContractPDFViewer } from "@/components/contract-pdf-viewer"
+import { ContractTimeline, ContractTimelineCompact } from "@/components/contract-timeline"
 
 export default function ContratosPage() {
   const [contracts, setContracts] = useState<any[]>([])
@@ -321,12 +323,33 @@ export default function ContratosPage() {
 
                     <div className="flex items-center gap-2">
                       {contract.status === "draft" && (
-                        <span className="px-3 py-1 rounded-full bg-gray-500/10 text-gray-600 text-sm">Rascunho</span>
+                        <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-gray-500/10 text-gray-600 text-sm">
+                          <FileText className="w-3 h-3" />
+                          Rascunho
+                        </span>
+                      )}
+                      {contract.status === "pending_signature" && (
+                        <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-yellow-500/10 text-yellow-600 text-sm">
+                          <Clock className="w-3 h-3" />
+                          Pendente
+                        </span>
                       )}
                       {contract.status === "signed" && (
                         <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-green-500/10 text-green-600 text-sm">
                           <CheckCircle className="w-3 h-3" />
                           Assinado
+                        </span>
+                      )}
+                      {contract.status === "cancelled" && (
+                        <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-red-500/10 text-red-600 text-sm">
+                          <XCircle className="w-3 h-3" />
+                          Cancelado
+                        </span>
+                      )}
+                      {contract.status === "expired" && (
+                        <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-orange-500/10 text-orange-600 text-sm">
+                          <AlertTriangle className="w-3 h-3" />
+                          Expirado
                         </span>
                       )}
                     </div>
@@ -370,11 +393,25 @@ export default function ContratosPage() {
       {/* Preview Dialog */}
       {previewContract && (
         <Dialog open={!!previewContract} onOpenChange={() => setPreviewContract(null)}>
-          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogContent className="max-w-6xl max-h-[95vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle>{previewContract.title}</DialogTitle>
+              <DialogTitle className="flex items-center gap-2">
+                <FileText className="w-5 h-5" />
+                {previewContract.title}
+              </DialogTitle>
             </DialogHeader>
-            <div className="prose prose-sm max-w-none whitespace-pre-wrap">{previewContract.content}</div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+              {/* Timeline Sidebar */}
+              <div className="lg:col-span-1 order-2 lg:order-1">
+                <ContractTimeline contract={previewContract} />
+              </div>
+
+              {/* PDF Viewer */}
+              <div className="lg:col-span-3 order-1 lg:order-2">
+                <ContractPDFViewer contract={previewContract} />
+              </div>
+            </div>
           </DialogContent>
         </Dialog>
       )}
