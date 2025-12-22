@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, Suspense } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
@@ -83,7 +83,7 @@ const STEPS = [
   { id: 7, name: "Finalizar", icon: FileCheck, description: "Resumo e salvar" },
 ]
 
-export default function ConsultaPage() {
+function ConsultaPageContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const patientIdFromUrl = searchParams.get("patient_id")
@@ -1169,5 +1169,22 @@ export default function ConsultaPage() {
         </div>
       </main>
     </div>
+  )
+}
+
+function ConsultaPageLoading() {
+  return (
+    <div className="min-h-screen bg-background flex flex-col items-center justify-center">
+      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+      <p className="mt-4 text-muted-foreground">Carregando consulta...</p>
+    </div>
+  )
+}
+
+export default function ConsultaPage() {
+  return (
+    <Suspense fallback={<ConsultaPageLoading />}>
+      <ConsultaPageContent />
+    </Suspense>
   )
 }
