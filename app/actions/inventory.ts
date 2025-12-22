@@ -4,6 +4,7 @@ import { getDb } from '@/lib/db'
 import { verifyToken } from '@/lib/session'
 import { cookies } from 'next/headers'
 import { setFullContext } from '@/lib/db-init'
+import { createTransactionFromInventoryMovement } from './financial'
 
 export async function createInventoryItem(data: {
   name: string
@@ -116,6 +117,11 @@ export async function createInventoryMovement(data: {
   unit_cost?: number
   reason?: string
   notes?: string
+  supplier_name?: string
+  payment_method?: string
+  payment_status?: 'pending' | 'paid'
+  due_date?: string
+  create_financial_transaction?: boolean
 }) {
   try {
     const cookieStore = await cookies()
@@ -171,7 +177,30 @@ export async function createInventoryMovement(data: {
       WHERE id = ${data.item_id} AND user_id = ${user.id}
     `
 
-    return { success: true, data: movement[0] }
+    // INTEGRAÇÃO FINANCEIRA: Criar despesa automaticamente para entradas de estoque
+    let financialResult = null
+    const shouldCreateFinancial = data.create_financial_transaction !== false
+    if (data.type === 'entry' && totalCost && totalCost > 0 && shouldCreateFinancial) {
+      try {
+        financialResult = await createTransactionFromInventoryMovement(movement[0].id, {
+          payment_method: data.payment_method,
+          payment_status: data.payment_status,
+          due_date: data.due_date,
+          supplier_name: data.supplier_name || item[0].supplier_name
+        })
+        if (financialResult.error) {
+          console.warn('Aviso ao criar transação financeira do estoque:', financialResult.error)
+        }
+      } catch (err) {
+        console.warn('Aviso ao criar transação financeira:', err)
+      }
+    }
+
+    return {
+      success: true,
+      data: movement[0],
+      financial: financialResult?.data || null
+    }
   } catch (error: any) {
     console.error('Erro ao criar movimentacao:', error)
     return { error: error.message }

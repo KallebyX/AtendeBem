@@ -21,6 +21,7 @@ import {
   ValidationResult
 } from '@/lib/nfe-validator'
 import { UF_CODES, validateCPF, validateCNPJ } from '@/lib/fiscal-utils'
+import { createTransactionFromNFe } from './financial'
 
 // ============================================================================
 // TIPOS
@@ -950,12 +951,24 @@ export async function sendNFeToAPI(invoiceId: string) {
       WHERE id = ${invoiceId}
     `
 
+    // INTEGRAÇÃO FINANCEIRA: Criar transação de receita automaticamente
+    let financialResult = null
+    try {
+      financialResult = await createTransactionFromNFe(invoiceId)
+      if (financialResult.error) {
+        console.warn('Aviso ao criar transação financeira da NFe:', financialResult.error)
+      }
+    } catch (err) {
+      console.warn('Aviso ao criar transação financeira:', err)
+    }
+
     return {
       success: true,
       message: 'Nota fiscal autorizada com sucesso',
       protocol,
       accessKey,
       verificationCode,
+      financial: financialResult?.data || null,
       validation: validationResult.validation.warnings.length > 0 ? {
         warnings: validationResult.validation.warnings
       } : undefined

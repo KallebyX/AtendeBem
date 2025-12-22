@@ -4,6 +4,7 @@ import { getDb } from '@/lib/db'
 import { verifyToken } from '@/lib/session'
 import { cookies } from 'next/headers'
 import { setUserContext } from '@/lib/db-init'
+import { createTransactionFromBudget } from './financial'
 
 export async function createBudget(data: {
   patient_id: string
@@ -173,7 +174,7 @@ export async function getBudgetById(id: string) {
   }
 }
 
-export async function approveBudget(budget_id: string) {
+export async function approveBudget(budget_id: string, createFinancialTransaction: boolean = true) {
   try {
     const cookieStore = await cookies()
     const token = cookieStore.get('session')?.value
@@ -193,7 +194,25 @@ export async function approveBudget(budget_id: string) {
     `
 
     if (result.length === 0) return { error: 'Orcamento nao encontrado' }
-    return { success: true, data: result[0] }
+
+    // INTEGRAÇÃO FINANCEIRA: Criar transações automaticamente
+    let financialResult = null
+    if (createFinancialTransaction) {
+      try {
+        financialResult = await createTransactionFromBudget(budget_id)
+        if (financialResult.error) {
+          console.warn('Aviso ao criar transação financeira do orçamento:', financialResult.error)
+        }
+      } catch (err) {
+        console.warn('Aviso ao criar transação financeira:', err)
+      }
+    }
+
+    return {
+      success: true,
+      data: result[0],
+      financial: financialResult?.data || null
+    }
   } catch (error: any) {
     console.error('Erro ao aprovar orcamento:', error)
     return { error: error.message }
