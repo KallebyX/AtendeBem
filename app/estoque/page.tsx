@@ -236,7 +236,7 @@ export default function EstoquePage() {
               <div className="space-y-2">
                 {alerts.slice(0, 5).map(alert => (
                   <div key={alert.id} className="flex items-center justify-between p-2 bg-orange-50 rounded">
-                    <span className="text-sm">{alert.message}</span>
+                    <span className="text-sm">{alert.alert_message}</span>
                     <Badge variant="outline" className="text-orange-600">{alert.alert_type}</Badge>
                   </div>
                 ))}
