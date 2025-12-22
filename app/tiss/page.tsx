@@ -96,6 +96,7 @@ interface Submission {
   sent_at?: string
   total_glosas?: number
   valor_glosado?: number
+  xml_content?: string
   created_at: string
 }
 
@@ -155,6 +156,10 @@ export default function TISSPage() {
   const [showUploadModal, setShowUploadModal] = useState(false)
   const [showXMLPreview, setShowXMLPreview] = useState(false)
   const [generatedXML, setGeneratedXML] = useState("")
+  const [showGuideDetailsModal, setShowGuideDetailsModal] = useState(false)
+  const [selectedGuide, setSelectedGuide] = useState<Guide | null>(null)
+  const [showSubmissionDetailsModal, setShowSubmissionDetailsModal] = useState(false)
+  const [selectedSubmission, setSelectedSubmission] = useState<Submission | null>(null)
 
   // Nova Guia - paciente selecionado
   const [selectedPatient, setSelectedPatient] = useState<{
@@ -676,7 +681,14 @@ Glosas: ${result.data.glosas.total} (R$ ${result.data.glosas.valor_total.toFixed
                         <TableCell>{getPaymentStatusBadge(guide.payment_status)}</TableCell>
                         <TableCell>{formatDate(guide.created_at)}</TableCell>
                         <TableCell>
-                          <Button variant="ghost" size="sm">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              setSelectedGuide(guide)
+                              setShowGuideDetailsModal(true)
+                            }}
+                          >
                             <Eye className="w-4 h-4" />
                           </Button>
                         </TableCell>
@@ -749,10 +761,27 @@ Glosas: ${result.data.glosas.total} (R$ ${result.data.glosas.valor_total.toFixed
                           </p>
                         </div>
                         <div className="flex gap-2">
-                          <Button variant="outline" size="sm">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              setSelectedSubmission(sub)
+                              setShowSubmissionDetailsModal(true)
+                            }}
+                          >
                             <Eye className="w-4 h-4" />
                           </Button>
-                          <Button variant="outline" size="sm">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              if (sub.xml_content) {
+                                handleDownloadXML(sub.xml_content, `lote_${sub.lote_number}.xml`)
+                              } else {
+                                alert("XML nao disponivel para este lote")
+                              }
+                            }}
+                          >
                             <Download className="w-4 h-4" />
                           </Button>
                         </div>
@@ -1142,6 +1171,189 @@ Glosas: ${result.data.glosas.total} (R$ ${result.data.glosas.valor_total.toFixed
                 "Criar Guia"
               )}
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal: Detalhes da Guia */}
+      <Dialog open={showGuideDetailsModal} onOpenChange={setShowGuideDetailsModal}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FileText className="w-5 h-5" />
+              Detalhes da Guia
+            </DialogTitle>
+            <DialogDescription>
+              Informacoes completas da guia TISS
+            </DialogDescription>
+          </DialogHeader>
+          {selectedGuide && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label className="text-muted-foreground text-xs">Numero da Guia</Label>
+                  <p className="font-mono font-semibold">{selectedGuide.guide_number}</p>
+                </div>
+                <div>
+                  <Label className="text-muted-foreground text-xs">Tipo</Label>
+                  <div className="mt-1">
+                    <Badge variant="outline">{selectedGuide.guide_type.toUpperCase()}</Badge>
+                  </div>
+                </div>
+                <div>
+                  <Label className="text-muted-foreground text-xs">Paciente</Label>
+                  <p className="font-medium">{selectedGuide.patient_name}</p>
+                </div>
+                <div>
+                  <Label className="text-muted-foreground text-xs">Carteirinha</Label>
+                  <p className="font-mono">{selectedGuide.beneficiary_card_number || "Nao informada"}</p>
+                </div>
+                <div>
+                  <Label className="text-muted-foreground text-xs">Valor Total</Label>
+                  <p className="font-semibold text-lg">{formatCurrency(Number(selectedGuide.total_value) || 0)}</p>
+                </div>
+                <div>
+                  <Label className="text-muted-foreground text-xs">Data de Criacao</Label>
+                  <p>{formatDate(selectedGuide.created_at)}</p>
+                </div>
+              </div>
+
+              <div className="flex gap-2">
+                <div>
+                  <Label className="text-muted-foreground text-xs">Status</Label>
+                  <div className="mt-1">{getStatusBadge(selectedGuide.status)}</div>
+                </div>
+                <div>
+                  <Label className="text-muted-foreground text-xs">Pagamento</Label>
+                  <div className="mt-1">{getPaymentStatusBadge(selectedGuide.payment_status)}</div>
+                </div>
+              </div>
+
+              {selectedGuide.procedures && selectedGuide.procedures.length > 0 && (
+                <div>
+                  <Label className="text-muted-foreground text-xs">Procedimentos</Label>
+                  <div className="mt-2 border rounded-lg divide-y max-h-48 overflow-y-auto">
+                    {selectedGuide.procedures.map((proc: any, index: number) => (
+                      <div key={index} className="p-3 flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Badge variant="outline" className="font-mono text-xs">
+                            {proc.code}
+                          </Badge>
+                          <span className="text-sm">{proc.description}</span>
+                        </div>
+                        <span className="text-sm font-medium">
+                          {formatCurrency(Number(proc.unit_price) * (proc.quantity || 1))}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowGuideDetailsModal(false)}>
+              Fechar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal: Detalhes do Lote */}
+      <Dialog open={showSubmissionDetailsModal} onOpenChange={setShowSubmissionDetailsModal}>
+        <DialogContent className="max-w-3xl max-h-[80vh]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FileText className="w-5 h-5" />
+              Detalhes do Lote
+            </DialogTitle>
+            <DialogDescription>
+              Informacoes do lote XML enviado
+            </DialogDescription>
+          </DialogHeader>
+          {selectedSubmission && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                <div>
+                  <Label className="text-muted-foreground text-xs">Numero do Lote</Label>
+                  <p className="font-mono font-semibold">{selectedSubmission.lote_number}</p>
+                </div>
+                <div>
+                  <Label className="text-muted-foreground text-xs">Tipo de Guia</Label>
+                  <div className="mt-1">
+                    <Badge variant="outline">{selectedSubmission.guide_type.toUpperCase()}</Badge>
+                  </div>
+                </div>
+                <div>
+                  <Label className="text-muted-foreground text-xs">Status</Label>
+                  <div className="mt-1">{getStatusBadge(selectedSubmission.status)}</div>
+                </div>
+                <div>
+                  <Label className="text-muted-foreground text-xs">Total de Guias</Label>
+                  <p className="font-semibold">{selectedSubmission.total_guides}</p>
+                </div>
+                <div>
+                  <Label className="text-muted-foreground text-xs">Valor Total</Label>
+                  <p className="font-semibold text-lg">{formatCurrency(Number(selectedSubmission.total_value) || 0)}</p>
+                </div>
+                <div>
+                  <Label className="text-muted-foreground text-xs">Codigo Operadora</Label>
+                  <p className="font-mono">{selectedSubmission.operadora_codigo}</p>
+                </div>
+                {selectedSubmission.protocol_number && (
+                  <div>
+                    <Label className="text-muted-foreground text-xs">Protocolo</Label>
+                    <p className="font-mono font-semibold">{selectedSubmission.protocol_number}</p>
+                  </div>
+                )}
+                <div>
+                  <Label className="text-muted-foreground text-xs">Data de Criacao</Label>
+                  <p>{formatDate(selectedSubmission.created_at)}</p>
+                </div>
+                {selectedSubmission.sent_at && (
+                  <div>
+                    <Label className="text-muted-foreground text-xs">Data de Envio</Label>
+                    <p>{formatDate(selectedSubmission.sent_at)}</p>
+                  </div>
+                )}
+              </div>
+
+              {(selectedSubmission.total_glosas || 0) > 0 && (
+                <div className="p-3 bg-orange-50 dark:bg-orange-950 rounded-lg border border-orange-200 dark:border-orange-800">
+                  <div className="flex items-center gap-2 text-orange-600 dark:text-orange-400">
+                    <AlertTriangle className="w-4 h-4" />
+                    <span className="font-medium">Glosas Registradas</span>
+                  </div>
+                  <p className="text-sm mt-1">
+                    {selectedSubmission.total_glosas} glosas no valor de {formatCurrency(Number(selectedSubmission.valor_glosado) || 0)}
+                  </p>
+                </div>
+              )}
+
+              {selectedSubmission.xml_content && (
+                <div>
+                  <Label className="text-muted-foreground text-xs">Conteudo XML</Label>
+                  <div className="mt-2 overflow-auto max-h-48 bg-muted rounded-lg p-4">
+                    <pre className="text-xs font-mono whitespace-pre-wrap">{selectedSubmission.xml_content}</pre>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowSubmissionDetailsModal(false)}>
+              Fechar
+            </Button>
+            {selectedSubmission?.xml_content && (
+              <Button onClick={() => {
+                if (selectedSubmission.xml_content) {
+                  handleDownloadXML(selectedSubmission.xml_content, `lote_${selectedSubmission.lote_number}.xml`)
+                }
+              }}>
+                <Download className="w-4 h-4 mr-2" />
+                Download XML
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>
