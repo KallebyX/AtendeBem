@@ -163,7 +163,7 @@ export async function createDigitalPrescription(data: {
           administration_instructions
         ) VALUES (
           ${medicalPrescription.id},
-          ${medicalPrescription.id},
+          ${null},
           ${med.name},
           ${med.dosage},
           ${med.frequency},
