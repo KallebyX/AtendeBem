@@ -57,6 +57,7 @@ import {
 } from "lucide-react"
 import { searchTUSS, tussStats, tussGroups, type TUSSProcedure } from "@/lib/tuss-complete"
 import { NavigationHeader } from "@/components/navigation-header"
+import { PatientSearchSelect } from "@/components/patient-search-select"
 import {
   getTISSGuides,
   getTISSSubmissions,
@@ -152,6 +153,16 @@ export default function TISSPage() {
   const [showUploadModal, setShowUploadModal] = useState(false)
   const [showXMLPreview, setShowXMLPreview] = useState(false)
   const [generatedXML, setGeneratedXML] = useState("")
+
+  // Nova Guia - paciente selecionado
+  const [selectedPatient, setSelectedPatient] = useState<{
+    id: string
+    full_name: string
+    cpf: string
+    phone?: string
+    date_of_birth?: string
+    email?: string
+  } | null>(null)
 
   // Refs
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -881,7 +892,10 @@ Glosas: ${result.data.glosas.total} (R$ ${result.data.glosas.valor_total.toFixed
       </Dialog>
 
       {/* Modal: Nova Guia (placeholder) */}
-      <Dialog open={showNewGuideModal} onOpenChange={setShowNewGuideModal}>
+      <Dialog open={showNewGuideModal} onOpenChange={(open) => {
+        setShowNewGuideModal(open)
+        if (!open) setSelectedPatient(null)
+      }}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Nova Guia TISS</DialogTitle>
@@ -919,10 +933,12 @@ Glosas: ${result.data.glosas.total} (R$ ${result.data.glosas.valor_total.toFixed
                 </Select>
               </div>
             </div>
-            <div className="space-y-2">
-              <Label>Paciente</Label>
-              <Input placeholder="Buscar paciente..." />
-            </div>
+            <PatientSearchSelect
+              onPatientSelect={setSelectedPatient}
+              selectedPatient={selectedPatient}
+              label="Paciente"
+              required
+            />
             <div className="space-y-2">
               <Label>Indicacao Clinica</Label>
               <Textarea placeholder="Descreva a indicacao clinica..." />
@@ -935,10 +951,13 @@ Glosas: ${result.data.glosas.total} (R$ ${result.data.glosas.valor_total.toFixed
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowNewGuideModal(false)}>
+            <Button variant="outline" onClick={() => {
+              setShowNewGuideModal(false)
+              setSelectedPatient(null)
+            }}>
               Cancelar
             </Button>
-            <Button disabled>
+            <Button disabled={!selectedPatient}>
               Criar Guia
             </Button>
           </DialogFooter>
