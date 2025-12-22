@@ -45,6 +45,7 @@ import {
   BarChart3,
   PieChart
 } from 'lucide-react'
+import { NavigationHeader } from '@/components/navigation-header'
 
 export default function FinancialDashboard() {
   const [metrics, setMetrics] = useState<any>(null)
@@ -241,9 +242,11 @@ export default function FinancialDashboard() {
   }
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
+    <div className="min-h-screen bg-background">
+      <NavigationHeader />
+      <main className="container mx-auto px-4 py-8 space-y-6">
+        {/* Header */}
+        <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold">Dashboard Financeiro Integrado</h1>
           <p className="text-muted-foreground">Visão consolidada de todos os módulos do sistema</p>
@@ -986,6 +989,7 @@ export default function FinancialDashboard() {
           </Card>
         </div>
       )}
+      </main>
     </div>
   )
 }
