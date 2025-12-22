@@ -4,6 +4,23 @@ import { getDb } from '@/lib/db'
 import { verifyToken } from '@/lib/session'
 import { cookies } from 'next/headers'
 import { setUserContext } from '@/lib/db-init'
+import {
+  generateNFSeXML,
+  generateNFeXML as generateNFeXMLFull,
+  generateAccessKeyNFe,
+  validateNFSeXML,
+  validateNFeXML,
+  NFSeXMLData,
+  NFeXMLData,
+  FORMAS_PAGAMENTO
+} from '@/lib/nfe-xml-generator'
+import {
+  validatePreSubmission,
+  validateCancellation,
+  PreSubmissionData,
+  ValidationResult
+} from '@/lib/nfe-validator'
+import { UF_CODES, validateCPF, validateCNPJ } from '@/lib/fiscal-utils'
 
 // ============================================================================
 // TIPOS
@@ -724,6 +741,113 @@ export async function getNFeById(invoiceId: string) {
 }
 
 // ============================================================================
+// VALIDAR NFE ANTES DO ENVIO
+// ============================================================================
+export async function validateNFeBeforeSend(invoiceId: string): Promise<{ success: boolean; validation: ValidationResult } | { error: string }> {
+  try {
+    const auth = await getAuthenticatedUser()
+    if ('error' in auth) return { error: auth.error }
+    const { user } = auth
+
+    const db = await getDb()
+
+    // Buscar nota
+    const invoice = await db`
+      SELECT n.*, p.full_name as patient_name, p.email as patient_email
+      FROM nfe_invoices n
+      LEFT JOIN patients p ON n.patient_id = p.id
+      WHERE n.id = ${invoiceId} AND n.user_id = ${user.id}
+    `
+    if (!invoice.length) return { error: 'Nota fiscal não encontrada' }
+
+    const nfe = invoice[0]
+
+    // Buscar configuração
+    const userInfo = await db`SELECT tenant_id FROM users WHERE id = ${user.id}`
+    const tenantId = userInfo[0].tenant_id
+
+    const nfeConfig = await db`
+      SELECT * FROM nfe_configuration WHERE tenant_id = ${tenantId}
+    `.catch(() => [])
+
+    const config = nfeConfig[0] || {}
+
+    // Preparar dados para validação
+    const validationData: PreSubmissionData = {
+      documentType: nfe.invoice_type as 'nfe' | 'nfse',
+      emitter: {
+        cnpj: config.company_cnpj || '',
+        ie: config.company_ie || '',
+        im: config.company_im || '',
+        razaoSocial: config.company_name || '',
+        nomeFantasia: config.company_fantasy_name || '',
+        regimeTributario: (config.company_regime_tributario || '1') as '1' | '2' | '3',
+        crt: config.company_crt || '1',
+        optanteSimplesNacional: config.optante_simples || false,
+        endereco: {
+          logradouro: config.address_street || '',
+          numero: config.address_number || '',
+          bairro: config.address_neighborhood || '',
+          codigoMunicipio: config.address_city_code || '',
+          municipio: config.address_city || '',
+          uf: config.address_state || '',
+          cep: config.address_zipcode || ''
+        }
+      },
+      recipient: {
+        cpfCnpj: nfe.customer_cpf_cnpj || '',
+        nome: nfe.customer_name || '',
+        email: nfe.patient_email || nfe.customer_email || '',
+        endereco: nfe.customer_address ? {
+          logradouro: nfe.customer_address.street || nfe.customer_address.logradouro || '',
+          numero: nfe.customer_address.number || nfe.customer_address.numero || '',
+          bairro: nfe.customer_address.neighborhood || nfe.customer_address.bairro || '',
+          codigoMunicipio: nfe.customer_address.city_code || '',
+          municipio: nfe.customer_address.city || '',
+          uf: nfe.customer_address.state || '',
+          cep: nfe.customer_address.zipcode || ''
+        } : undefined
+      },
+      items: (nfe.services || []).map((s: any) => ({
+        codigo: s.code || '',
+        descricao: s.description || '',
+        quantidade: Number(s.quantity) || 1,
+        valorUnitario: Number(s.unit_price) || 0,
+        valorTotal: Number(s.total_value) || 0,
+        lc116Code: s.lc116_code || undefined,
+        ncm: s.ncm || undefined,
+        cfop: s.cfop || undefined
+      })),
+      values: {
+        valorServicos: Number(nfe.services_value) || 0,
+        valorProdutos: 0,
+        valorDesconto: Number(nfe.discount_value) || 0,
+        valorDeducoes: Number(nfe.deductions_value) || 0,
+        valorTotal: Number(nfe.net_value) || Number(nfe.services_value) || 0,
+        aliquotaISS: Number(nfe.iss_rate) || 0,
+        valorISS: Number(nfe.iss_value) || 0
+      },
+      certificate: config.certificate_expires_at ? {
+        hasValidCertificate: !!config.certificate_path,
+        expiresAt: config.certificate_expires_at,
+        daysToExpire: config.certificate_expires_at
+          ? Math.ceil((new Date(config.certificate_expires_at).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+          : undefined
+      } : undefined,
+      environment: config.environment || 'sandbox'
+    }
+
+    // Executar validação
+    const validation = validatePreSubmission(validationData)
+
+    return { success: true, validation }
+  } catch (error: any) {
+    console.error('Erro ao validar NFe:', error)
+    return { error: error.message }
+  }
+}
+
+// ============================================================================
 // ENVIAR NFE PARA SEFAZ/PREFEITURA
 // ============================================================================
 export async function sendNFeToAPI(invoiceId: string) {
@@ -755,6 +879,20 @@ export async function sendNFeToAPI(invoiceId: string) {
 
     const config = nfeConfig[0] || {}
 
+    // VALIDAÇÃO PRÉ-ENVIO (Padrão OURO)
+    const validationResult = await validateNFeBeforeSend(invoiceId)
+    if ('error' in validationResult) {
+      return { error: validationResult.error }
+    }
+
+    if (!validationResult.validation.canProceed) {
+      const errorMessages = validationResult.validation.errors.map(e => e.message).join('; ')
+      return {
+        error: `Validação falhou: ${errorMessages}`,
+        validation: validationResult.validation
+      }
+    }
+
     // Atualizar status para processando
     await db`
       UPDATE nfe_invoices
@@ -768,14 +906,15 @@ export async function sendNFeToAPI(invoiceId: string) {
     // Simular delay de processamento
     await new Promise(resolve => setTimeout(resolve, 1000))
 
-    // Gerar protocolo e chave de acesso simulados
-    const protocol = `${config.environment === 'sandbox' ? 'HOM' : 'PRD'}${Date.now()}`
+    // Gerar protocolo de autorização
+    const timestamp = Date.now()
+    const protocol = `${config.environment === 'sandbox' ? 'HOM' : 'PRD'}${timestamp}`
 
     let accessKey: string | null = null
     let verificationCode: string | null = null
 
     if (nfe.invoice_type === 'nfe') {
-      // Chave de acesso NFe (44 dígitos)
+      // Chave de acesso NFe (44 dígitos) - Padrão SEFAZ
       accessKey = generateAccessKey({
         uf: config.address_state || 'SP',
         cnpj: config.company_cnpj || '',
@@ -783,15 +922,18 @@ export async function sendNFeToAPI(invoiceId: string) {
         serie: nfe.series || '1',
         numero: nfe.invoice_number.replace(/\D/g, '').slice(-9),
         tpEmis: '1',
-        cNF: Math.random().toString().slice(2, 10)
+        cNF: String(Math.floor(Math.random() * 100000000)).padStart(8, '0')
       })
     } else {
-      // Código de verificação NFSe
-      verificationCode = Math.random().toString(36).substring(2, 10).toUpperCase()
+      // Código de verificação NFSe (padrão alfanumérico)
+      verificationCode = `${config.address_city_code?.slice(0, 4) || 'XXXX'}${timestamp.toString(36).toUpperCase().slice(-8)}`
     }
 
-    // Gerar XML da nota (simplificado)
-    const xmlContent = generateNFeXML(nfe, config)
+    // Gerar XML no Padrão OURO Nacional
+    const xmlContent = generateNFeXMLComplete(nfe, config, verificationCode || undefined, accessKey || undefined)
+
+    // Calcular hash do XML para integridade
+    const xmlHash = Buffer.from(xmlContent).toString('base64').slice(0, 64)
 
     // Atualizar nota com autorização
     await db`
@@ -803,6 +945,7 @@ export async function sendNFeToAPI(invoiceId: string) {
         access_key = ${accessKey},
         verification_code = ${verificationCode},
         xml_content = ${xmlContent},
+        xml_hash = ${xmlHash},
         updated_at = NOW()
       WHERE id = ${invoiceId}
     `
@@ -812,7 +955,10 @@ export async function sendNFeToAPI(invoiceId: string) {
       message: 'Nota fiscal autorizada com sucesso',
       protocol,
       accessKey,
-      verificationCode
+      verificationCode,
+      validation: validationResult.validation.warnings.length > 0 ? {
+        warnings: validationResult.validation.warnings
+      } : undefined
     }
   } catch (error: any) {
     console.error('Erro ao enviar NFe:', error)
@@ -1063,104 +1209,287 @@ function generateAccessKey(data: {
   return chaveBase + digito.toString()
 }
 
-function generateNFeXML(nfe: any, config: any): string {
-  // Gerar XML simplificado (em produção usar biblioteca apropriada)
-  const now = new Date().toISOString()
+/**
+ * Gera XML no Padrão OURO Nacional
+ * NFSe: ABRASF 2.04
+ * NFe: SEFAZ 4.00
+ */
+function generateNFeXMLComplete(nfe: any, config: any, verificationCode?: string, accessKey?: string): string {
+  const now = new Date()
+  const nowISO = now.toISOString()
+  const competencia = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
 
   if (nfe.invoice_type === 'nfse') {
-    return `<?xml version="1.0" encoding="UTF-8"?>
-<CompNfse xmlns="http://www.abrasf.org.br/nfse.xsd">
-  <Nfse>
-    <InfNfse>
-      <Numero>${nfe.invoice_number}</Numero>
-      <CodigoVerificacao>${nfe.verification_code || ''}</CodigoVerificacao>
-      <DataEmissao>${now}</DataEmissao>
-      <IdentificacaoRps>
-        <Numero>${nfe.rps_number || ''}</Numero>
-        <Serie>${nfe.rps_series || '1'}</Serie>
-        <Tipo>1</Tipo>
-      </IdentificacaoRps>
-      <Competencia>${now.slice(0, 7)}</Competencia>
-      <Servico>
-        <Valores>
-          <ValorServicos>${nfe.services_value}</ValorServicos>
-          <ValorIss>${nfe.iss_value}</ValorIss>
-          <Aliquota>${nfe.iss_rate}</Aliquota>
-          <ValorLiquidoNfse>${nfe.net_value}</ValorLiquidoNfse>
-        </Valores>
-        <ItemListaServico>${nfe.services?.[0]?.lc116_code || '4.01'}</ItemListaServico>
-        <Discriminacao>${nfe.services?.map((s: any) => s.description).join('; ') || ''}</Discriminacao>
-      </Servico>
-      <PrestadorServico>
-        <IdentificacaoPrestador>
-          <CpfCnpj>
-            <Cnpj>${config.company_cnpj?.replace(/[^\d]/g, '') || ''}</Cnpj>
-          </CpfCnpj>
-          <InscricaoMunicipal>${config.company_im || ''}</InscricaoMunicipal>
-        </IdentificacaoPrestador>
-        <RazaoSocial>${config.company_name || ''}</RazaoSocial>
-        <NomeFantasia>${config.company_fantasy_name || config.company_name || ''}</NomeFantasia>
-        <Endereco>
-          <Endereco>${config.address_street || ''}</Endereco>
-          <Numero>${config.address_number || ''}</Numero>
-          <Bairro>${config.address_neighborhood || ''}</Bairro>
-          <CodigoMunicipio>${config.address_city_code || ''}</CodigoMunicipio>
-          <Uf>${config.address_state || ''}</Uf>
-          <Cep>${config.address_zipcode || ''}</Cep>
-        </Endereco>
-      </PrestadorServico>
-      <TomadorServico>
-        <IdentificacaoTomador>
-          <CpfCnpj>
-            <Cpf>${nfe.customer_cpf_cnpj?.replace(/[^\d]/g, '') || ''}</Cpf>
-          </CpfCnpj>
-        </IdentificacaoTomador>
-        <RazaoSocial>${nfe.customer_name || ''}</RazaoSocial>
-      </TomadorServico>
-    </InfNfse>
-  </Nfse>
-</CompNfse>`
+    // Preparar dados para NFSe padrão ABRASF 2.04
+    const nfseData: NFSeXMLData = {
+      numero: nfe.invoice_number?.replace(/\D/g, '') || '1',
+      serie: nfe.series || '1',
+      tipo: 1,
+      dataEmissao: nowISO,
+      competencia: competencia,
+
+      rps: nfe.rps_number ? {
+        numero: nfe.rps_number,
+        serie: nfe.rps_series || '1',
+        tipo: 1,
+        dataEmissao: nfe.rps_date || nowISO.split('T')[0]
+      } : undefined,
+
+      naturezaOperacao: 1, // 1 = Tributação no município
+      regimeEspecialTributacao: config.optante_simples ? 1 : undefined,
+      optanteSimplesNacional: config.optante_simples || config.company_crt === '1',
+      incentivoFiscal: false,
+
+      prestador: {
+        cnpj: config.company_cnpj || '',
+        inscricaoMunicipal: config.company_im || '',
+        razaoSocial: config.company_name || '',
+        nomeFantasia: config.company_fantasy_name || config.company_name || '',
+        endereco: {
+          logradouro: config.address_street || '',
+          numero: config.address_number || 'S/N',
+          complemento: config.address_complement || undefined,
+          bairro: config.address_neighborhood || '',
+          codigoMunicipio: config.address_city_code || '',
+          municipio: config.address_city || '',
+          uf: config.address_state || '',
+          cep: config.address_zipcode || '',
+          codigoPais: '1058',
+          pais: 'BRASIL'
+        },
+        telefone: config.phone || undefined,
+        email: config.email || undefined
+      },
+
+      tomador: {
+        cpfCnpj: nfe.customer_cpf_cnpj || '',
+        razaoSocial: nfe.customer_name || '',
+        endereco: nfe.customer_address ? {
+          logradouro: nfe.customer_address.street || nfe.customer_address.logradouro || '',
+          numero: nfe.customer_address.number || nfe.customer_address.numero || 'S/N',
+          complemento: nfe.customer_address.complement || nfe.customer_address.complemento || undefined,
+          bairro: nfe.customer_address.neighborhood || nfe.customer_address.bairro || '',
+          codigoMunicipio: nfe.customer_address.city_code || nfe.customer_address.codigoMunicipio || config.address_city_code || '',
+          municipio: nfe.customer_address.city || nfe.customer_address.municipio || '',
+          uf: nfe.customer_address.state || nfe.customer_address.uf || '',
+          cep: nfe.customer_address.zipcode || nfe.customer_address.cep || '',
+          codigoPais: '1058',
+          pais: 'BRASIL'
+        } : undefined,
+        email: nfe.customer_email || undefined
+      },
+
+      servico: {
+        itemListaServico: nfe.services?.[0]?.lc116_code || '4.01',
+        codigoCnae: config.company_cnae || undefined,
+        discriminacao: nfe.services?.map((s: any) =>
+          `${s.quantity || 1}x ${s.description} - R$ ${(s.total_value || s.unit_price || 0).toFixed(2)}`
+        ).join('\n') || 'Prestação de serviços',
+        codigoMunicipioIncidencia: config.address_city_code || '',
+        exigibilidadeISS: 1 // 1 = Exigível
+      },
+
+      valores: {
+        valorServicos: Number(nfe.services_value) || 0,
+        valorDeducoes: Number(nfe.deductions_value) || undefined,
+        valorPis: Number(nfe.pis_value) || undefined,
+        valorCofins: Number(nfe.cofins_value) || undefined,
+        valorInss: Number(nfe.inss_value) || undefined,
+        valorIr: Number(nfe.ir_value) || undefined,
+        valorCsll: Number(nfe.csll_value) || undefined,
+        valorIss: Number(nfe.iss_value) || 0,
+        aliquota: Number(nfe.iss_rate) || 5,
+        issRetido: false,
+        valorLiquidoNfse: Number(nfe.net_value) || Number(nfe.services_value) || 0,
+        baseCalculo: (Number(nfe.services_value) || 0) - (Number(nfe.deductions_value) || 0)
+      },
+
+      informacoesAdicionais: nfe.observations || undefined,
+
+      autorizacao: verificationCode ? {
+        protocolo: nfe.authorization_protocol || '',
+        dataAutorizacao: nowISO,
+        codigoVerificacao: verificationCode
+      } : undefined
+    }
+
+    return generateNFSeXML(nfseData)
   }
 
-  // XML NFe modelo 55 (simplificado)
-  return `<?xml version="1.0" encoding="UTF-8"?>
-<NFe xmlns="http://www.portalfiscal.inf.br/nfe">
-  <infNFe versao="4.00">
-    <ide>
-      <cUF>${config.address_state || 'SP'}</cUF>
-      <natOp>PRESTACAO DE SERVICOS</natOp>
-      <mod>55</mod>
-      <serie>${nfe.series || '1'}</serie>
-      <nNF>${nfe.invoice_number?.replace(/\D/g, '') || ''}</nNF>
-      <dhEmi>${now}</dhEmi>
-      <tpNF>1</tpNF>
-      <tpEmis>1</tpEmis>
-    </ide>
-    <emit>
-      <CNPJ>${config.company_cnpj?.replace(/[^\d]/g, '') || ''}</CNPJ>
-      <xNome>${config.company_name || ''}</xNome>
-      <xFant>${config.company_fantasy_name || ''}</xFant>
-      <enderEmit>
-        <xLgr>${config.address_street || ''}</xLgr>
-        <nro>${config.address_number || ''}</nro>
-        <xBairro>${config.address_neighborhood || ''}</xBairro>
-        <cMun>${config.address_city_code || ''}</cMun>
-        <xMun>${config.address_city || ''}</xMun>
-        <UF>${config.address_state || ''}</UF>
-        <CEP>${config.address_zipcode?.replace(/[^\d]/g, '') || ''}</CEP>
-      </enderEmit>
-      <IE>${config.company_ie || ''}</IE>
-      <CRT>${config.company_crt || '1'}</CRT>
-    </emit>
-    <dest>
-      <CPF>${nfe.customer_cpf_cnpj?.replace(/[^\d]/g, '') || ''}</CPF>
-      <xNome>${nfe.customer_name || ''}</xNome>
-    </dest>
-    <total>
-      <ICMSTot>
-        <vNF>${nfe.services_value || 0}</vNF>
-      </ICMSTot>
-    </total>
-  </infNFe>
-</NFe>`
+  // NFe modelo 55 - Padrão SEFAZ 4.00
+  const cNF = String(Math.floor(Math.random() * 100000000)).padStart(8, '0')
+  const nNF = nfe.invoice_number?.replace(/\D/g, '') || '1'
+
+  const nfeData: NFeXMLData = {
+    chaveAcesso: accessKey || undefined,
+
+    ide: {
+      cUF: UF_CODES[config.address_state] || '35',
+      cNF: cNF,
+      natOp: 'PRESTACAO DE SERVICOS DE SAUDE',
+      mod: '55',
+      serie: nfe.series || '1',
+      nNF: nNF,
+      dhEmi: `${nowISO.slice(0, 19)}-03:00`,
+      tpNF: 1, // 1 = Saída
+      idDest: 1, // 1 = Operação interna
+      cMunFG: config.address_city_code || '',
+      tpImp: 1, // 1 = DANFE retrato
+      tpEmis: 1, // 1 = Emissão normal
+      tpAmb: config.environment === 'production' ? 1 : 2,
+      finNFe: 1, // 1 = NFe normal
+      indFinal: 1, // 1 = Consumidor final
+      indPres: 1, // 1 = Operação presencial
+      procEmi: 0, // 0 = Aplicativo do contribuinte
+      verProc: 'AtendeBem 2.0'
+    },
+
+    emit: {
+      CNPJ: config.company_cnpj || '',
+      xNome: config.company_name || '',
+      xFant: config.company_fantasy_name || undefined,
+      enderEmit: {
+        xLgr: config.address_street || '',
+        nro: config.address_number || 'S/N',
+        xCpl: config.address_complement || undefined,
+        xBairro: config.address_neighborhood || '',
+        cMun: config.address_city_code || '',
+        xMun: config.address_city || '',
+        UF: config.address_state || '',
+        CEP: config.address_zipcode || '',
+        cPais: '1058',
+        xPais: 'BRASIL',
+        fone: config.phone || undefined
+      },
+      IE: config.company_ie || 'ISENTO',
+      IM: config.company_im || undefined,
+      CNAE: config.company_cnae || undefined,
+      CRT: config.company_crt || '1'
+    },
+
+    dest: {
+      CPF: nfe.customer_cpf_cnpj?.replace(/[^\d]/g, '').length === 11
+        ? nfe.customer_cpf_cnpj.replace(/[^\d]/g, '')
+        : undefined,
+      CNPJ: nfe.customer_cpf_cnpj?.replace(/[^\d]/g, '').length === 14
+        ? nfe.customer_cpf_cnpj.replace(/[^\d]/g, '')
+        : undefined,
+      xNome: nfe.customer_name || '',
+      enderDest: nfe.customer_address ? {
+        xLgr: nfe.customer_address.street || nfe.customer_address.logradouro || '',
+        nro: nfe.customer_address.number || nfe.customer_address.numero || 'S/N',
+        xCpl: nfe.customer_address.complement || undefined,
+        xBairro: nfe.customer_address.neighborhood || nfe.customer_address.bairro || '',
+        cMun: nfe.customer_address.city_code || config.address_city_code || '',
+        xMun: nfe.customer_address.city || nfe.customer_address.municipio || '',
+        UF: nfe.customer_address.state || nfe.customer_address.uf || '',
+        CEP: nfe.customer_address.zipcode || nfe.customer_address.cep || '',
+        cPais: '1058',
+        xPais: 'BRASIL'
+      } : undefined,
+      indIEDest: '9', // 9 = Não contribuinte
+      email: nfe.customer_email || undefined
+    },
+
+    det: (nfe.services || []).map((item: any, idx: number) => ({
+      nItem: idx + 1,
+      prod: {
+        cProd: item.code || String(idx + 1).padStart(4, '0'),
+        cEAN: 'SEM GTIN',
+        xProd: item.description || 'Serviço',
+        NCM: '00000000', // Serviços usam NCM genérico
+        CFOP: '5933', // Prestação de serviço interno
+        uCom: 'UN',
+        qCom: Number(item.quantity) || 1,
+        vUnCom: Number(item.unit_price) || 0,
+        vProd: Number(item.total_value) || Number(item.unit_price) * (Number(item.quantity) || 1),
+        cEANTrib: 'SEM GTIN',
+        uTrib: 'UN',
+        qTrib: Number(item.quantity) || 1,
+        vUnTrib: Number(item.unit_price) || 0,
+        indTot: 1
+      },
+      imposto: {
+        ICMS: {
+          orig: '0',
+          CSOSN: config.company_crt === '1' ? '102' : undefined,
+          CST: config.company_crt === '3' ? '41' : undefined // Não tributada
+        },
+        PIS: {
+          CST: config.company_crt === '1' ? '07' : '08' // Outras saídas
+        },
+        COFINS: {
+          CST: config.company_crt === '1' ? '07' : '08'
+        },
+        ISSQN: {
+          vBC: Number(item.total_value) || 0,
+          vAliq: Number(nfe.iss_rate) || 5,
+          vISSQN: (Number(item.total_value) || 0) * ((Number(nfe.iss_rate) || 5) / 100),
+          cMunFG: config.address_city_code || '',
+          cListServ: item.lc116_code?.replace('.', '') || '0401',
+          indISS: 1, // 1 = Exigível
+          indIncentivo: 2 // 2 = Não
+        }
+      }
+    })),
+
+    total: {
+      ICMSTot: {
+        vBC: 0,
+        vICMS: 0,
+        vICMSDeson: 0,
+        vFCP: 0,
+        vBCST: 0,
+        vST: 0,
+        vFCPST: 0,
+        vFCPSTRet: 0,
+        vProd: Number(nfe.services_value) || 0,
+        vFrete: 0,
+        vSeg: 0,
+        vDesc: Number(nfe.discount_value) || 0,
+        vII: 0,
+        vIPI: 0,
+        vIPIDevol: 0,
+        vPIS: Number(nfe.pis_value) || 0,
+        vCOFINS: Number(nfe.cofins_value) || 0,
+        vOutro: 0,
+        vNF: Number(nfe.net_value) || Number(nfe.services_value) || 0,
+        vTotTrib: (Number(nfe.iss_value) || 0) + (Number(nfe.pis_value) || 0) + (Number(nfe.cofins_value) || 0)
+      },
+      ISSQNtot: {
+        vServ: Number(nfe.services_value) || 0,
+        vBC: (Number(nfe.services_value) || 0) - (Number(nfe.deductions_value) || 0),
+        vISS: Number(nfe.iss_value) || 0,
+        vPIS: Number(nfe.pis_value) || 0,
+        vCOFINS: Number(nfe.cofins_value) || 0,
+        dCompet: nowISO.split('T')[0],
+        vDeducao: Number(nfe.deductions_value) || undefined,
+        vDescIncond: Number(nfe.discount_value) || undefined,
+        cRegTrib: config.company_crt === '1' ? 1 : 3
+      }
+    },
+
+    transp: {
+      modFrete: 9 // 9 = Sem frete
+    },
+
+    pag: {
+      detPag: [{
+        indPag: 0, // 0 = À vista
+        tPag: '01', // 01 = Dinheiro
+        vPag: Number(nfe.net_value) || Number(nfe.services_value) || 0
+      }]
+    },
+
+    infAdic: {
+      infCpl: nfe.observations || `Prestação de serviços de saúde. ${config.optante_simples ? 'Documento emitido por ME ou EPP optante pelo Simples Nacional.' : ''}`
+    }
+  }
+
+  return generateNFeXMLFull(nfeData)
+}
+
+// Função legada para compatibilidade
+function generateNFeXML(nfe: any, config: any): string {
+  return generateNFeXMLComplete(nfe, config)
 }

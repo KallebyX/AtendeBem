@@ -1,6 +1,12 @@
 /**
  * Gerador de DANFE (Documento Auxiliar da Nota Fiscal Eletrônica)
- * Suporta NFSe (serviços) e NFe (produtos)
+ * Padrão OURO Nacional - Conforme Manual de Orientação SEFAZ
+ *
+ * Suporta:
+ * - NFSe (Nota Fiscal de Serviços Eletrônica) - Padrão ABRASF
+ * - NFe (Nota Fiscal Eletrônica) - Modelo 55
+ *
+ * @version 2.0.0
  */
 
 import jsPDF from 'jspdf'
@@ -34,6 +40,9 @@ export interface DANFEData {
     ie?: string
     im?: string
     cnae?: string
+    crt?: string
+    regimeTributario?: string
+    optanteSimplesNacional?: boolean
     address: {
       street: string
       number: string
@@ -74,6 +83,8 @@ export interface DANFEData {
     unitPrice: number
     totalPrice: number
     lc116Code?: string
+    ncm?: string
+    cfop?: string
   }>
 
   // Valores
@@ -90,15 +101,22 @@ export interface DANFEData {
     csllValue?: number
     inssValue?: number
     netValue: number
+    totalTributos?: number
   }
 
   // Informações adicionais
   additionalInfo?: string
   competence?: string
+
+  // Ambiente
+  ambiente?: 'production' | 'sandbox'
+
+  // Natureza da operação
+  naturezaOperacao?: string
 }
 
 // ============================================================================
-// GERADOR DE DANFE NFSE
+// GERADOR DE DANFE NFSE - PADRÃO ABRASF
 // ============================================================================
 export function generateDANFENFSe(data: DANFEData): jsPDF {
   const doc = new jsPDF({
@@ -114,17 +132,29 @@ export function generateDANFENFSe(data: DANFEData): jsPDF {
 
   let y = margin
 
+  // Marca d'água para homologação
+  if (data.ambiente === 'sandbox') {
+    doc.setTextColor(220, 220, 220)
+    doc.setFontSize(60)
+    doc.setFont('helvetica', 'bold')
+    doc.text('HOMOLOGAÇÃO', pageWidth / 2, pageHeight / 2, {
+      align: 'center',
+      angle: 45
+    })
+    doc.setTextColor(0, 0, 0)
+  }
+
   // ============================================================================
-  // CABEÇALHO
+  // CABEÇALHO PRINCIPAL
   // ============================================================================
 
-  // Borda do cabeçalho
+  // Borda externa do cabeçalho
   doc.setDrawColor(0)
   doc.setLineWidth(0.5)
-  doc.rect(margin, y, contentWidth, 35)
+  doc.rect(margin, y, contentWidth, 40)
 
-  // Logo ou nome da empresa
-  doc.setFontSize(14)
+  // Área do prestador (esquerda)
+  doc.setFontSize(12)
   doc.setFont('helvetica', 'bold')
   doc.text(data.emitter.fantasyName || data.emitter.name, margin + 5, y + 8)
 
@@ -134,69 +164,116 @@ export function generateDANFENFSe(data: DANFEData): jsPDF {
   if (data.emitter.im) {
     doc.text(`Inscrição Municipal: ${data.emitter.im}`, margin + 5, y + 18)
   }
+  if (data.emitter.cnae) {
+    doc.text(`CNAE: ${data.emitter.cnae}`, margin + 75, y + 18)
+  }
   doc.text(
     `${data.emitter.address.street}, ${data.emitter.address.number}${data.emitter.address.complement ? ` - ${data.emitter.address.complement}` : ''}`,
     margin + 5,
-    y + 22
+    y + 23
   )
   doc.text(
-    `${data.emitter.address.neighborhood} - ${data.emitter.address.city}/${data.emitter.address.state} - CEP: ${formatCEP(data.emitter.address.zipcode)}`,
+    `${data.emitter.address.neighborhood} - ${data.emitter.address.city}/${data.emitter.address.state}`,
     margin + 5,
-    y + 26
+    y + 27
   )
+  doc.text(`CEP: ${formatCEP(data.emitter.address.zipcode)}`, margin + 5, y + 31)
   if (data.emitter.phone) {
-    doc.text(`Tel: ${data.emitter.phone}`, margin + 5, y + 30)
+    doc.text(`Tel: ${data.emitter.phone}`, margin + 55, y + 31)
+  }
+  if (data.emitter.email) {
+    doc.text(`Email: ${data.emitter.email}`, margin + 5, y + 35)
   }
 
-  // Título à direita
-  doc.setFontSize(12)
+  // Área do título (direita)
+  doc.setDrawColor(0)
+  doc.setLineWidth(0.3)
+  doc.line(margin + 115, y, margin + 115, y + 40)
+
+  doc.setFillColor(240, 240, 240)
+  doc.rect(margin + 115, y, 75, 16, 'F')
+
+  doc.setFontSize(11)
   doc.setFont('helvetica', 'bold')
-  doc.text('NOTA FISCAL DE SERVIÇOS', margin + contentWidth - 5, y + 10, { align: 'right' })
-  doc.text('ELETRÔNICA - NFS-e', margin + contentWidth - 5, y + 16, { align: 'right' })
+  doc.text('NOTA FISCAL DE SERVIÇOS', margin + 152.5, y + 6, { align: 'center' })
+  doc.text('ELETRÔNICA - NFS-e', margin + 152.5, y + 12, { align: 'center' })
 
-  doc.setFontSize(16)
-  doc.text(`Nº ${data.invoiceNumber}`, margin + contentWidth - 5, y + 26, { align: 'right' })
+  doc.setFontSize(9)
+  doc.setFont('helvetica', 'normal')
+  doc.text('Número da Nota:', margin + 120, y + 22)
+  doc.setFontSize(14)
+  doc.setFont('helvetica', 'bold')
+  doc.text(data.invoiceNumber, margin + 152.5, y + 28, { align: 'center' })
 
-  y += 40
+  doc.setFontSize(8)
+  doc.setFont('helvetica', 'normal')
+  doc.text(`Série: ${data.series || '1'}`, margin + 120, y + 35)
+  doc.text(`Data: ${formatDate(data.issueDate)}`, margin + 150, y + 35)
+
+  y += 45
 
   // ============================================================================
-  // DADOS DA NOTA
+  // DADOS DA NOTA FISCAL
   // ============================================================================
 
   doc.setDrawColor(0)
-  doc.rect(margin, y, contentWidth, 20)
+  doc.rect(margin, y, contentWidth, 22)
+
+  doc.setFillColor(240, 240, 240)
+  doc.rect(margin, y, contentWidth, 5, 'F')
 
   doc.setFontSize(8)
   doc.setFont('helvetica', 'bold')
-  doc.text('DADOS DA NOTA FISCAL', margin + 2, y + 4)
+  doc.text('DADOS DA NOTA FISCAL', margin + 2, y + 3.5)
 
   doc.setFont('helvetica', 'normal')
 
   // Linha 1
   const col1 = margin + 2
-  const col2 = margin + 45
-  const col3 = margin + 90
-  const col4 = margin + 135
+  const col2 = margin + 40
+  const col3 = margin + 80
+  const col4 = margin + 120
+  const col5 = margin + 155
 
-  doc.text(`Data de Emissão:`, col1, y + 10)
-  doc.text(formatDate(data.issueDate), col1, y + 14)
+  doc.setFontSize(7)
+  doc.text('Data de Emissão:', col1, y + 9)
+  doc.setFont('helvetica', 'bold')
+  doc.text(formatDate(data.issueDate), col1, y + 13)
 
-  doc.text(`Competência:`, col2, y + 10)
-  doc.text(data.competence || formatMonth(data.issueDate), col2, y + 14)
+  doc.setFont('helvetica', 'normal')
+  doc.text('Competência:', col2, y + 9)
+  doc.setFont('helvetica', 'bold')
+  doc.text(data.competence || formatMonth(data.issueDate), col2, y + 13)
 
   if (data.rpsNumber) {
-    doc.text(`Nº RPS:`, col3, y + 10)
-    doc.text(`${data.rpsSeries || '1'}-${data.rpsNumber}`, col3, y + 14)
+    doc.setFont('helvetica', 'normal')
+    doc.text('Nº RPS:', col3, y + 9)
+    doc.setFont('helvetica', 'bold')
+    doc.text(`${data.rpsSeries || '1'}-${data.rpsNumber}`, col3, y + 13)
   }
+
+  doc.setFont('helvetica', 'normal')
+  doc.text('Natureza Operação:', col4, y + 9)
+  doc.setFont('helvetica', 'bold')
+  doc.text(data.naturezaOperacao || 'Tributação no município', col4, y + 13)
 
   if (data.verificationCode) {
-    doc.text(`Código Verificação:`, col4, y + 10)
-    doc.setFont('helvetica', 'bold')
-    doc.text(data.verificationCode, col4, y + 14)
     doc.setFont('helvetica', 'normal')
+    doc.text('Código Verificação:', col1, y + 17)
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(9)
+    doc.text(data.verificationCode, col2, y + 17)
   }
 
-  y += 25
+  if (data.authorizationProtocol) {
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(7)
+    doc.text('Protocolo:', col4, y + 17)
+    doc.setFont('helvetica', 'bold')
+    doc.text(data.authorizationProtocol, col5, y + 17)
+  }
+
+  y += 27
 
   // ============================================================================
   // TOMADOR DO SERVIÇO
@@ -260,76 +337,120 @@ export function generateDANFENFSe(data: DANFEData): jsPDF {
   y += 65
 
   // ============================================================================
-  // VALORES
+  // VALORES E TRIBUTOS
   // ============================================================================
 
   doc.setDrawColor(0)
-  doc.rect(margin, y, contentWidth / 2, 40)
-  doc.rect(margin + contentWidth / 2, y, contentWidth / 2, 40)
+  doc.rect(margin, y, contentWidth / 2, 48)
+  doc.rect(margin + contentWidth / 2, y, contentWidth / 2, 48)
 
   // Coluna esquerda - Tributos
+  doc.setFillColor(240, 240, 240)
+  doc.rect(margin, y, contentWidth / 2, 5, 'F')
+
   doc.setFontSize(8)
   doc.setFont('helvetica', 'bold')
-  doc.text('TRIBUTOS', margin + 2, y + 4)
+  doc.text('TRIBUTOS', margin + 2, y + 3.5)
 
   doc.setFont('helvetica', 'normal')
+  doc.setFontSize(7)
   let taxY = y + 10
 
-  doc.text(`Base de Cálculo:`, margin + 2, taxY)
+  doc.text('Base de Cálculo:', margin + 2, taxY)
   doc.text(`R$ ${formatCurrency(data.values.baseValue)}`, margin + 45, taxY)
   taxY += 5
 
-  doc.text(`Alíquota ISS:`, margin + 2, taxY)
+  doc.text('Alíquota ISS:', margin + 2, taxY)
   doc.text(`${(Number(data.values.issRate) || 0).toFixed(2)}%`, margin + 45, taxY)
   taxY += 5
 
-  doc.text(`Valor ISS:`, margin + 2, taxY)
+  doc.text('Valor ISS:', margin + 2, taxY)
+  doc.setFont('helvetica', 'bold')
   doc.text(`R$ ${formatCurrency(data.values.issValue)}`, margin + 45, taxY)
+  doc.setFont('helvetica', 'normal')
   taxY += 5
 
   if (data.values.pisValue) {
-    doc.text(`PIS:`, margin + 2, taxY)
+    doc.text('PIS (0,65%):', margin + 2, taxY)
     doc.text(`R$ ${formatCurrency(data.values.pisValue)}`, margin + 45, taxY)
     taxY += 5
   }
 
   if (data.values.cofinsValue) {
-    doc.text(`COFINS:`, margin + 2, taxY)
+    doc.text('COFINS (3%):', margin + 2, taxY)
     doc.text(`R$ ${formatCurrency(data.values.cofinsValue)}`, margin + 45, taxY)
+    taxY += 5
+  }
+
+  if (data.values.irValue) {
+    doc.text('IR Retido:', margin + 2, taxY)
+    doc.text(`R$ ${formatCurrency(data.values.irValue)}`, margin + 45, taxY)
+    taxY += 5
+  }
+
+  if (data.values.inssValue) {
+    doc.text('INSS Retido:', margin + 2, taxY)
+    doc.text(`R$ ${formatCurrency(data.values.inssValue)}`, margin + 45, taxY)
+    taxY += 5
+  }
+
+  // Total de tributos
+  const totalTributos = (data.values.issValue || 0) + (data.values.pisValue || 0) +
+    (data.values.cofinsValue || 0) + (data.values.irValue || 0) + (data.values.inssValue || 0)
+  if (totalTributos > 0) {
+    doc.setFont('helvetica', 'bold')
+    doc.text('Total Tributos:', margin + 2, y + 43)
+    doc.text(`R$ ${formatCurrency(totalTributos)}`, margin + 45, y + 43)
   }
 
   // Coluna direita - Totais
   const rightCol = margin + contentWidth / 2 + 2
 
+  doc.setFillColor(240, 240, 240)
+  doc.rect(margin + contentWidth / 2, y, contentWidth / 2, 5, 'F')
+
   doc.setFont('helvetica', 'bold')
-  doc.text('VALORES', rightCol, y + 4)
+  doc.setFontSize(8)
+  doc.text('VALORES DA NOTA', rightCol, y + 3.5)
 
   doc.setFont('helvetica', 'normal')
+  doc.setFontSize(7)
   let valY = y + 10
 
-  doc.text(`Valor dos Serviços:`, rightCol, valY)
-  doc.text(`R$ ${formatCurrency(data.values.servicesValue)}`, rightCol + 50, valY)
+  doc.text('Valor dos Serviços:', rightCol, valY)
+  doc.text(`R$ ${formatCurrency(data.values.servicesValue)}`, rightCol + 55, valY)
   valY += 5
 
   if (data.values.deductions) {
-    doc.text(`(-) Deduções:`, rightCol, valY)
-    doc.text(`R$ ${formatCurrency(data.values.deductions)}`, rightCol + 50, valY)
+    doc.text('(-) Deduções:', rightCol, valY)
+    doc.text(`R$ ${formatCurrency(data.values.deductions)}`, rightCol + 55, valY)
     valY += 5
   }
 
   if (data.values.discount) {
-    doc.text(`(-) Desconto:`, rightCol, valY)
-    doc.text(`R$ ${formatCurrency(data.values.discount)}`, rightCol + 50, valY)
+    doc.text('(-) Desconto Incond.:', rightCol, valY)
+    doc.text(`R$ ${formatCurrency(data.values.discount)}`, rightCol + 55, valY)
     valY += 5
   }
 
+  doc.text('Base de Cálculo:', rightCol, valY)
+  doc.text(`R$ ${formatCurrency(data.values.baseValue)}`, rightCol + 55, valY)
   valY += 5
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(10)
-  doc.text(`VALOR LÍQUIDO:`, rightCol, valY)
-  doc.text(`R$ ${formatCurrency(data.values.netValue)}`, rightCol + 50, valY)
 
-  y += 45
+  doc.text('(-) ISS Retido:', rightCol, valY)
+  doc.text(`R$ ${formatCurrency(0)}`, rightCol + 55, valY)
+  valY += 8
+
+  // Valor líquido destacado
+  doc.setFillColor(220, 255, 220)
+  doc.rect(margin + contentWidth / 2, y + 36, contentWidth / 2, 12, 'F')
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(9)
+  doc.text('VALOR LÍQUIDO DA NOTA:', rightCol, y + 42)
+  doc.setFontSize(12)
+  doc.text(`R$ ${formatCurrency(data.values.netValue)}`, rightCol + 55, y + 44)
+
+  y += 53
 
   // ============================================================================
   // INFORMAÇÕES ADICIONAIS
@@ -351,23 +472,62 @@ export function generateDANFENFSe(data: DANFEData): jsPDF {
   }
 
   // ============================================================================
-  // RODAPÉ
+  // RODAPÉ - INFORMAÇÕES LEGAIS
   // ============================================================================
 
-  doc.setFontSize(7)
-  doc.setFont('helvetica', 'italic')
-  doc.text(
-    'Este documento é uma representação gráfica da NFS-e. Consulte sua autenticidade no site da prefeitura.',
-    pageWidth / 2,
-    pageHeight - 15,
-    { align: 'center' }
-  )
+  // Linha separadora
+  doc.setDrawColor(0)
+  doc.line(margin, pageHeight - 25, pageWidth - margin, pageHeight - 25)
 
+  doc.setFontSize(6)
+  doc.setFont('helvetica', 'normal')
+
+  // Informações de verificação
   if (data.verificationCode) {
     doc.text(
       `Código de Verificação: ${data.verificationCode}`,
+      margin,
+      pageHeight - 21
+    )
+  }
+
+  if (data.authorizationProtocol) {
+    doc.text(
+      `Protocolo de Autorização: ${data.authorizationProtocol}`,
+      margin + 80,
+      pageHeight - 21
+    )
+  }
+
+  // Aviso de autenticidade
+  doc.setFontSize(6)
+  doc.setFont('helvetica', 'italic')
+  doc.text(
+    'Este documento é uma representação gráfica da NFS-e. Consulte sua autenticidade no portal da prefeitura do município emissor.',
+    pageWidth / 2,
+    pageHeight - 16,
+    { align: 'center' }
+  )
+
+  // Informação do Simples Nacional
+  if (data.emitter.optanteSimplesNacional) {
+    doc.setFont('helvetica', 'bold')
+    doc.text(
+      'DOCUMENTO EMITIDO POR ME OU EPP OPTANTE PELO SIMPLES NACIONAL. NÃO GERA DIREITO A CRÉDITO FISCAL DE ISS E IPI.',
       pageWidth / 2,
-      pageHeight - 10,
+      pageHeight - 11,
+      { align: 'center' }
+    )
+  }
+
+  // Informação de tributos aproximados (Lei 12.741/2012)
+  const totalTributosApprox = (data.values.issValue || 0) + (data.values.pisValue || 0) + (data.values.cofinsValue || 0)
+  if (totalTributosApprox > 0) {
+    doc.setFont('helvetica', 'normal')
+    doc.text(
+      `Valor aproximado dos tributos: R$ ${formatCurrency(totalTributosApprox)} (${((totalTributosApprox / data.values.servicesValue) * 100).toFixed(2)}%) - Fonte: IBPT (Lei 12.741/2012)`,
+      pageWidth / 2,
+      pageHeight - 6,
       { align: 'center' }
     )
   }
