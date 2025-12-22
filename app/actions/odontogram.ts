@@ -7,7 +7,6 @@ import { setUserContext } from "@/lib/db-init"
 
 export async function createOdontogram(data: {
   patient_id: string
-  appointment_id?: string
   teeth_data?: any
   clinical_notes?: string
 }) {
@@ -24,11 +23,10 @@ export async function createOdontogram(data: {
 
     const result = await db`
       INSERT INTO odontograms (
-        user_id, patient_id, appointment_id, teeth_data, clinical_notes
+        user_id, patient_id, teeth_data, clinical_notes
       ) VALUES (
         ${user.id}, ${data.patient_id},
-        ${data.appointment_id || null},
-        ${JSON.stringify(data.teeth_data || {})},
+        ${JSON.stringify(data.teeth_data || {})}::jsonb,
         ${data.clinical_notes || ""}
       ) RETURNING *
     `
