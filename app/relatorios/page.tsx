@@ -7,7 +7,6 @@ import { Badge } from '@/components/ui/badge'
 import { NavigationHeader } from '@/components/navigation-header'
 import {
   getAnalyticsDashboard,
-  createSavedReport,
   getSavedReports
 } from '@/app/actions/analytics'
 import {
@@ -18,7 +17,7 @@ import {
 } from '@/app/actions/reports'
 import {
   BarChart3, TrendingUp, Users, DollarSign, Calendar, Download,
-  FileText, FileSpreadsheet, RefreshCw, PieChart, Activity
+  FileText, RefreshCw, PieChart, Activity
 } from 'lucide-react'
 import { toast } from 'sonner'
 

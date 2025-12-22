@@ -10,14 +10,13 @@ import { Textarea } from "@/components/ui/textarea"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { NavigationHeader } from "@/components/navigation-header"
 import { PatientSearchSelect } from "@/components/patient-search-select"
-import { Smile, Plus, Search, Calendar, Save, X, FileText, History } from "lucide-react"
+import { Smile, Plus, Search, Calendar, Save, FileText, History } from "lucide-react"
 import {
   getOdontograms,
   createOdontogram,
   updateOdontogram,
   addOdontogramProcedure,
-  getOdontogramProcedures,
-  getOdontogramById
+  getOdontogramProcedures
 } from "@/app/actions/odontogram"
 import { toast } from "sonner"
 
