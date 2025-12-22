@@ -9,47 +9,48 @@
 </p>
 
 <p align="center">
-  Plataforma SaaS para registro inteligente de atendimentos em saúde com códigos TUSS, 
-  receitas digitais certificadas ICP-Brasil e exportação profissional.
+  Plataforma SaaS para registro inteligente de atendimentos em saúde com códigos TUSS, receitas digitais certificadas ICP-Brasil e exportação profissional.
 </p>
 
 <p align="center">
   <a href="https://v0-atendebem.vercel.app">
     <img src="https://img.shields.io/badge/demo-live-brightgreen?style=for-the-badge" alt="Demo"/>
   </a>
-  <a href="#licença">
-    <img src="https://img.shields.io/badge/license-proprietary-red?style=for-the-badge" alt="License"/>
-  </a>
-  <a href="https://github.com/KallebyX/AtendeBem/commits/main">
-    <img src="https://img.shields.io/github/last-commit/KallebyX/AtendeBem?style=for-the-badge" alt="Last Commit"/>
-  </a>
-</p>
-
-<p align="center">
-  <a href="#-sobre">Sobre</a> •
-  <a href="#-funcionalidades">Funcionalidades</a> •
-  <a href="#️-tecnologias">Tecnologias</a> •
-  <a href="#-arquitetura">Arquitetura</a> •
-  <a href="#-instalação">Instalação</a> •
-  <a href="#-uso">Uso</a> •
-  <a href="#-api">API</a> •
-  <a href="#-contribuição">Contribuição</a>
+  <img src="https://img.shields.io/badge/license-proprietary-red?style=for-the-badge" alt="License"/>
+  <img src="https://img.shields.io/badge/status-em%20desenvolvimento-yellow?style=for-the-badge" alt="Status"/>
 </p>
 
 ---
 
-## 📋 Sobre
+## Índice
+
+- [Sobre](#sobre)
+- [Funcionalidades](#funcionalidades)
+- [Tecnologias](#tecnologias)
+- [Arquitetura](#arquitetura)
+- [Instalação](#instalação)
+- [Uso](#uso)
+- [API](#api)
+- [Segurança](#segurança)
+- [Roadmap](#roadmap)
+- [Time](#time)
+- [Contribuição](#contribuição)
+- [Licença](#licença)
+
+---
+
+## Sobre
 
 O **AtendeBem** resolve um problema crítico na rotina médica: profissionais de saúde perdem até **2 horas por dia** com documentação administrativa, navegando entre dezenas de tabelas técnicas (TUSS, CID, CBOS) e enfrentando **30% de glosas** por erros em códigos ou preenchimento.
 
-Nossa plataforma transforma esse cenário ao converter o raciocínio clínico em registros estruturados, eliminando a complexidade do preenchimento manual e reduzindo drasticamente erros operacionais.
+Nossa plataforma transforma esse cenário ao converter o raciocínio clínico em registros estruturados, eliminando a complexidade do preenchimento manual.
 
 ### O Problema
 
 | Desafio | Impacto |
 |---------|---------|
 | Tempo perdido com documentação | 2h/dia por profissional |
-| Tabelas técnicas para consultar | 10+ (TUSS, CID-10/11, CBOS, etc.) |
+| Tabelas técnicas para consultar | 10+ (TUSS, CID-10/11, CBOS) |
 | Taxa de glosas por erros | ~30% das guias |
 | Curva de aprendizado de sistemas | Alta frustração e retrabalho |
 
@@ -59,105 +60,112 @@ O AtendeBem funciona como um **Construtor de Atendimentos** visual onde o profis
 
 ---
 
-## ✨ Funcionalidades
+## Funcionalidades
 
-### 🏥 Registro de Atendimentos
-- **Fluxo visual e intuitivo** — Monte atendimentos como blocos, sem códigos técnicos
-- **Busca inteligente** — Encontre procedimentos por nome comum, não por código
-- **Validação em tempo real** — Feedback instantâneo sobre campos obrigatórios
-- **Histórico reutilizável** — Repita atendimentos anteriores com um clique
+### Registro de Atendimentos
 
-### 📋 Base de Dados Completa
+- Fluxo visual e intuitivo — Monte atendimentos como blocos, sem códigos técnicos
+- Busca inteligente — Encontre procedimentos por nome comum, não por código
+- Validação em tempo real — Feedback instantâneo sobre campos obrigatórios
+- Histórico reutilizável — Repita atendimentos anteriores com um clique
+
+### Base de Dados Completa
+
 - **10.000+ códigos TUSS** — Consultas, procedimentos cirúrgicos e exames
 - **CID-10 e CID-11** — Classificação internacional atualizada
 - **Banco de Medicamentos** — RENAME e lista estadual RS/2025 integradas
 - **CBOS** — Classificação Brasileira de Ocupações
 
-### 📝 Receituário Digital
-- **Assinatura ICP-Brasil** — Certificado digital e-CPF/e-CNPJ com validade jurídica
-- **QR Code de validação** — Pacientes e farmácias validam autenticidade
-- **Conformidade CFM/ANS** — Atende todos os requisitos legais e regulatórios
-- **Criptografia ponta-a-ponta** — Segurança e rastreabilidade completa
+### Receituário Digital
 
-### 📤 Exportação Profissional
-- **PDF padrão TISS/ANS** — Pronto para envio a convênios
-- **Excel estruturado** — Para análises e auditorias
-- **Integração com sistemas** — API REST para automações
+- Assinatura ICP-Brasil — Certificado digital e-CPF/e-CNPJ com validade jurídica
+- QR Code de validação — Pacientes e farmácias validam autenticidade
+- Conformidade CFM/ANS — Atende todos os requisitos legais
+- Criptografia ponta-a-ponta — Segurança e rastreabilidade completa
 
-### 🤖 Assistente IA (Gemini)
+### Exportação Profissional
+
+- PDF padrão TISS/ANS — Pronto para envio a convênios
+- Excel estruturado — Para análises e auditorias
+- API REST — Integração com outros sistemas
+
+### Assistente IA (Gemini)
+
 - Auxílio na montagem de atendimentos
 - Esclarecimento de dúvidas administrativas
 - Sugestões de combinações usuais
-- Apoio operacional sem substituir decisões clínicas
 
 ---
 
-## 🛠️ Tecnologias
+## Tecnologias
 
 ### Frontend
-| Tecnologia | Versão | Uso |
-|------------|--------|-----|
-| [Next.js](https://nextjs.org/) | 14.x | Framework React com App Router |
-| [TypeScript](https://www.typescriptlang.org/) | 5.x | Tipagem estática |
-| [Tailwind CSS](https://tailwindcss.com/) | 3.x | Estilização utilitária |
-| [shadcn/ui](https://ui.shadcn.com/) | latest | Componentes acessíveis |
-| [Lucide Icons](https://lucide.dev/) | latest | Iconografia |
 
-### Backend & Database
 | Tecnologia | Uso |
 |------------|-----|
-| [Supabase](https://supabase.com/) | BaaS (Auth, Database, Storage, Edge Functions) |
-| [PostgreSQL](https://www.postgresql.org/) | Banco de dados relacional |
-| [Row Level Security](https://supabase.com/docs/guides/auth/row-level-security) | Isolamento multi-tenant |
+| Next.js 14 | Framework React com App Router |
+| TypeScript | Tipagem estática |
+| Tailwind CSS | Estilização |
+| shadcn/ui | Componentes acessíveis |
+| Lucide Icons | Iconografia |
+
+### Backend e Database
+
+| Tecnologia | Uso |
+|------------|-----|
+| Supabase | Auth, Database, Storage, Edge Functions |
+| PostgreSQL | Banco de dados relacional |
+| Row Level Security | Isolamento multi-tenant |
 
 ### Integrações
+
 | Serviço | Uso |
 |---------|-----|
-| [Google Gemini](https://ai.google.dev/) | Assistente IA |
-| [Vercel](https://vercel.com/) | Deploy e hosting |
-| Certificadora ICP-Brasil | Assinatura digital |
+| Google Gemini | Assistente IA |
+| Vercel | Deploy e hosting |
+| ICP-Brasil | Assinatura digital |
 
 ---
 
-## 🏗️ Arquitetura
+## Arquitetura
 
-\`\`\`
-┌─────────────────────────────────────────────────────────────────┐
-│                         FRONTEND                                │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────────┐ │
-│  │   Next.js   │  │  shadcn/ui  │  │    Tailwind CSS         │ │
-│  │  App Router │  │  Components │  │    Styling              │ │
-│  └──────┬──────┘  └──────┬──────┘  └───────────┬─────────────┘ │
-└─────────┼────────────────┼─────────────────────┼───────────────┘
-          │                │                     │
-          ▼                ▼                     ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                      SUPABASE PLATFORM                          │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────────┐ │
-│  │    Auth     │  │  Database   │  │    Edge Functions       │ │
-│  │   (JWT)     │  │ (PostgreSQL)│  │    (Deno Runtime)       │ │
-│  └──────┬──────┘  └──────┬──────┘  └───────────┬─────────────┘ │
-│         │                │                     │               │
-│         ▼                ▼                     ▼               │
-│  ┌─────────────────────────────────────────────────────────────┐│
-│  │                 Row Level Security (RLS)                    ││
-│  │              Isolamento Multi-Tenant por tenant_id          ││
-│  └─────────────────────────────────────────────────────────────┘│
-└─────────────────────────────────────────────────────────────────┘
-          │
-          ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                    SERVIÇOS EXTERNOS                            │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────────┐ │
-│  │   Gemini    │  │  ICP-Brasil │  │      Vercel             │ │
-│  │  (IA/LLM)   │  │  (Cert Dig) │  │   (Deploy/CDN)          │ │
-│  └─────────────┘  └─────────────┘  └─────────────────────────┘ │
-└─────────────────────────────────────────────────────────────────┘
-\`\`\`
+### Visão Geral
+
+O sistema segue uma arquitetura moderna baseada em serverless com Supabase como backend:
+
+```
+┌────────────────────────────────────────────────────────────┐
+│                        CLIENTE                             │
+│                    (Next.js + React)                       │
+└────────────────────────┬───────────────────────────────────┘
+                         │
+                         ▼
+┌────────────────────────────────────────────────────────────┐
+│                    SUPABASE PLATFORM                       │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────────┐ │
+│  │     Auth     │  │   Database   │  │  Edge Functions  │ │
+│  │    (JWT)     │  │ (PostgreSQL) │  │     (Deno)       │ │
+│  └──────────────┘  └──────────────┘  └──────────────────┘ │
+│                                                            │
+│  ┌────────────────────────────────────────────────────┐   │
+│  │          Row Level Security (RLS)                   │   │
+│  │       Isolamento Multi-Tenant por tenant_id         │   │
+│  └────────────────────────────────────────────────────┘   │
+└────────────────────────┬───────────────────────────────────┘
+                         │
+                         ▼
+┌────────────────────────────────────────────────────────────┐
+│                  SERVIÇOS EXTERNOS                         │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────────┐ │
+│  │    Gemini    │  │  ICP-Brasil  │  │      Vercel      │ │
+│  │     (IA)     │  │ (Cert. Dig.) │  │   (CDN/Deploy)   │ │
+│  └──────────────┘  └──────────────┘  └──────────────────┘ │
+└────────────────────────────────────────────────────────────┘
+```
 
 ### Estrutura de Diretórios
 
-\`\`\`
+```
 atendebem/
 ├── app/                    # Next.js App Router
 │   ├── (auth)/            # Rotas de autenticação
@@ -177,63 +185,45 @@ atendebem/
 ├── public/               # Assets estáticos
 ├── scripts/              # Scripts de manutenção
 └── docs/                 # Documentação
-    └── architecture/     # Diagramas e decisões
-\`\`\`
+```
 
-### Modelo de Dados (Principais Entidades)
+### Modelo de Dados
 
-\`\`\`sql
--- Multi-tenant: todas as tabelas possuem tenant_id
-tenants
-├── id (uuid, PK)
-├── name
-├── cnpj
-└── created_at
+Principais entidades do sistema:
 
-users
-├── id (uuid, PK, FK → auth.users)
-├── tenant_id (FK → tenants)
-├── role (admin | doctor | receptionist)
-└── profile_data (jsonb)
+**tenants** — Clínicas e consultórios
+- id, name, cnpj, created_at
 
-patients
-├── id (uuid, PK)
-├── tenant_id (FK → tenants)
-├── name, cpf, birth_date
-└── contact_info (jsonb)
+**users** — Profissionais de saúde
+- id, tenant_id, role, profile_data
 
-appointments
-├── id (uuid, PK)
-├── tenant_id (FK → tenants)
-├── patient_id (FK → patients)
-├── professional_id (FK → users)
-├── procedures (jsonb[])  -- códigos TUSS
-├── diagnoses (jsonb[])   -- códigos CID
-└── status, scheduled_at
+**patients** — Pacientes
+- id, tenant_id, name, cpf, birth_date
 
-prescriptions
-├── id (uuid, PK)
-├── tenant_id (FK → tenants)
-├── appointment_id (FK → appointments)
-├── medications (jsonb[])
-├── digital_signature
-└── validation_qr_code
-\`\`\`
+**appointments** — Atendimentos
+- id, tenant_id, patient_id, professional_id
+- procedures (códigos TUSS), diagnoses (códigos CID), status
+
+**prescriptions** — Receitas digitais
+- id, tenant_id, appointment_id
+- medications, digital_signature, qr_code
+
+> Todas as tabelas possuem `tenant_id` para isolamento multi-tenant via RLS.
 
 ---
 
-## 🚀 Instalação
+## Instalação
 
 ### Pré-requisitos
 
-- Node.js 18.x ou superior
-- pnpm 8.x ou superior
+- Node.js 18+
+- pnpm 8+
 - Conta no [Supabase](https://supabase.com)
 - Chave API do [Google Gemini](https://ai.google.dev/)
 
 ### Passo a Passo
 
-\`\`\`bash
+```bash
 # 1. Clone o repositório
 git clone https://github.com/KallebyX/AtendeBem.git
 cd AtendeBem
@@ -243,11 +233,11 @@ pnpm install
 
 # 3. Configure as variáveis de ambiente
 cp .env.example .env.local
-\`\`\`
+```
 
 ### Variáveis de Ambiente
 
-\`\`\`env
+```env
 # Supabase
 NEXT_PUBLIC_SUPABASE_URL=https://seu-projeto.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=sua-anon-key
@@ -258,37 +248,34 @@ GEMINI_API_KEY=sua-api-key
 
 # App
 NEXT_PUBLIC_APP_URL=http://localhost:3000
-\`\`\`
+```
 
-### Configuração do Banco de Dados
+### Configuração do Banco
 
-\`\`\`bash
+```bash
 # Conecte ao Supabase CLI
 npx supabase login
-
-# Link com seu projeto
 npx supabase link --project-ref seu-project-ref
 
 # Execute as migrations
 npx supabase db push
-\`\`\`
+```
 
-### Executando Localmente
+### Executando
 
-\`\`\`bash
+```bash
 # Desenvolvimento
 pnpm dev
 
 # Build de produção
-pnpm build
-pnpm start
-\`\`\`
+pnpm build && pnpm start
+```
 
-Acesse [http://localhost:3000](http://localhost:3000)
+Acesse: http://localhost:3000
 
 ---
 
-## 📖 Uso
+## Uso
 
 ### Fluxo Principal
 
@@ -305,59 +292,57 @@ Acesse [http://localhost:3000](http://localhost:3000)
 | `Ctrl + S` | Salvar rascunho |
 | `Ctrl + E` | Exportar PDF |
 | `Ctrl + K` | Busca rápida |
-| `Esc` | Fechar modal |
 
 ---
 
-## 🔌 API
+## API
 
 ### Autenticação
 
-Todas as requisições devem incluir o header de autorização:
+Todas as requisições devem incluir:
 
-\`\`\`http
+```http
 Authorization: Bearer <supabase-jwt-token>
-\`\`\`
+```
 
 ### Endpoints Principais
 
-#### Atendimentos
+**Atendimentos**
 
-\`\`\`http
-GET    /api/appointments         # Lista atendimentos
-POST   /api/appointments         # Cria atendimento
-GET    /api/appointments/:id     # Detalhes do atendimento
-PUT    /api/appointments/:id     # Atualiza atendimento
-DELETE /api/appointments/:id     # Remove atendimento
-\`\`\`
+| Método | Endpoint | Descrição |
+|--------|----------|-----------|
+| GET | /api/appointments | Lista atendimentos |
+| POST | /api/appointments | Cria atendimento |
+| GET | /api/appointments/:id | Detalhes |
+| PUT | /api/appointments/:id | Atualiza |
+| DELETE | /api/appointments/:id | Remove |
 
-#### Pacientes
+**Pacientes**
 
-\`\`\`http
-GET    /api/patients             # Lista pacientes
-POST   /api/patients             # Cadastra paciente
-GET    /api/patients/:id         # Detalhes do paciente
-PUT    /api/patients/:id         # Atualiza paciente
-\`\`\`
+| Método | Endpoint | Descrição |
+|--------|----------|-----------|
+| GET | /api/patients | Lista pacientes |
+| POST | /api/patients | Cadastra |
+| GET | /api/patients/:id | Detalhes |
+| PUT | /api/patients/:id | Atualiza |
 
-#### Códigos TUSS
+**Códigos TUSS**
 
-\`\`\`http
-GET    /api/tuss?q=consulta      # Busca códigos TUSS
-GET    /api/tuss/:code           # Detalhes do código
-\`\`\`
+| Método | Endpoint | Descrição |
+|--------|----------|-----------|
+| GET | /api/tuss?q=consulta | Busca códigos |
+| GET | /api/tuss/:code | Detalhes do código |
 
-#### Exportação
+**Exportação**
 
-\`\`\`http
-POST   /api/export/pdf           # Gera PDF do atendimento
-POST   /api/export/excel         # Gera planilha Excel
-\`\`\`
+| Método | Endpoint | Descrição |
+|--------|----------|-----------|
+| POST | /api/export/pdf | Gera PDF |
+| POST | /api/export/excel | Gera planilha |
 
 ### Exemplo de Requisição
 
-\`\`\`typescript
-// Criar novo atendimento
+```typescript
 const response = await fetch('/api/appointments', {
   method: 'POST',
   headers: {
@@ -371,166 +356,98 @@ const response = await fetch('/api/appointments', {
       { tuss_code: '10101012', description: 'Consulta em consultório' }
     ],
     diagnoses: [
-      { cid_code: 'J06.9', description: 'Infecção aguda das vias aéreas superiores' }
+      { cid_code: 'J06.9', description: 'IVAS não especificada' }
     ]
   })
 });
-\`\`\`
+```
 
 ---
 
-## 🔒 Segurança
+## Segurança
 
 ### Conformidade
 
-- **LGPD** — Estrutura preparada para adequação à Lei Geral de Proteção de Dados
-- **CFM** — Normas do Conselho Federal de Medicina para prontuário eletrônico
-- **ANS** — Padrão TISS para troca de informações em saúde suplementar
-- **ICP-Brasil** — Infraestrutura de Chaves Públicas para assinatura digital
+- **LGPD** — Estrutura preparada para adequação
+- **CFM** — Normas para prontuário eletrônico
+- **ANS** — Padrão TISS para saúde suplementar
+- **ICP-Brasil** — Assinatura digital válida
 
 ### Práticas Implementadas
 
-- ✅ Autenticação JWT com refresh tokens
-- ✅ Row Level Security (RLS) para isolamento multi-tenant
-- ✅ Criptografia de dados sensíveis
-- ✅ Validação de entrada em todas as rotas
-- ✅ Rate limiting nas APIs
-- ✅ Logs de auditoria para ações críticas
+- Autenticação JWT com refresh tokens
+- Row Level Security (RLS) para isolamento multi-tenant
+- Criptografia de dados sensíveis
+- Validação de entrada em todas as rotas
+- Rate limiting nas APIs
+- Logs de auditoria
 
 ### Aviso Importante
 
-> ⚠️ O AtendeBem **não realiza diagnóstico médico** e **não substitui julgamento clínico**. É uma ferramenta administrativa para registro e documentação.
+> O AtendeBem **não realiza diagnóstico médico** e **não substitui julgamento clínico**. É uma ferramenta administrativa para registro e documentação.
 
 ---
 
-## 🧪 Testes
-
-\`\`\`bash
-# Testes unitários
-pnpm test
-
-# Testes com coverage
-pnpm test:coverage
-
-# Testes E2E
-pnpm test:e2e
-
-# Lint
-pnpm lint
-\`\`\`
-
----
-
-## 📊 Métricas de Sucesso
-
-| Métrica | Alvo | Status |
-|---------|------|--------|
-| Economia de tempo | 70% | 🟢 Atingido |
-| Redução de erros | 95% | 🟢 Atingido |
-| Conformidade ANS | 100% | 🟢 Atingido |
-| Uptime | 99.9% | 🟢 Monitorado |
-
----
-
-## 🗺️ Roadmap
+## Roadmap
 
 ### Q1 2025
+
 - [x] MVP com registro de atendimentos
 - [x] Integração TUSS completa
 - [x] Receituário digital básico
 - [ ] Assinatura ICP-Brasil
 
 ### Q2 2025
+
 - [ ] App mobile (React Native)
 - [ ] Integração com WhatsApp Business
 - [ ] Dashboard de analytics
 
 ### Q3 2025
+
 - [ ] Módulo financeiro (faturamento)
 - [ ] Integração com laboratórios
 - [ ] Telemedicina nativa
 
 ### Q4 2025
+
 - [ ] Marketplace de integrações
-- [ ] IA preditiva para diagnósticos
+- [ ] IA preditiva
 - [ ] Expansão para outras especialidades
 
 ---
 
-## 🤝 Contribuição
-
-Este projeto segue padrões profissionais de desenvolvimento. Para contribuir:
-
-1. **Fork** o repositório
-2. Crie uma **branch** para sua feature (`git checkout -b feature/nova-funcionalidade`)
-3. **Commit** suas mudanças (`git commit -m 'feat: adiciona nova funcionalidade'`)
-4. **Push** para a branch (`git push origin feature/nova-funcionalidade`)
-5. Abra um **Pull Request**
-
-### Padrão de Commits
-
-Utilizamos [Conventional Commits](https://www.conventionalcommits.org/):
-
-\`\`\`
-feat: nova funcionalidade
-fix: correção de bug
-docs: atualização de documentação
-style: formatação (sem mudança de código)
-refactor: refatoração
-test: adição de testes
-chore: tarefas de manutenção
-\`\`\`
-
-### Code Review
-
-- Todo PR passa por revisão
-- Testes devem passar
-- Coverage não pode diminuir
-- Documentação deve ser atualizada
-
----
-
-## 📄 Licença
-
-Este projeto está sob **licença proprietária**.
-
-O uso, cópia ou distribuição sem autorização expressa **não é permitido**.
-
-© 2025 [Oryum Tech](https://oryum.tech) — Todos os direitos reservados.
-
----
-
-## 👥 Time
+## Time
 
 <table>
   <tr>
-    <td align="center">
+    <td align="center" width="200">
       <a href="https://github.com/KallebyX">
-        <img src="https://github.com/KallebyX.png" width="100px;" alt="Kalleby Evangelho"/>
+        <img src="https://github.com/KallebyX.png" width="100" alt="Kalleby Evangelho"/>
         <br />
-        <sub><b>Kalleby Evangelho Mota</b></sub>
+        <strong>Kalleby Evangelho Mota</strong>
       </a>
       <br />
       <sub>CEO & Founder</sub>
       <br />
       <sub>Oryum Tech</sub>
     </td>
-    <td align="center">
+    <td align="center" width="200">
       <a href="https://github.com/luizfr-jr">
-        <img src="https://github.com/luizfr-jr.png" width="100px;" alt="Prof. Luiz Fernando"/>
+        <img src="https://github.com/luizfr-jr.png" width="100" alt="Prof. Luiz Fernando"/>
         <br />
-        <sub><b>Prof. Luiz Fernando Rodrigues Jr.</b></sub>
+        <strong>Prof. Luiz Fernando R. Jr.</strong>
       </a>
       <br />
       <sub>Orientador Acadêmico</sub>
       <br />
-      <sub>Universidade Franciscana (UFN)</sub>
+      <sub>Universidade Franciscana</sub>
     </td>
-    <td align="center">
+    <td align="center" width="200">
       <a href="https://www.doctoralia.com.br/carlos-abdala/ortopedista-traumatologista/cacapava-do-sul">
-        <img src="https://ui-avatars.com/api/?name=Carlos+Abdala&background=0D9488&color=fff&size=100&bold=true" width="100px;" alt="Dr. Carlos Abdala"/>
+        <img src="https://ui-avatars.com/api/?name=CA&background=0d9488&color=fff&size=100&bold=true" width="100" alt="Dr. Carlos Abdala"/>
         <br />
-        <sub><b>Dr. Carlos Abdala</b></sub>
+        <strong>Dr. Carlos Abdala</strong>
       </a>
       <br />
       <sub>Consultor Médico</sub>
@@ -540,21 +457,59 @@ O uso, cópia ou distribuição sem autorização expressa **não é permitido**
   </tr>
 </table>
 
-### Papéis e Contribuições
+### Contribuições
 
-| Membro | Papel | Contribuição |
-|--------|-------|--------------|
-| **Kalleby Evangelho** | CEO & Founder | Arquitetura, desenvolvimento full-stack, gestão de produto |
-| **Prof. Luiz Fernando** | Orientador Acadêmico | Orientação técnica, metodologia, validação acadêmica |
-| **Dr. Carlos Abdala** | Consultor Médico | Validação clínica, requisitos médicos, fluxos de atendimento |
+| Membro | Papel | Área |
+|--------|-------|------|
+| Kalleby Evangelho | CEO & Founder | Arquitetura, desenvolvimento full-stack, gestão |
+| Prof. Luiz Fernando | Orientador | Metodologia, orientação técnica, validação |
+| Dr. Carlos Abdala | Consultor | Validação clínica, requisitos médicos |
 
 ---
 
-## 📞 Contato
+## Contribuição
 
-- **Website:** [oryum.tech](https://oryum.tech)
-- **Email:** contato@oryum.tech
-- **LinkedIn:** [Kalleby Evangelho](https://linkedin.com/in/kallebyevangelho)
+### Como Contribuir
+
+1. Fork o repositório
+2. Crie uma branch: `git checkout -b feature/nova-funcionalidade`
+3. Commit suas mudanças: `git commit -m 'feat: adiciona funcionalidade'`
+4. Push: `git push origin feature/nova-funcionalidade`
+5. Abra um Pull Request
+
+### Padrão de Commits
+
+Utilizamos [Conventional Commits](https://www.conventionalcommits.org/):
+
+| Prefixo | Uso |
+|---------|-----|
+| `feat:` | Nova funcionalidade |
+| `fix:` | Correção de bug |
+| `docs:` | Documentação |
+| `style:` | Formatação |
+| `refactor:` | Refatoração |
+| `test:` | Testes |
+| `chore:` | Manutenção |
+
+---
+
+## Licença
+
+Este projeto está sob **licença proprietária**.
+
+O uso, cópia ou distribuição sem autorização expressa **não é permitido**.
+
+© 2025 [Oryum Tech](https://oryum.tech) — Todos os direitos reservados.
+
+---
+
+## Contato
+
+| Canal | Link |
+|-------|------|
+| Website | [oryum.tech](https://oryum.tech) |
+| Email | contato@oryum.tech |
+| LinkedIn | [Kalleby Evangelho](https://linkedin.com/in/kallebyevangelho) |
 
 ---
 
@@ -563,5 +518,5 @@ O uso, cópia ou distribuição sem autorização expressa **não é permitido**
 </p>
 
 <p align="center">
-  Feito com ❤️ em Caçapava do Sul, RS, Brasil 🇧🇷
+  Feito com ❤️ em Caçapava do Sul, RS, Brasil
 </p>
