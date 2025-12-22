@@ -1,0 +1,47 @@
+# https://www.robotstxt.org/robotstxt.html
+# Robots.txt para AtendeBem - Sistema Médico
+
+User-agent: *
+Allow: /
+Allow: /login
+Allow: /cadastro
+
+# Bloquear áreas administrativas e privadas
+Disallow: /dashboard
+Disallow: /api/
+Disallow: /admin/
+Disallow: /crm/
+Disallow: /financeiro/
+Disallow: /configuracoes/
+Disallow: /atendimento/
+Disallow: /pacientes/
+Disallow: /faturamento/
+Disallow: /relatorios/
+Disallow: /assinatura/
+Disallow: /contrato/
+Disallow: /agendamentos/
+Disallow: /agenda/
+
+# Bloquear parâmetros de busca que criam duplicatas
+Disallow: /*?*
+Allow: /?
+
+# Permitir crawlers de busca específicos
+User-agent: Googlebot
+Allow: /
+Crawl-delay: 1
+
+User-agent: Bingbot
+Allow: /
+Crawl-delay: 2
+
+User-agent: Slurp
+Allow: /
+Crawl-delay: 2
+
+# Sitemap
+Sitemap: https://atendebem.com.br/sitemap.xml
+Sitemap: https://www.atendebem.com.br/sitemap.xml
+
+# Host preferencial
+Host: https://atendebem.com.br
