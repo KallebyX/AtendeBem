@@ -15,9 +15,9 @@ O AtendeBem utiliza o Google Gemini para funcionalidades de IA como assistente v
 
 Crie o arquivo `.env.local` na raiz do projeto (se nao existir) e adicione:
 
-```bash
+\`\`\`bash
 GOOGLE_GENERATIVE_AI_API_KEY=sua_chave_aqui
-```
+\`\`\`
 
 **Nota:** O sistema aceita qualquer uma destas variaveis:
 - `GOOGLE_GENERATIVE_AI_API_KEY` (recomendado)
@@ -26,9 +26,9 @@ GOOGLE_GENERATIVE_AI_API_KEY=sua_chave_aqui
 
 ### 3. Reiniciar o servidor
 
-```bash
+\`\`\`bash
 npm run dev
-```
+\`\`\`
 
 ## Funcionalidades que dependem da API
 
