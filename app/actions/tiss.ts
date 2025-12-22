@@ -72,7 +72,7 @@ export async function createTISSGuide(data: {
 
     // Busca dados do paciente
     const patient = await db`
-      SELECT full_name, cpf, birth_date, insurance_provider, insurance_number, gender
+      SELECT full_name, cpf, date_of_birth, insurance_provider, insurance_number, gender
       FROM patients WHERE id = ${data.patient_id} AND user_id = ${user.id}
     `
 
@@ -204,7 +204,7 @@ export async function generateTISSSubmissionXML(data: {
 
     // Busca guias
     const guides = await db`
-      SELECT g.*, p.full_name as patient_name, p.cpf as patient_cpf, p.birth_date
+      SELECT g.*, p.full_name as patient_name, p.cpf as patient_cpf, p.date_of_birth
       FROM tiss_guides g
       JOIN patients p ON g.patient_id = p.id
       WHERE g.id = ANY(${data.guide_ids}) AND g.user_id = ${user.id}
@@ -253,7 +253,7 @@ export async function generateTISSSubmissionXML(data: {
         numero_carteira: g.beneficiary_card_number || '',
         nome: g.beneficiary_name || g.patient_name,
         cpf: g.beneficiary_cpf || g.patient_cpf,
-        data_nascimento: g.birth_date?.toISOString().split('T')[0]
+        data_nascimento: g.date_of_birth?.toISOString().split('T')[0]
       }
 
       const profissional: TISSProfissional = {
