@@ -4,7 +4,9 @@ import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { NavigationHeader } from '@/components/navigation-header'
+import { ReportExportPanel } from '@/components/report-export-panel'
 import {
   getAnalyticsDashboard,
   getSavedReports
@@ -17,7 +19,7 @@ import {
 } from '@/app/actions/reports'
 import {
   BarChart3, TrendingUp, Users, DollarSign, Calendar, Download,
-  FileText, RefreshCw, PieChart, Activity
+  FileText, RefreshCw, PieChart, Activity, FileSpreadsheet
 } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -96,72 +98,91 @@ export default function RelatoriosPage() {
         <div className="mb-8">
           <h1 className="text-3xl font-bold flex items-center gap-3">
             <BarChart3 className="w-8 h-8 text-purple-600" />
-            Analytics e Relatorios
+            Analytics e Relatórios
           </h1>
           <p className="text-muted-foreground mt-2">
-            Visualize dados e exporte relatorios do seu consultorio
+            Visualize dados, métricas e exporte relatórios detalhados em PDF e Excel
           </p>
         </div>
 
-        {/* Period Selector & Export Buttons */}
-        <div className="flex flex-wrap gap-4 mb-6">
-          <select
-            value={period}
-            onChange={(e) => setPeriod(e.target.value)}
-            className="border rounded-md p-2"
-          >
-            <option value="7">Ultimos 7 dias</option>
-            <option value="30">Ultimos 30 dias</option>
-            <option value="90">Ultimos 90 dias</option>
-            <option value="365">Ultimo ano</option>
-          </select>
+        <Tabs defaultValue="export" className="space-y-6">
+          <TabsList className="grid w-full grid-cols-2 lg:w-[400px]">
+            <TabsTrigger value="export" className="flex items-center gap-2">
+              <FileSpreadsheet className="w-4 h-4" />
+              Exportar Relatórios
+            </TabsTrigger>
+            <TabsTrigger value="analytics" className="flex items-center gap-2">
+              <Activity className="w-4 h-4" />
+              Analytics
+            </TabsTrigger>
+          </TabsList>
 
-          <Button variant="outline" onClick={loadData}>
-            <RefreshCw className="w-4 h-4 mr-2" />
-            Atualizar
-          </Button>
+          {/* Aba de Exportação de Relatórios */}
+          <TabsContent value="export" className="space-y-6">
+            <ReportExportPanel />
+          </TabsContent>
 
-          <div className="flex-1" />
+          {/* Aba de Analytics */}
+          <TabsContent value="analytics" className="space-y-6">
+            {/* Period Selector & Export Buttons */}
+            <div className="flex flex-wrap gap-4">
+              <select
+                value={period}
+                onChange={(e) => setPeriod(e.target.value)}
+                className="border rounded-md p-2"
+              >
+                <option value="7">Últimos 7 dias</option>
+                <option value="30">Últimos 30 dias</option>
+                <option value="90">Últimos 90 dias</option>
+                <option value="365">Último ano</option>
+              </select>
 
-          <Button
-            variant="outline"
-            onClick={() => handleExport('patients')}
-            disabled={exporting === 'patients'}
-          >
-            {exporting === 'patients' ? (
-              <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-            ) : (
-              <Users className="w-4 h-4 mr-2" />
-            )}
-            Exportar Pacientes
-          </Button>
+              <Button variant="outline" onClick={loadData}>
+                <RefreshCw className="w-4 h-4 mr-2" />
+                Atualizar
+              </Button>
 
-          <Button
-            variant="outline"
-            onClick={() => handleExport('financial')}
-            disabled={exporting === 'financial'}
-          >
-            {exporting === 'financial' ? (
-              <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-            ) : (
-              <DollarSign className="w-4 h-4 mr-2" />
-            )}
-            Exportar Financeiro
-          </Button>
+              <div className="flex-1" />
 
-          <Button
-            variant="outline"
-            onClick={() => handleExport('appointments')}
-            disabled={exporting === 'appointments'}
-          >
-            {exporting === 'appointments' ? (
-              <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-            ) : (
-              <Calendar className="w-4 h-4 mr-2" />
-            )}
-            Exportar Atendimentos
-          </Button>
-        </div>
+              <Button
+                variant="outline"
+                onClick={() => handleExport('patients')}
+                disabled={exporting === 'patients'}
+              >
+                {exporting === 'patients' ? (
+                  <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <Users className="w-4 h-4 mr-2" />
+                )}
+                CSV Pacientes
+              </Button>
+
+              <Button
+                variant="outline"
+                onClick={() => handleExport('financial')}
+                disabled={exporting === 'financial'}
+              >
+                {exporting === 'financial' ? (
+                  <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <DollarSign className="w-4 h-4 mr-2" />
+                )}
+                CSV Financeiro
+              </Button>
+
+              <Button
+                variant="outline"
+                onClick={() => handleExport('appointments')}
+                disabled={exporting === 'appointments'}
+              >
+                {exporting === 'appointments' ? (
+                  <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <Calendar className="w-4 h-4 mr-2" />
+                )}
+                CSV Atendimentos
+              </Button>
+            </div>
 
         {loading ? (
           <Card>
@@ -408,6 +429,8 @@ export default function RelatoriosPage() {
             </Card>
           </>
         )}
+          </TabsContent>
+        </Tabs>
       </div>
     </div>
   )
