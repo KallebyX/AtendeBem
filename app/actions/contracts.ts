@@ -3,7 +3,7 @@
 import { getDb } from '@/lib/db'
 import { verifyToken } from '@/lib/session'
 import { cookies } from 'next/headers'
-import { setUserContext } from '@/lib/db-init'
+import { setFullContext } from '@/lib/db-init'
 
 export async function createContract(data: {
   patient_id: string
@@ -22,7 +22,7 @@ export async function createContract(data: {
     const user = await verifyToken(token)
     if (!user) return { error: 'Token invalido' }
 
-    await setUserContext(user.id)
+    await setFullContext(user.id)
     const db = await getDb()
 
     // Gerar numero do contrato
@@ -56,7 +56,7 @@ export async function getContracts(filters?: { patient_id?: string; status?: str
     const user = await verifyToken(token)
     if (!user) return { error: 'Token invalido' }
 
-    await setUserContext(user.id)
+    await setFullContext(user.id)
     const db = await getDb()
 
     const result = filters?.patient_id && filters?.status
@@ -111,7 +111,7 @@ export async function getContractById(id: string) {
     const user = await verifyToken(token)
     if (!user) return { error: 'Token invalido' }
 
-    await setUserContext(user.id)
+    await setFullContext(user.id)
     const db = await getDb()
 
     const result = await db`
@@ -138,7 +138,7 @@ export async function getContractTemplates(type?: string) {
     const user = await verifyToken(token)
     if (!user) return { error: 'Token invalido' }
 
-    await setUserContext(user.id)
+    await setFullContext(user.id)
     const db = await getDb()
 
     const result = type
@@ -175,7 +175,7 @@ export async function signContract(data: {
     const user = await verifyToken(token)
     if (!user) return { error: 'Token invalido' }
 
-    await setUserContext(user.id)
+    await setFullContext(user.id)
     const db = await getDb()
 
     const result = await db`
@@ -242,7 +242,7 @@ export async function deleteContract(contract_id: string) {
     const user = await verifyToken(token)
     if (!user) return { error: 'Token invalido' }
 
-    await setUserContext(user.id)
+    await setFullContext(user.id)
     const db = await getDb()
 
     const result = await db`

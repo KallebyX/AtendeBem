@@ -3,7 +3,7 @@
 import { getDb } from '@/lib/db'
 import { verifyToken } from '@/lib/session'
 import { cookies } from 'next/headers'
-import { setUserContext } from '@/lib/db-init'
+import { setFullContext } from '@/lib/db-init'
 
 export async function createClinic(data: {
   name: string
@@ -21,7 +21,7 @@ export async function createClinic(data: {
     const user = await verifyToken(token)
     if (!user) return { error: 'Token invalido' }
 
-    await setUserContext(user.id)
+    await setFullContext(user.id)
     const db = await getDb()
 
     const result = await db`
@@ -55,7 +55,7 @@ export async function getClinics() {
     const user = await verifyToken(token)
     if (!user) return { error: 'Token invalido' }
 
-    await setUserContext(user.id)
+    await setFullContext(user.id)
     const db = await getDb()
 
     const result = await db`
@@ -87,7 +87,7 @@ export async function updateClinic(id: string, data: {
     const user = await verifyToken(token)
     if (!user) return { error: 'Token invalido' }
 
-    await setUserContext(user.id)
+    await setFullContext(user.id)
     const db = await getDb()
 
     const result = await db`
@@ -124,7 +124,7 @@ export async function deleteClinic(id: string) {
     const user = await verifyToken(token)
     if (!user) return { error: 'Token invalido' }
 
-    await setUserContext(user.id)
+    await setFullContext(user.id)
     const db = await getDb()
 
     const result = await db`
@@ -158,7 +158,7 @@ export async function createRoom(data: {
     const user = await verifyToken(token)
     if (!user) return { error: 'Token invalido' }
 
-    await setUserContext(user.id)
+    await setFullContext(user.id)
     const db = await getDb()
 
     const result = await db`
@@ -190,7 +190,7 @@ export async function getRoomsByClinic(clinic_id: string) {
     const user = await verifyToken(token)
     if (!user) return { error: 'Token invalido' }
 
-    await setUserContext(user.id)
+    await setFullContext(user.id)
     const db = await getDb()
 
     const result = await db`
@@ -215,7 +215,7 @@ export async function updateRoomStatus(room_id: string, status: string) {
     const user = await verifyToken(token)
     if (!user) return { error: 'Token invalido' }
 
-    await setUserContext(user.id)
+    await setFullContext(user.id)
     const db = await getDb()
 
     const result = await db`
@@ -252,7 +252,7 @@ export async function createStaffSchedule(data: {
     const user = await verifyToken(token)
     if (!user) return { error: 'Token invalido' }
 
-    await setUserContext(user.id)
+    await setFullContext(user.id)
     const db = await getDb()
 
     const result = await db`
@@ -284,7 +284,7 @@ export async function getStaffSchedules(staff_user_id?: string) {
     const currentUser = await verifyToken(token)
     if (!currentUser) return { error: 'Token invalido' }
 
-    await setUserContext(currentUser.id)
+    await setFullContext(currentUser.id)
     const db = await getDb()
 
     const targetUserId = staff_user_id || currentUser.id

@@ -2,6 +2,7 @@
 
 import { getDb } from "@/lib/db"
 import { getCurrentUser } from "@/lib/session"
+import { setFullContext } from "@/lib/db-init"
 
 export async function createTelemedicineSession(data: {
   patient_id: string
@@ -16,10 +17,14 @@ export async function createTelemedicineSession(data: {
 
     const db = await getDb()
 
+    // Set both user and tenant context for RLS
+    await setFullContext(user.id)
+
     // Gerar room Daily.co
     const roomName = `atendebem-${user.id}-${Date.now()}`
     const roomUrl = `https://atendebem.daily.co/${roomName}`
 
+    // tenant_id será auto-preenchido pelo trigger
     const result = await db`
       INSERT INTO telemedicine_sessions (
         user_id, patient_id, appointment_id,
@@ -148,6 +153,10 @@ export async function joinWaitingRoom(session_id: string, patient_id: string, no
 
     const db = await getDb()
 
+    // Set both user and tenant context for RLS
+    await setFullContext(user.id)
+
+    // tenant_id será auto-preenchido pelo trigger
     const result = await db`
       INSERT INTO telemedicine_waiting_room (
         user_id, session_id, patient_id, pre_consultation_notes
