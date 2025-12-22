@@ -11,11 +11,23 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import {
   getClinics,
   createClinic,
+  updateClinic,
+  deleteClinic,
   createRoom,
   getRoomsByClinic,
   updateRoomStatus,
 } from "@/app/actions/clinic-management"
-import { Building, Plus, DoorOpen, MapPin, Phone, Mail } from "lucide-react"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import { Building, Plus, DoorOpen, MapPin, Phone, Mail, Pencil, Trash2, Loader2 } from "lucide-react"
 import { toast } from "sonner"
 
 export default function ClinicsPage() {
@@ -25,6 +37,23 @@ export default function ClinicsPage() {
   const [loading, setLoading] = useState(true)
   const [isNewClinicOpen, setIsNewClinicOpen] = useState(false)
   const [isNewRoomOpen, setIsNewRoomOpen] = useState(false)
+  const [isEditClinicOpen, setIsEditClinicOpen] = useState(false)
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
+  const [clinicToDelete, setClinicToDelete] = useState<any>(null)
+  const [saving, setSaving] = useState(false)
+
+  const [editClinic, setEditClinic] = useState({
+    id: "",
+    name: "",
+    cnpj: "",
+    phone: "",
+    email: "",
+    address_street: "",
+    address_number: "",
+    address_city: "",
+    address_state: "",
+    address_zipcode: "",
+  })
 
   const [newClinic, setNewClinic] = useState({
     name: "",
@@ -143,6 +172,85 @@ export default function ClinicsPage() {
       }
     } catch (error) {
       toast.error("Erro ao atualizar status")
+    }
+  }
+
+  const handleOpenEditClinic = (clinic: any) => {
+    setEditClinic({
+      id: clinic.id,
+      name: clinic.name || "",
+      cnpj: clinic.cnpj || "",
+      phone: clinic.phone || "",
+      email: clinic.email || "",
+      address_street: clinic.address_street || "",
+      address_number: clinic.address_number || "",
+      address_city: clinic.address_city || "",
+      address_state: clinic.address_state || "",
+      address_zipcode: clinic.address_zipcode || "",
+    })
+    setIsEditClinicOpen(true)
+  }
+
+  const handleUpdateClinic = async () => {
+    setSaving(true)
+    try {
+      const result = await updateClinic(editClinic.id, {
+        name: editClinic.name,
+        cnpj: editClinic.cnpj,
+        phone: editClinic.phone,
+        email: editClinic.email,
+        address: {
+          street: editClinic.address_street,
+          number: editClinic.address_number,
+          city: editClinic.address_city,
+          state: editClinic.address_state,
+        },
+      })
+
+      if (result.success) {
+        toast.success("Clinica atualizada com sucesso")
+        setIsEditClinicOpen(false)
+        loadClinics()
+        if (selectedClinic?.id === editClinic.id) {
+          setSelectedClinic(result.data)
+        }
+      } else {
+        toast.error(result.error || "Erro ao atualizar clinica")
+      }
+    } catch (error) {
+      toast.error("Erro ao atualizar clinica")
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleOpenDeleteDialog = (clinic: any) => {
+    setClinicToDelete(clinic)
+    setIsDeleteDialogOpen(true)
+  }
+
+  const handleDeleteClinic = async () => {
+    if (!clinicToDelete) return
+
+    setSaving(true)
+    try {
+      const result = await deleteClinic(clinicToDelete.id)
+      if (result.success) {
+        toast.success("Clinica excluida com sucesso")
+        setIsDeleteDialogOpen(false)
+        setClinicToDelete(null)
+        if (selectedClinic?.id === clinicToDelete.id) {
+          setSelectedClinic(null)
+          setRooms([])
+        }
+        loadClinics()
+      } else {
+        toast.error(result.error || "Erro ao excluir clinica")
+      }
+    } catch (error) {
+      toast.error("Erro ao excluir clinica")
+    } finally {
+      setSaving(false)
     }
   }
 
@@ -269,21 +377,53 @@ export default function ClinicsPage() {
             </CardHeader>
             <CardContent className="space-y-2">
               {clinics.map((clinic) => (
-                <Button
+                <div
                   key={clinic.id}
-                  variant={selectedClinic?.id === clinic.id ? "secondary" : "outline"}
-                  className="w-full justify-start h-auto py-3"
+                  className={`flex items-center gap-2 p-3 rounded-lg border cursor-pointer transition-colors ${
+                    selectedClinic?.id === clinic.id
+                      ? "bg-secondary border-secondary"
+                      : "hover:bg-muted/50"
+                  }`}
                   onClick={() => handleSelectClinic(clinic)}
                 >
-                  <div className="flex flex-col items-start gap-1">
-                    <span className="font-medium">{clinic.name}</span>
+                  <div className="flex-1 min-w-0">
+                    <span className="font-medium block truncate">{clinic.name}</span>
                     <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                      <MapPin className="h-3 w-3" />
-                      {clinic.address_city}, {clinic.address_state}
+                      <MapPin className="h-3 w-3 flex-shrink-0" />
+                      <span className="truncate">{clinic.address_city}, {clinic.address_state}</span>
                     </div>
                   </div>
-                </Button>
+                  <div className="flex gap-1 flex-shrink-0">
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-8 w-8"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handleOpenEditClinic(clinic)
+                      }}
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-8 w-8 text-destructive hover:text-destructive"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handleOpenDeleteDialog(clinic)
+                      }}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
               ))}
+              {clinics.length === 0 && (
+                <div className="text-center py-8 text-muted-foreground">
+                  Nenhuma clinica cadastrada
+                </div>
+              )}
             </CardContent>
           </Card>
 
@@ -299,23 +439,44 @@ export default function ClinicsPage() {
               <>
                 {/* Informações da Clínica */}
                 <Card>
-                  <CardHeader>
+                  <CardHeader className="flex flex-row items-center justify-between">
                     <CardTitle>{selectedClinic.name}</CardTitle>
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleOpenEditClinic(selectedClinic)}
+                      >
+                        <Pencil className="h-4 w-4 mr-2" />
+                        Editar
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        onClick={() => handleOpenDeleteDialog(selectedClinic)}
+                      >
+                        <Trash2 className="h-4 w-4 mr-2" />
+                        Excluir
+                      </Button>
+                    </div>
                   </CardHeader>
                   <CardContent className="grid md:grid-cols-2 gap-4">
                     <div className="flex items-center gap-2">
                       <Phone className="h-4 w-4 text-muted-foreground" />
-                      <span>{selectedClinic.phone}</span>
+                      <span>{selectedClinic.phone || "Não informado"}</span>
                     </div>
                     <div className="flex items-center gap-2">
                       <Mail className="h-4 w-4 text-muted-foreground" />
-                      <span>{selectedClinic.email}</span>
+                      <span>{selectedClinic.email || "Não informado"}</span>
                     </div>
                     <div className="md:col-span-2 flex items-center gap-2">
                       <MapPin className="h-4 w-4 text-muted-foreground" />
                       <span>
-                        {selectedClinic.address_street}, {selectedClinic.address_number} - {selectedClinic.address_city}
-                        , {selectedClinic.address_state}
+                        {selectedClinic.address_street ? (
+                          `${selectedClinic.address_street}, ${selectedClinic.address_number} - ${selectedClinic.address_city}, ${selectedClinic.address_state}`
+                        ) : (
+                          "Endereço não informado"
+                        )}
                       </span>
                     </div>
                   </CardContent>
@@ -412,6 +573,135 @@ export default function ClinicsPage() {
           </div>
         </div>
       </div>
+
+      {/* Modal: Editar Clínica */}
+      <Dialog open={isEditClinicOpen} onOpenChange={setIsEditClinicOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Editar Clínica</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Nome da Clínica</Label>
+                <Input
+                  value={editClinic.name}
+                  onChange={(e) => setEditClinic({ ...editClinic, name: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>CNPJ</Label>
+                <Input
+                  value={editClinic.cnpj}
+                  onChange={(e) => setEditClinic({ ...editClinic, cnpj: e.target.value })}
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Telefone</Label>
+                <Input
+                  value={editClinic.phone}
+                  onChange={(e) => setEditClinic({ ...editClinic, phone: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>E-mail</Label>
+                <Input
+                  type="email"
+                  value={editClinic.email}
+                  onChange={(e) => setEditClinic({ ...editClinic, email: e.target.value })}
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-4">
+              <div className="col-span-2 space-y-2">
+                <Label>Rua</Label>
+                <Input
+                  value={editClinic.address_street}
+                  onChange={(e) => setEditClinic({ ...editClinic, address_street: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Número</Label>
+                <Input
+                  value={editClinic.address_number}
+                  onChange={(e) => setEditClinic({ ...editClinic, address_number: e.target.value })}
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <Label>Cidade</Label>
+                <Input
+                  value={editClinic.address_city}
+                  onChange={(e) => setEditClinic({ ...editClinic, address_city: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Estado</Label>
+                <Input
+                  value={editClinic.address_state}
+                  onChange={(e) => setEditClinic({ ...editClinic, address_state: e.target.value })}
+                  maxLength={2}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>CEP</Label>
+                <Input
+                  value={editClinic.address_zipcode}
+                  onChange={(e) => setEditClinic({ ...editClinic, address_zipcode: e.target.value })}
+                />
+              </div>
+            </div>
+            <div className="flex gap-2 justify-end">
+              <Button variant="outline" onClick={() => setIsEditClinicOpen(false)}>
+                Cancelar
+              </Button>
+              <Button onClick={handleUpdateClinic} disabled={saving}>
+                {saving ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Salvando...
+                  </>
+                ) : (
+                  "Salvar Alterações"
+                )}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog: Confirmar Exclusão */}
+      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir Clínica</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja excluir a clínica <strong>{clinicToDelete?.name}</strong>?
+              Esta ação não pode ser desfeita e todas as salas associadas também serão desativadas.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={saving}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteClinic}
+              disabled={saving}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {saving ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Excluindo...
+                </>
+              ) : (
+                "Excluir"
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

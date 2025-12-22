@@ -66,7 +66,8 @@ import {
   getTISSGlosas,
   generateTISSSubmissionXML,
   processReturnXML,
-  searchTUSSProcedures
+  searchTUSSProcedures,
+  createTISSGuide
 } from "@/app/actions/tiss"
 
 // Tipos
@@ -171,6 +172,12 @@ export default function TISSPage() {
   const [selectedProcedures, setSelectedProcedures] = useState<TUSSProcedure[]>([])
   const [showTussSearch, setShowTussSearch] = useState(false)
 
+  // Nova Guia - campos do formulário
+  const [guideType, setGuideType] = useState<"consulta" | "sp_sadt" | "internacao" | "honorarios">("consulta")
+  const [operadora, setOperadora] = useState("")
+  const [clinicalIndication, setClinicalIndication] = useState("")
+  const [creatingGuide, setCreatingGuide] = useState(false)
+
   // Refs
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -244,6 +251,52 @@ export default function TISSPage() {
   // Remover procedimento da guia
   const handleRemoveProcedure = (code: string) => {
     setSelectedProcedures(selectedProcedures.filter(p => p.code !== code))
+  }
+
+  // Criar nova guia TISS
+  const handleCreateGuide = async () => {
+    if (!selectedPatient || selectedProcedures.length === 0) return
+
+    setCreatingGuide(true)
+    try {
+      const result = await createTISSGuide({
+        patient_id: selectedPatient.id,
+        guide_type: guideType,
+        operadora_registro_ans: operadora || undefined,
+        clinical_indication: clinicalIndication || undefined,
+        procedures: selectedProcedures.map(proc => ({
+          code: proc.code,
+          description: proc.description,
+          quantity: 1,
+          unit_price: proc.price || 0,
+          table: "22"
+        }))
+      })
+
+      if (result.error) {
+        alert(`Erro ao criar guia: ${result.error}`)
+      } else {
+        // Sucesso - fecha modal e recarrega dados
+        setShowNewGuideModal(false)
+        setSelectedPatient(null)
+        setSelectedProcedures([])
+        setGuideTussSearch("")
+        setGuideTussResults([])
+        setShowTussSearch(false)
+        setGuideType("consulta")
+        setOperadora("")
+        setClinicalIndication("")
+
+        // Recarrega listas
+        loadGuides()
+        loadDashboard()
+      }
+    } catch (error) {
+      console.error("Erro ao criar guia:", error)
+      alert("Erro ao criar guia. Tente novamente.")
+    } finally {
+      setCreatingGuide(false)
+    }
   }
 
   // Gera lote XML
@@ -933,6 +986,9 @@ Glosas: ${result.data.glosas.total} (R$ ${result.data.glosas.valor_total.toFixed
           setGuideTussSearch("")
           setGuideTussResults([])
           setShowTussSearch(false)
+          setGuideType("consulta")
+          setOperadora("")
+          setClinicalIndication("")
         }
       }}>
         <DialogContent className="max-w-2xl">
@@ -946,7 +1002,7 @@ Glosas: ${result.data.glosas.total} (R$ ${result.data.glosas.valor_total.toFixed
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Tipo de Guia</Label>
-                <Select defaultValue="consulta">
+                <Select value={guideType} onValueChange={(value: "consulta" | "sp_sadt" | "internacao" | "honorarios") => setGuideType(value)}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
@@ -960,7 +1016,7 @@ Glosas: ${result.data.glosas.total} (R$ ${result.data.glosas.valor_total.toFixed
               </div>
               <div className="space-y-2">
                 <Label>Operadora</Label>
-                <Select>
+                <Select value={operadora} onValueChange={setOperadora}>
                   <SelectTrigger>
                     <SelectValue placeholder="Selecione..." />
                   </SelectTrigger>
@@ -980,7 +1036,11 @@ Glosas: ${result.data.glosas.total} (R$ ${result.data.glosas.valor_total.toFixed
             />
             <div className="space-y-2">
               <Label>Indicacao Clinica</Label>
-              <Textarea placeholder="Descreva a indicacao clinica..." />
+              <Textarea
+                placeholder="Descreva a indicacao clinica..."
+                value={clinicalIndication}
+                onChange={(e) => setClinicalIndication(e.target.value)}
+              />
             </div>
             <div className="space-y-2">
               <Label>Procedimentos TUSS</Label>
@@ -1063,11 +1123,24 @@ Glosas: ${result.data.glosas.total} (R$ ${result.data.glosas.valor_total.toFixed
               setGuideTussSearch("")
               setGuideTussResults([])
               setShowTussSearch(false)
+              setGuideType("consulta")
+              setOperadora("")
+              setClinicalIndication("")
             }}>
               Cancelar
             </Button>
-            <Button disabled={!selectedPatient || selectedProcedures.length === 0}>
-              Criar Guia
+            <Button
+              disabled={!selectedPatient || selectedProcedures.length === 0 || creatingGuide}
+              onClick={handleCreateGuide}
+            >
+              {creatingGuide ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Criando...
+                </>
+              ) : (
+                "Criar Guia"
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>

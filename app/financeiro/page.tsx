@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { getDashboardMetrics, getFinancialTransactions, updateTransactionStatus, getRevenueCategories, getPaymentMethods, createFinancialTransaction } from '@/app/actions/financial'
+import { INCOME_CATEGORIES, EXPENSE_CATEGORIES, PAYMENT_METHODS, INCOME_GROUPS, EXPENSE_GROUPS } from '@/lib/financial-categories'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -9,11 +10,11 @@ import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Badge } from '@/components/ui/badge'
-import { 
-  DollarSign, 
-  TrendingUp, 
-  TrendingDown, 
-  Calendar, 
+import {
+  DollarSign,
+  TrendingUp,
+  TrendingDown,
+  Calendar,
   Download,
   Plus,
   Filter,
@@ -65,9 +66,28 @@ export default function FinancialDashboard() {
 
     if (metricsRes.success) setMetrics(metricsRes.data)
     if (transactionsRes.success) setTransactions(transactionsRes.data)
-    if (categoriesRes.success) setCategories(categoriesRes.data)
-    if (methodsRes.success) setPaymentMethods(methodsRes.data)
-    
+
+    // Usa categorias do banco ou fallback para categorias locais
+    if (categoriesRes.success && categoriesRes.data && categoriesRes.data.length > 0) {
+      setCategories(categoriesRes.data)
+    } else {
+      // Fallback: usa categorias locais pré-definidas
+      const localCategories = [
+        ...INCOME_CATEGORIES.map(c => ({ ...c, id: c.name })),
+        ...EXPENSE_CATEGORIES.map(c => ({ ...c, id: c.name }))
+      ]
+      setCategories(localCategories)
+    }
+
+    // Usa métodos de pagamento do banco ou fallback para locais
+    if (methodsRes.success && methodsRes.data && methodsRes.data.length > 0) {
+      setPaymentMethods(methodsRes.data)
+    } else {
+      // Fallback: usa métodos locais pré-definidos
+      const localMethods = PAYMENT_METHODS.map(m => ({ ...m, id: m.name }))
+      setPaymentMethods(localMethods)
+    }
+
     setLoading(false)
   }
 
@@ -369,11 +389,26 @@ export default function FinancialDashboard() {
                     onChange={(e) => setNewTransaction({ ...newTransaction, category: e.target.value })}
                   >
                     <option value="">Selecione...</option>
-                    {categories
-                      .filter(c => c.type === newTransaction.type)
-                      .map(cat => (
-                        <option key={cat.id} value={cat.name}>{cat.name}</option>
-                      ))}
+                    {(() => {
+                      const filteredCategories = categories.filter(c => c.type === newTransaction.type)
+                      const groups = [...new Set(filteredCategories.map(c => c.group).filter(Boolean))]
+
+                      if (groups.length > 0) {
+                        return groups.map(group => (
+                          <optgroup key={group} label={group as string}>
+                            {filteredCategories
+                              .filter(c => c.group === group)
+                              .map(cat => (
+                                <option key={cat.id || cat.name} value={cat.name}>{cat.name}</option>
+                              ))}
+                          </optgroup>
+                        ))
+                      }
+                      // Fallback se não houver grupos
+                      return filteredCategories.map(cat => (
+                        <option key={cat.id || cat.name} value={cat.name}>{cat.name}</option>
+                      ))
+                    })()}
                   </select>
                 </div>
               </div>
