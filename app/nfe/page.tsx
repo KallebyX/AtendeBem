@@ -182,7 +182,7 @@ export default function NFePage() {
       getNFeServices(),
     ])
 
-    if (patientsResult.success) setPatients(patientsResult.data || [])
+    if (patientsResult.success) setPatients(patientsResult.patients || [])
     if (servicesResult.success) setServices(servicesResult.data || [])
 
     setSelectedPatient("")
