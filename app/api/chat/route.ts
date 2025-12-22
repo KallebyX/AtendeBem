@@ -35,11 +35,14 @@ export async function POST(req: Request) {
 
     console.log("[v0] [AI CHAT] Request received with", messages?.length, "messages")
 
-    // Get API key from environment
-    const apiKey = process.env.GOOGLE_AI_API_KEY || process.env.GEMINI_API_KEY
+    // Get API key from environment (supports multiple variable names)
+    const apiKey =
+      process.env.GOOGLE_GENERATIVE_AI_API_KEY ||
+      process.env.GOOGLE_AI_API_KEY ||
+      process.env.GEMINI_API_KEY
 
     if (!apiKey) {
-      console.log("[v0] [AI CHAT] No API key configured, using fallback response")
+      console.log("[v0] [AI CHAT] No API key configured. Set GOOGLE_GENERATIVE_AI_API_KEY, GOOGLE_AI_API_KEY, or GEMINI_API_KEY in .env.local")
       const lastMessage = messages[messages.length - 1]?.content || ""
       const fallbackResponse = generateFallbackResponse(lastMessage)
 
@@ -83,16 +86,45 @@ export async function POST(req: Request) {
       const errorData = await response.text()
       console.error("[v0] [AI CHAT] Gemini API error:", response.status, errorData)
 
-      if (response.status === 401) {
+      // Handle specific error codes with helpful messages
+      if (response.status === 401 || response.status === 403) {
+        const lastMessage = messages[messages.length - 1]?.content || ""
+        const fallbackResponse = generateFallbackResponse(lastMessage)
+
         return NextResponse.json({
           id: Date.now().toString(),
           role: "assistant",
           content:
-            "⚠️ A chave de API do Google AI esta invalida ou expirada. Por favor, configure uma chave valida nas variaveis de ambiente (GOOGLE_AI_API_KEY ou GEMINI_API_KEY).\n\nEnquanto isso, posso fornecer respostas basicas sobre o sistema AtendeBem.",
+            `**API de IA nao configurada corretamente**
+
+A chave de API do Google Gemini esta invalida, expirada ou bloqueada.
+
+**Como resolver:**
+1. Acesse https://aistudio.google.com/apikey
+2. Gere uma nova chave de API
+3. Adicione ao arquivo \`.env.local\`:
+   \`\`\`
+   GOOGLE_GENERATIVE_AI_API_KEY=sua_chave_aqui
+   \`\`\`
+4. Reinicie o servidor com \`npm run dev\`
+
+---
+
+**Modo offline ativado:**
+${fallbackResponse}`,
         })
       }
 
-      throw new Error(`API request failed: ${response.status}`)
+      if (response.status === 429) {
+        return NextResponse.json({
+          id: Date.now().toString(),
+          role: "assistant",
+          content:
+            "Limite de requisicoes da API excedido. Por favor, aguarde alguns minutos e tente novamente.",
+        })
+      }
+
+      throw new Error(`API request failed: ${response.status} - ${errorData}`)
     }
 
     const data = await response.json()
