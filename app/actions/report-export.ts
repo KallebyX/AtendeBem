@@ -9,8 +9,19 @@ import {
   generateAppointmentsExcel,
   generateInventoryExcel,
   generateIntegratedExcel,
+  generateProceduresExcel,
+  generatePrescriptionsExcel,
+  generateTISSExcel,
+  generateExamsExcel,
   generateFinancialPDFHTML,
   generateIntegratedPDFHTML,
+  generatePatientsPDFHTML,
+  generateAppointmentsPDFHTML,
+  generateInventoryPDFHTML,
+  generateProceduresPDFHTML,
+  generatePrescriptionsPDFHTML,
+  generateTISSPDFHTML,
+  generateExamsPDFHTML,
   exportWorkbookToBase64,
   formatDate,
   formatCurrency,
@@ -19,6 +30,10 @@ import {
   type AppointmentReportData,
   type InventoryReportData,
   type IntegratedReportData,
+  type ProceduresReportData,
+  type PrescriptionsReportData,
+  type TISSReportData,
+  type ExamsReportData,
 } from "@/lib/report-export"
 
 // ============================================================================
@@ -964,6 +979,747 @@ export async function exportIntegratedToPDF(startDate?: string, endDate?: string
     success: true,
     data: html,
     filename: `relatorio-gerencial-${Date.now()}.html`,
+    contentType: 'text/html'
+  }
+}
+
+// ============================================================================
+// NOVOS RELATÓRIOS - PDF PARA PACIENTES, AGENDAMENTOS E ESTOQUE
+// ============================================================================
+
+export async function exportPatientsToPDF() {
+  const result = await generatePatientsReportData()
+  if (!result.success || !result.data) {
+    return { success: false, error: result.error }
+  }
+
+  const html = generatePatientsPDFHTML(result.data)
+
+  return {
+    success: true,
+    data: html,
+    filename: `relatorio-pacientes-${Date.now()}.html`,
+    contentType: 'text/html'
+  }
+}
+
+export async function exportAppointmentsToPDF(startDate?: string, endDate?: string) {
+  const result = await generateAppointmentsReportData(startDate, endDate)
+  if (!result.success || !result.data) {
+    return { success: false, error: result.error }
+  }
+
+  const html = generateAppointmentsPDFHTML(result.data)
+
+  return {
+    success: true,
+    data: html,
+    filename: `relatorio-agendamentos-${Date.now()}.html`,
+    contentType: 'text/html'
+  }
+}
+
+export async function exportInventoryToPDF() {
+  const result = await generateInventoryReportData()
+  if (!result.success || !result.data) {
+    return { success: false, error: result.error }
+  }
+
+  const html = generateInventoryPDFHTML(result.data)
+
+  return {
+    success: true,
+    data: html,
+    filename: `relatorio-estoque-${Date.now()}.html`,
+    contentType: 'text/html'
+  }
+}
+
+// ============================================================================
+// RELATÓRIO DE PROCEDIMENTOS COMPLETO
+// ============================================================================
+
+export async function generateProceduresReportData(
+  startDate?: string,
+  endDate?: string
+): Promise<{ success: boolean; error?: string; data?: ProceduresReportData }> {
+  try {
+    const cookieStore = await cookies()
+    const token = cookieStore.get("session")?.value
+
+    if (!token) return { success: false, error: "Não autenticado" }
+
+    const user = await verifyToken(token)
+    if (!user) return { success: false, error: "Sessão inválida" }
+
+    const db = await getDb()
+    const userId = user.id
+
+    const start = startDate || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+    const end = endDate || new Date().toISOString().split('T')[0]
+
+    // 1. Buscar procedimentos
+    const proceduresResult = await db`
+      SELECT
+        pr.id,
+        pr.created_at,
+        pr.procedure_type,
+        pr.tuss_code,
+        pr.tuss_name,
+        pr.duration_minutes,
+        pr.outcome,
+        p.full_name as patient_name,
+        u.name as professional_name,
+        COALESCE(pay.amount, 0) as valor
+      FROM procedures pr
+      LEFT JOIN appointments a ON pr.appointment_id = a.id
+      LEFT JOIN patients p ON a.patient_id = p.id
+      LEFT JOIN users u ON a.user_id = u.id
+      LEFT JOIN payments pay ON pay.appointment_id = a.id
+      WHERE pr.user_id = ${userId}
+        AND pr.created_at >= ${start}
+        AND pr.created_at <= ${end}
+      ORDER BY pr.created_at DESC
+    `.catch(() => [])
+
+    // 2. Calcular métricas
+    const total = proceduresResult.length
+    const totalReceita = proceduresResult.reduce((acc: number, p: any) => acc + Number(p.valor || 0), 0)
+    const ticketMedio = total > 0 ? totalReceita / total : 0
+
+    // Calcular dias no período
+    const startD = new Date(start)
+    const endD = new Date(end)
+    const dias = Math.ceil((endD.getTime() - startD.getTime()) / (1000 * 60 * 60 * 24)) || 1
+    const procedimentosPorDia = total / dias
+
+    // 3. Por tipo
+    const tipoCount: Record<string, { quantidade: number; receita: number }> = {}
+    proceduresResult.forEach((p: any) => {
+      const tipo = p.procedure_type || p.tuss_name || 'Outros'
+      if (!tipoCount[tipo]) tipoCount[tipo] = { quantidade: 0, receita: 0 }
+      tipoCount[tipo].quantidade++
+      tipoCount[tipo].receita += Number(p.valor || 0)
+    })
+
+    // 4. Por profissional
+    const profCount: Record<string, { quantidade: number; receita: number }> = {}
+    proceduresResult.forEach((p: any) => {
+      const prof = p.professional_name || 'Não informado'
+      if (!profCount[prof]) profCount[prof] = { quantidade: 0, receita: 0 }
+      profCount[prof].quantidade++
+      profCount[prof].receita += Number(p.valor || 0)
+    })
+
+    // 5. Evolução mensal
+    const mesCount: Record<string, { quantidade: number; receita: number }> = {}
+    proceduresResult.forEach((p: any) => {
+      const mes = new Date(p.created_at).toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' })
+      if (!mesCount[mes]) mesCount[mes] = { quantidade: 0, receita: 0 }
+      mesCount[mes].quantidade++
+      mesCount[mes].receita += Number(p.valor || 0)
+    })
+
+    const reportData: ProceduresReportData = {
+      title: "Relatório de Procedimentos",
+      period: `${formatDate(start)} a ${formatDate(end)}`,
+      generatedAt: new Date().toLocaleString('pt-BR'),
+      generatedBy: user.name || user.email,
+      summary: {
+        totalProcedimentos: total,
+        totalReceita,
+        ticketMedio,
+        procedimentosPorDia
+      },
+      procedimentos: proceduresResult.map((p: any) => ({
+        data: formatDate(p.created_at),
+        paciente: p.patient_name || 'Não informado',
+        procedimento: p.tuss_name || p.procedure_type || 'Não informado',
+        codigoTUSS: p.tuss_code || '-',
+        profissional: p.professional_name || 'Não informado',
+        duracao: p.duration_minutes ? `${p.duration_minutes} min` : '-',
+        valor: Number(p.valor || 0),
+        status: p.outcome === 'completed' ? 'Realizado' : 'Pendente'
+      })),
+      porTipo: Object.entries(tipoCount).map(([tipo, data]) => ({
+        tipo,
+        quantidade: data.quantidade,
+        receita: data.receita,
+        percentual: total > 0 ? (data.quantidade / total) * 100 : 0
+      })).sort((a, b) => b.quantidade - a.quantidade),
+      porProfissional: Object.entries(profCount).map(([profissional, data]) => ({
+        profissional,
+        quantidade: data.quantidade,
+        receita: data.receita
+      })).sort((a, b) => b.quantidade - a.quantidade),
+      evolucaoMensal: Object.entries(mesCount).map(([mes, data]) => ({
+        mes,
+        quantidade: data.quantidade,
+        receita: data.receita
+      }))
+    }
+
+    return { success: true, data: reportData }
+  } catch (error: any) {
+    console.error("Erro ao gerar relatório de procedimentos:", error)
+    return { success: false, error: error.message }
+  }
+}
+
+export async function exportProceduresToExcel(startDate?: string, endDate?: string) {
+  const result = await generateProceduresReportData(startDate, endDate)
+  if (!result.success || !result.data) {
+    return { success: false, error: result.error }
+  }
+
+  const workbook = generateProceduresExcel(result.data)
+  const base64 = exportWorkbookToBase64(workbook)
+
+  return {
+    success: true,
+    data: base64,
+    filename: `relatorio-procedimentos-${Date.now()}.xlsx`,
+    contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+  }
+}
+
+export async function exportProceduresToPDF(startDate?: string, endDate?: string) {
+  const result = await generateProceduresReportData(startDate, endDate)
+  if (!result.success || !result.data) {
+    return { success: false, error: result.error }
+  }
+
+  const html = generateProceduresPDFHTML(result.data)
+
+  return {
+    success: true,
+    data: html,
+    filename: `relatorio-procedimentos-${Date.now()}.html`,
+    contentType: 'text/html'
+  }
+}
+
+// ============================================================================
+// RELATÓRIO DE PRESCRIÇÕES COMPLETO
+// ============================================================================
+
+export async function generatePrescriptionsReportData(
+  startDate?: string,
+  endDate?: string
+): Promise<{ success: boolean; error?: string; data?: PrescriptionsReportData }> {
+  try {
+    const cookieStore = await cookies()
+    const token = cookieStore.get("session")?.value
+
+    if (!token) return { success: false, error: "Não autenticado" }
+
+    const user = await verifyToken(token)
+    if (!user) return { success: false, error: "Sessão inválida" }
+
+    const db = await getDb()
+    const userId = user.id
+
+    const start = startDate || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+    const end = endDate || new Date().toISOString().split('T')[0]
+
+    // 1. Buscar prescrições digitais
+    const prescriptionsResult = await db`
+      SELECT
+        dp.id,
+        dp.created_at,
+        dp.prescription_number,
+        dp.prescription_type,
+        dp.medications,
+        dp.status,
+        dp.signature_status,
+        p.full_name as patient_name,
+        u.name as professional_name
+      FROM digital_prescriptions dp
+      LEFT JOIN patients p ON dp.patient_id = p.id
+      LEFT JOIN users u ON dp.user_id = u.id
+      WHERE dp.user_id = ${userId}
+        AND dp.created_at >= ${start}
+        AND dp.created_at <= ${end}
+      ORDER BY dp.created_at DESC
+    `.catch(() => [])
+
+    // 2. Buscar prescrições legadas também
+    const legacyResult = await db`
+      SELECT
+        mp.id,
+        mp.created_at,
+        mp.cid10_code,
+        mp.status,
+        mp.medications,
+        p.full_name as patient_name,
+        u.name as professional_name
+      FROM medical_prescriptions mp
+      LEFT JOIN patients p ON mp.patient_id = p.id
+      LEFT JOIN users u ON mp.user_id = u.id
+      WHERE mp.user_id = ${userId}
+        AND mp.created_at >= ${start}
+        AND mp.created_at <= ${end}
+      ORDER BY mp.created_at DESC
+    `.catch(() => [])
+
+    // Combinar resultados
+    const allPrescriptions = [
+      ...prescriptionsResult.map((p: any) => ({
+        ...p,
+        isDigital: true
+      })),
+      ...legacyResult.map((p: any) => ({
+        ...p,
+        isDigital: false,
+        prescription_number: `MP-${p.id.slice(0, 8)}`,
+        prescription_type: 'Simples',
+        signature_status: 'pending'
+      }))
+    ]
+
+    // 3. Calcular métricas
+    const total = allPrescriptions.length
+    const digitais = prescriptionsResult.length
+    const assinadas = allPrescriptions.filter((p: any) => p.signature_status === 'signed').length
+    const pendentes = allPrescriptions.filter((p: any) => p.status === 'pending' || p.signature_status === 'pending').length
+
+    // 4. Por tipo
+    const tipoCount: Record<string, number> = {}
+    allPrescriptions.forEach((p: any) => {
+      const tipo = p.prescription_type || 'Simples'
+      tipoCount[tipo] = (tipoCount[tipo] || 0) + 1
+    })
+
+    // 5. Medicamentos mais prescritos
+    const medCount: Record<string, number> = {}
+    allPrescriptions.forEach((p: any) => {
+      if (p.medications) {
+        const meds = Array.isArray(p.medications) ? p.medications :
+          (typeof p.medications === 'string' ? JSON.parse(p.medications) : [p.medications])
+        meds.forEach((m: any) => {
+          const nome = typeof m === 'string' ? m : (m.name || m.medication_name || 'Não identificado')
+          medCount[nome] = (medCount[nome] || 0) + 1
+        })
+      }
+    })
+
+    const reportData: PrescriptionsReportData = {
+      title: "Relatório de Prescrições",
+      period: `${formatDate(start)} a ${formatDate(end)}`,
+      generatedAt: new Date().toLocaleString('pt-BR'),
+      generatedBy: user.name || user.email,
+      summary: {
+        totalReceitas: total,
+        receitasDigitais: digitais,
+        receitasAssinadas: assinadas,
+        receitasPendentes: pendentes
+      },
+      receitas: allPrescriptions.map((p: any) => {
+        let meds = '-'
+        if (p.medications) {
+          const medsArray = Array.isArray(p.medications) ? p.medications :
+            (typeof p.medications === 'string' ? JSON.parse(p.medications) : [p.medications])
+          meds = medsArray.map((m: any) => typeof m === 'string' ? m : (m.name || m.medication_name || '')).join(', ')
+        }
+        return {
+          data: formatDate(p.created_at),
+          numero: p.prescription_number || '-',
+          paciente: p.patient_name || 'Não informado',
+          medicamentos: meds.substring(0, 50) + (meds.length > 50 ? '...' : ''),
+          profissional: p.professional_name || 'Não informado',
+          tipo: p.prescription_type || 'Simples',
+          status: p.status === 'issued' ? 'Emitida' : 'Pendente',
+          assinatura: p.signature_status === 'signed' ? 'Assinada' : 'Pendente'
+        }
+      }),
+      porTipo: Object.entries(tipoCount).map(([tipo, quantidade]) => ({
+        tipo,
+        quantidade,
+        percentual: total > 0 ? (quantidade / total) * 100 : 0
+      })).sort((a, b) => b.quantidade - a.quantidade),
+      medicamentosMaisPrescritos: Object.entries(medCount)
+        .map(([medicamento, quantidade]) => ({
+          medicamento,
+          quantidade,
+          percentual: total > 0 ? (quantidade / total) * 100 : 0
+        }))
+        .sort((a, b) => b.quantidade - a.quantidade)
+        .slice(0, 20)
+    }
+
+    return { success: true, data: reportData }
+  } catch (error: any) {
+    console.error("Erro ao gerar relatório de prescrições:", error)
+    return { success: false, error: error.message }
+  }
+}
+
+export async function exportPrescriptionsToExcel(startDate?: string, endDate?: string) {
+  const result = await generatePrescriptionsReportData(startDate, endDate)
+  if (!result.success || !result.data) {
+    return { success: false, error: result.error }
+  }
+
+  const workbook = generatePrescriptionsExcel(result.data)
+  const base64 = exportWorkbookToBase64(workbook)
+
+  return {
+    success: true,
+    data: base64,
+    filename: `relatorio-prescricoes-${Date.now()}.xlsx`,
+    contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+  }
+}
+
+export async function exportPrescriptionsToPDF(startDate?: string, endDate?: string) {
+  const result = await generatePrescriptionsReportData(startDate, endDate)
+  if (!result.success || !result.data) {
+    return { success: false, error: result.error }
+  }
+
+  const html = generatePrescriptionsPDFHTML(result.data)
+
+  return {
+    success: true,
+    data: html,
+    filename: `relatorio-prescricoes-${Date.now()}.html`,
+    contentType: 'text/html'
+  }
+}
+
+// ============================================================================
+// RELATÓRIO DE GUIAS TISS COMPLETO
+// ============================================================================
+
+export async function generateTISSReportData(
+  startDate?: string,
+  endDate?: string
+): Promise<{ success: boolean; error?: string; data?: TISSReportData }> {
+  try {
+    const cookieStore = await cookies()
+    const token = cookieStore.get("session")?.value
+
+    if (!token) return { success: false, error: "Não autenticado" }
+
+    const user = await verifyToken(token)
+    if (!user) return { success: false, error: "Sessão inválida" }
+
+    const db = await getDb()
+    const userId = user.id
+
+    const start = startDate || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+    const end = endDate || new Date().toISOString().split('T')[0]
+
+    // 1. Buscar guias TISS
+    const guiasResult = await db`
+      SELECT
+        tg.id,
+        tg.guide_number,
+        tg.created_at,
+        tg.guide_type,
+        tg.guide_data,
+        tg.status,
+        tg.total_amount,
+        p.full_name as patient_name,
+        p.health_insurance as operadora
+      FROM tiss_guides tg
+      LEFT JOIN patients p ON tg.patient_id = p.id
+      WHERE tg.user_id = ${userId}
+        AND tg.created_at >= ${start}
+        AND tg.created_at <= ${end}
+      ORDER BY tg.created_at DESC
+    `.catch(() => [])
+
+    // 2. Calcular métricas
+    const total = guiasResult.length
+    const autorizadas = guiasResult.filter((g: any) => g.status === 'authorized' || g.status === 'approved').length
+    const pendentes = guiasResult.filter((g: any) => g.status === 'pending' || g.status === 'submitted').length
+    const negadas = guiasResult.filter((g: any) => g.status === 'denied' || g.status === 'rejected').length
+    const valorTotal = guiasResult.reduce((acc: number, g: any) => acc + Number(g.total_amount || 0), 0)
+
+    // 3. Por operadora
+    const operadoraCount: Record<string, { quantidade: number; valorTotal: number }> = {}
+    guiasResult.forEach((g: any) => {
+      const op = g.operadora || 'Não informada'
+      if (!operadoraCount[op]) operadoraCount[op] = { quantidade: 0, valorTotal: 0 }
+      operadoraCount[op].quantidade++
+      operadoraCount[op].valorTotal += Number(g.total_amount || 0)
+    })
+
+    // 4. Por tipo
+    const tipoCount: Record<string, number> = {}
+    guiasResult.forEach((g: any) => {
+      const tipo = g.guide_type || 'Consulta'
+      tipoCount[tipo] = (tipoCount[tipo] || 0) + 1
+    })
+
+    // 5. Por status
+    const statusMap: Record<string, string> = {
+      'pending': 'Pendente',
+      'submitted': 'Enviada',
+      'authorized': 'Autorizada',
+      'approved': 'Aprovada',
+      'denied': 'Negada',
+      'rejected': 'Rejeitada',
+      'cancelled': 'Cancelada'
+    }
+    const statusCount: Record<string, number> = {}
+    guiasResult.forEach((g: any) => {
+      const status = statusMap[g.status] || g.status || 'Pendente'
+      statusCount[status] = (statusCount[status] || 0) + 1
+    })
+
+    const reportData: TISSReportData = {
+      title: "Relatório de Guias TISS",
+      period: `${formatDate(start)} a ${formatDate(end)}`,
+      generatedAt: new Date().toLocaleString('pt-BR'),
+      generatedBy: user.name || user.email,
+      summary: {
+        totalGuias: total,
+        guiasAutorizadas: autorizadas,
+        guiasPendentes: pendentes,
+        guiasNegadas: negadas,
+        valorTotal
+      },
+      guias: guiasResult.map((g: any) => {
+        let procedimentos = '-'
+        if (g.guide_data) {
+          const data = typeof g.guide_data === 'string' ? JSON.parse(g.guide_data) : g.guide_data
+          if (data.procedures && Array.isArray(data.procedures)) {
+            procedimentos = data.procedures.map((p: any) => p.name || p.description || '').join(', ')
+          }
+        }
+        return {
+          numero: g.guide_number || g.id.slice(0, 8),
+          data: formatDate(g.created_at),
+          paciente: g.patient_name || 'Não informado',
+          operadora: g.operadora || 'Não informada',
+          tipo: g.guide_type || 'Consulta',
+          procedimentos: procedimentos.substring(0, 40) + (procedimentos.length > 40 ? '...' : ''),
+          valorTotal: Number(g.total_amount || 0),
+          status: statusMap[g.status] || g.status || 'Pendente'
+        }
+      }),
+      porOperadora: Object.entries(operadoraCount).map(([operadora, data]) => ({
+        operadora,
+        quantidade: data.quantidade,
+        valorTotal: data.valorTotal,
+        percentual: total > 0 ? (data.quantidade / total) * 100 : 0
+      })).sort((a, b) => b.quantidade - a.quantidade),
+      porTipo: Object.entries(tipoCount).map(([tipo, quantidade]) => ({
+        tipo,
+        quantidade,
+        percentual: total > 0 ? (quantidade / total) * 100 : 0
+      })).sort((a, b) => b.quantidade - a.quantidade),
+      porStatus: Object.entries(statusCount).map(([status, quantidade]) => ({
+        status,
+        quantidade,
+        percentual: total > 0 ? (quantidade / total) * 100 : 0
+      })).sort((a, b) => b.quantidade - a.quantidade)
+    }
+
+    return { success: true, data: reportData }
+  } catch (error: any) {
+    console.error("Erro ao gerar relatório TISS:", error)
+    return { success: false, error: error.message }
+  }
+}
+
+export async function exportTISSToExcel(startDate?: string, endDate?: string) {
+  const result = await generateTISSReportData(startDate, endDate)
+  if (!result.success || !result.data) {
+    return { success: false, error: result.error }
+  }
+
+  const workbook = generateTISSExcel(result.data)
+  const base64 = exportWorkbookToBase64(workbook)
+
+  return {
+    success: true,
+    data: base64,
+    filename: `relatorio-tiss-${Date.now()}.xlsx`,
+    contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+  }
+}
+
+export async function exportTISSToPDF(startDate?: string, endDate?: string) {
+  const result = await generateTISSReportData(startDate, endDate)
+  if (!result.success || !result.data) {
+    return { success: false, error: result.error }
+  }
+
+  const html = generateTISSPDFHTML(result.data)
+
+  return {
+    success: true,
+    data: html,
+    filename: `relatorio-tiss-${Date.now()}.html`,
+    contentType: 'text/html'
+  }
+}
+
+// ============================================================================
+// RELATÓRIO DE EXAMES COMPLETO
+// ============================================================================
+
+export async function generateExamsReportData(
+  startDate?: string,
+  endDate?: string
+): Promise<{ success: boolean; error?: string; data?: ExamsReportData }> {
+  try {
+    const cookieStore = await cookies()
+    const token = cookieStore.get("session")?.value
+
+    if (!token) return { success: false, error: "Não autenticado" }
+
+    const user = await verifyToken(token)
+    if (!user) return { success: false, error: "Sessão inválida" }
+
+    const db = await getDb()
+    const userId = user.id
+
+    const start = startDate || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+    const end = endDate || new Date().toISOString().split('T')[0]
+
+    // 1. Buscar solicitações de exames
+    const examsResult = await db`
+      SELECT
+        er.id,
+        er.created_at,
+        er.exam_type,
+        er.urgency,
+        er.status,
+        er.clinical_indication,
+        p.full_name as patient_name,
+        u.name as professional_name
+      FROM exam_requests er
+      LEFT JOIN patients p ON er.patient_id = p.id
+      LEFT JOIN users u ON er.user_id = u.id
+      WHERE er.user_id = ${userId}
+        AND er.created_at >= ${start}
+        AND er.created_at <= ${end}
+      ORDER BY er.created_at DESC
+    `.catch(() => [])
+
+    // 2. Buscar exames de pacientes também
+    const patientExamsResult = await db`
+      SELECT
+        pe.id,
+        pe.exam_date as created_at,
+        pe.exam_type,
+        'Normal' as urgency,
+        pe.status,
+        pe.results,
+        p.full_name as patient_name,
+        'Sistema' as professional_name
+      FROM patient_exams pe
+      LEFT JOIN patients p ON pe.patient_id = p.id
+      WHERE p.user_id = ${userId}
+        AND pe.exam_date >= ${start}
+        AND pe.exam_date <= ${end}
+      ORDER BY pe.exam_date DESC
+    `.catch(() => [])
+
+    // Combinar resultados
+    const allExams = [...examsResult, ...patientExamsResult]
+
+    // 3. Calcular métricas
+    const total = allExams.length
+    const realizados = allExams.filter((e: any) => e.status === 'completed' || e.status === 'done').length
+    const pendentes = allExams.filter((e: any) => e.status === 'pending' || e.status === 'requested').length
+    const cancelados = allExams.filter((e: any) => e.status === 'cancelled').length
+
+    // 4. Por tipo
+    const tipoCount: Record<string, number> = {}
+    allExams.forEach((e: any) => {
+      const tipo = e.exam_type || 'Outros'
+      tipoCount[tipo] = (tipoCount[tipo] || 0) + 1
+    })
+
+    // 5. Por status
+    const statusMap: Record<string, string> = {
+      'pending': 'Pendente',
+      'requested': 'Solicitado',
+      'scheduled': 'Agendado',
+      'in_progress': 'Em Andamento',
+      'completed': 'Realizado',
+      'done': 'Realizado',
+      'cancelled': 'Cancelado'
+    }
+    const statusCount: Record<string, number> = {}
+    allExams.forEach((e: any) => {
+      const status = statusMap[e.status] || e.status || 'Pendente'
+      statusCount[status] = (statusCount[status] || 0) + 1
+    })
+
+    const reportData: ExamsReportData = {
+      title: "Relatório de Exames",
+      period: `${formatDate(start)} a ${formatDate(end)}`,
+      generatedAt: new Date().toLocaleString('pt-BR'),
+      generatedBy: user.name || user.email,
+      summary: {
+        totalExames: total,
+        examesRealizados: realizados,
+        examesPendentes: pendentes,
+        exameCancelados: cancelados
+      },
+      exames: allExams.map((e: any) => ({
+        data: formatDate(e.created_at),
+        paciente: e.patient_name || 'Não informado',
+        tipoExame: e.exam_type || 'Não informado',
+        solicitante: e.professional_name || 'Não informado',
+        urgencia: e.urgency === 'urgent' ? 'Urgente' : 'Normal',
+        resultado: e.results ? 'Disponível' : 'Pendente',
+        status: statusMap[e.status] || e.status || 'Pendente'
+      })),
+      porTipo: Object.entries(tipoCount).map(([tipo, quantidade]) => ({
+        tipo,
+        quantidade,
+        percentual: total > 0 ? (quantidade / total) * 100 : 0
+      })).sort((a, b) => b.quantidade - a.quantidade),
+      porStatus: Object.entries(statusCount).map(([status, quantidade]) => ({
+        status,
+        quantidade,
+        percentual: total > 0 ? (quantidade / total) * 100 : 0
+      })).sort((a, b) => b.quantidade - a.quantidade)
+    }
+
+    return { success: true, data: reportData }
+  } catch (error: any) {
+    console.error("Erro ao gerar relatório de exames:", error)
+    return { success: false, error: error.message }
+  }
+}
+
+export async function exportExamsToExcel(startDate?: string, endDate?: string) {
+  const result = await generateExamsReportData(startDate, endDate)
+  if (!result.success || !result.data) {
+    return { success: false, error: result.error }
+  }
+
+  const workbook = generateExamsExcel(result.data)
+  const base64 = exportWorkbookToBase64(workbook)
+
+  return {
+    success: true,
+    data: base64,
+    filename: `relatorio-exames-${Date.now()}.xlsx`,
+    contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+  }
+}
+
+export async function exportExamsToPDF(startDate?: string, endDate?: string) {
+  const result = await generateExamsReportData(startDate, endDate)
+  if (!result.success || !result.data) {
+    return { success: false, error: result.error }
+  }
+
+  const html = generateExamsPDFHTML(result.data)
+
+  return {
+    success: true,
+    data: html,
+    filename: `relatorio-exames-${Date.now()}.html`,
     contentType: 'text/html'
   }
 }
