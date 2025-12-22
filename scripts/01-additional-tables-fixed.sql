@@ -409,6 +409,183 @@ CREATE TABLE IF NOT EXISTS nfe_invoices (
 );
 
 -- ============================================
+-- ADD MISSING COLUMNS TO EXISTING TABLES
+-- (Handles case where tables exist but lack these columns)
+-- ============================================
+
+DO $$
+BEGIN
+    -- CONTRACTS
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'contracts' AND table_schema = 'public') THEN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'contracts' AND column_name = 'user_id') THEN
+            ALTER TABLE contracts ADD COLUMN user_id UUID;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'contracts' AND column_name = 'patient_id') THEN
+            ALTER TABLE contracts ADD COLUMN patient_id UUID;
+        END IF;
+    END IF;
+
+    -- CONTRACT_TEMPLATES
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'contract_templates' AND table_schema = 'public') THEN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'contract_templates' AND column_name = 'user_id') THEN
+            ALTER TABLE contract_templates ADD COLUMN user_id UUID;
+        END IF;
+    END IF;
+
+    -- MEDICAL_IMAGES
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'medical_images' AND table_schema = 'public') THEN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'medical_images' AND column_name = 'user_id') THEN
+            ALTER TABLE medical_images ADD COLUMN user_id UUID;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'medical_images' AND column_name = 'patient_id') THEN
+            ALTER TABLE medical_images ADD COLUMN patient_id UUID;
+        END IF;
+    END IF;
+
+    -- IMAGE_ANNOTATIONS
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'image_annotations' AND table_schema = 'public') THEN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'image_annotations' AND column_name = 'user_id') THEN
+            ALTER TABLE image_annotations ADD COLUMN user_id UUID;
+        END IF;
+    END IF;
+
+    -- ODONTOGRAMS
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'odontograms' AND table_schema = 'public') THEN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'odontograms' AND column_name = 'user_id') THEN
+            ALTER TABLE odontograms ADD COLUMN user_id UUID;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'odontograms' AND column_name = 'patient_id') THEN
+            ALTER TABLE odontograms ADD COLUMN patient_id UUID;
+        END IF;
+    END IF;
+
+    -- ODONTOGRAM_PROCEDURES
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'odontogram_procedures' AND table_schema = 'public') THEN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'odontogram_procedures' AND column_name = 'user_id') THEN
+            ALTER TABLE odontogram_procedures ADD COLUMN user_id UUID;
+        END IF;
+    END IF;
+
+    -- BIOMETRIC_ENROLLMENTS
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'biometric_enrollments' AND table_schema = 'public') THEN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'biometric_enrollments' AND column_name = 'user_id') THEN
+            ALTER TABLE biometric_enrollments ADD COLUMN user_id UUID;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'biometric_enrollments' AND column_name = 'patient_id') THEN
+            ALTER TABLE biometric_enrollments ADD COLUMN patient_id UUID;
+        END IF;
+    END IF;
+
+    -- BIOMETRIC_VERIFICATIONS
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'biometric_verifications' AND table_schema = 'public') THEN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'biometric_verifications' AND column_name = 'user_id') THEN
+            ALTER TABLE biometric_verifications ADD COLUMN user_id UUID;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'biometric_verifications' AND column_name = 'patient_id') THEN
+            ALTER TABLE biometric_verifications ADD COLUMN patient_id UUID;
+        END IF;
+    END IF;
+
+    -- WHATSAPP_CONVERSATIONS
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'whatsapp_conversations' AND table_schema = 'public') THEN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'whatsapp_conversations' AND column_name = 'user_id') THEN
+            ALTER TABLE whatsapp_conversations ADD COLUMN user_id UUID;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'whatsapp_conversations' AND column_name = 'patient_id') THEN
+            ALTER TABLE whatsapp_conversations ADD COLUMN patient_id UUID;
+        END IF;
+    END IF;
+
+    -- WHATSAPP_MESSAGES
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'whatsapp_messages' AND table_schema = 'public') THEN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'whatsapp_messages' AND column_name = 'user_id') THEN
+            ALTER TABLE whatsapp_messages ADD COLUMN user_id UUID;
+        END IF;
+    END IF;
+
+    -- INVENTORY_ITEMS
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'inventory_items' AND table_schema = 'public') THEN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'inventory_items' AND column_name = 'user_id') THEN
+            ALTER TABLE inventory_items ADD COLUMN user_id UUID;
+        END IF;
+    END IF;
+
+    -- INVENTORY_MOVEMENTS
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'inventory_movements' AND table_schema = 'public') THEN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'inventory_movements' AND column_name = 'user_id') THEN
+            ALTER TABLE inventory_movements ADD COLUMN user_id UUID;
+        END IF;
+    END IF;
+
+    -- ANAMNESIS
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'anamnesis' AND table_schema = 'public') THEN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'anamnesis' AND column_name = 'user_id') THEN
+            ALTER TABLE anamnesis ADD COLUMN user_id UUID;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'anamnesis' AND column_name = 'patient_id') THEN
+            ALTER TABLE anamnesis ADD COLUMN patient_id UUID;
+        END IF;
+    END IF;
+
+    -- BUDGETS
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'budgets' AND table_schema = 'public') THEN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'budgets' AND column_name = 'user_id') THEN
+            ALTER TABLE budgets ADD COLUMN user_id UUID;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'budgets' AND column_name = 'patient_id') THEN
+            ALTER TABLE budgets ADD COLUMN patient_id UUID;
+        END IF;
+    END IF;
+
+    -- TISS_GUIDES
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'tiss_guides' AND table_schema = 'public') THEN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'tiss_guides' AND column_name = 'user_id') THEN
+            ALTER TABLE tiss_guides ADD COLUMN user_id UUID;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'tiss_guides' AND column_name = 'patient_id') THEN
+            ALTER TABLE tiss_guides ADD COLUMN patient_id UUID;
+        END IF;
+    END IF;
+
+    -- TELEMEDICINE_SESSIONS
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'telemedicine_sessions' AND table_schema = 'public') THEN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'telemedicine_sessions' AND column_name = 'user_id') THEN
+            ALTER TABLE telemedicine_sessions ADD COLUMN user_id UUID;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'telemedicine_sessions' AND column_name = 'patient_id') THEN
+            ALTER TABLE telemedicine_sessions ADD COLUMN patient_id UUID;
+        END IF;
+    END IF;
+
+    -- CRM_LEADS
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'crm_leads' AND table_schema = 'public') THEN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'crm_leads' AND column_name = 'user_id') THEN
+            ALTER TABLE crm_leads ADD COLUMN user_id UUID;
+        END IF;
+    END IF;
+
+    -- CRM_TASKS
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'crm_tasks' AND table_schema = 'public') THEN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'crm_tasks' AND column_name = 'user_id') THEN
+            ALTER TABLE crm_tasks ADD COLUMN user_id UUID;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'crm_tasks' AND column_name = 'patient_id') THEN
+            ALTER TABLE crm_tasks ADD COLUMN patient_id UUID;
+        END IF;
+    END IF;
+
+    -- NFE_INVOICES
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'nfe_invoices' AND table_schema = 'public') THEN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'nfe_invoices' AND column_name = 'user_id') THEN
+            ALTER TABLE nfe_invoices ADD COLUMN user_id UUID;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'nfe_invoices' AND column_name = 'patient_id') THEN
+            ALTER TABLE nfe_invoices ADD COLUMN patient_id UUID;
+        END IF;
+    END IF;
+END $$;
+
+-- ============================================
 -- INDEXES FOR ALL TABLES
 -- ============================================
 
