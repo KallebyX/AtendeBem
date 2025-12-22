@@ -2,12 +2,11 @@
 
 import { useState, useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Textarea } from "@/components/ui/textarea"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
   sendWhatsAppMessage,
   getWhatsAppConversations,
@@ -15,7 +14,7 @@ import {
   markConversationAsRead,
   getWhatsAppStatus,
 } from "@/app/actions/whatsapp"
-import { MessageCircle, Send, Phone, Smartphone, QrCode, Settings, Check, X, RefreshCw, Search, Plus, Clock, CheckCheck } from "lucide-react"
+import { MessageCircle, Send, Phone, Smartphone, QrCode, Check, RefreshCw, Search, Clock, CheckCheck } from "lucide-react"
 import { NavigationHeader } from "@/components/navigation-header"
 import { toast } from "sonner"
 

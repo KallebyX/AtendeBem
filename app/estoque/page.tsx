@@ -10,12 +10,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { NavigationHeader } from '@/components/navigation-header'
 import {
   createInventoryItem,
-  updateInventoryItem,
   createInventoryMovement,
   getInventoryItems,
   getInventoryAlerts
 } from '@/app/actions/inventory'
-import { Package, AlertTriangle, TrendingUp, TrendingDown, Plus, Search, Edit, Trash2, BarChart3, RefreshCw } from 'lucide-react'
+import { Package, AlertTriangle, TrendingUp, TrendingDown, Plus, Search, BarChart3, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
 
 const CATEGORIES = [
