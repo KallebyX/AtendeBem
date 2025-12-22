@@ -1,3 +1,6 @@
+-- Habilita a extensão pgcrypto (necessária para gen_random_bytes)
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
 -- Tabela de Receitas Digitais com Assinatura ICP-Brasil
 CREATE TABLE IF NOT EXISTS digital_prescriptions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
