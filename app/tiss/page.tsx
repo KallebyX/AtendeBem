@@ -951,17 +951,17 @@ Glosas: ${result.data.glosas.total} (R$ ${result.data.glosas.valor_total.toFixed
 
       {/* Modal: Upload Retorno */}
       <Dialog open={showUploadModal} onOpenChange={setShowUploadModal}>
-        <DialogContent>
+        <DialogContent className="w-full max-w-[calc(100%-1rem)] sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Upload de Retorno XML</DialogTitle>
             <DialogDescription>
-              Faca upload do arquivo XML de retorno (demonstrativoRetorno) recebido da operadora
+              Faca upload do arquivo XML de retorno recebido da operadora
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-            <div className="border-2 border-dashed rounded-lg p-8 text-center">
-              <Upload className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
-              <p className="text-sm text-muted-foreground mb-4">
+            <div className="border-2 border-dashed rounded-lg p-6 sm:p-8 text-center">
+              <Upload className="w-10 h-10 sm:w-12 sm:h-12 mx-auto mb-3 sm:mb-4 text-muted-foreground" />
+              <p className="text-xs sm:text-sm text-muted-foreground mb-3 sm:mb-4">
                 Arraste um arquivo XML ou clique para selecionar
               </p>
               <input
@@ -971,11 +971,11 @@ Glosas: ${result.data.glosas.total} (R$ ${result.data.glosas.valor_total.toFixed
                 className="hidden"
                 onChange={handleUploadReturn}
               />
-              <Button variant="outline" onClick={() => fileInputRef.current?.click()}>
+              <Button variant="outline" onClick={() => fileInputRef.current?.click()} className="w-full sm:w-auto">
                 Selecionar Arquivo
               </Button>
             </div>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-xs text-muted-foreground text-center">
               O arquivo sera processado automaticamente e as glosas serao registradas no sistema
             </p>
           </div>
@@ -984,21 +984,21 @@ Glosas: ${result.data.glosas.total} (R$ ${result.data.glosas.valor_total.toFixed
 
       {/* Modal: Preview XML */}
       <Dialog open={showXMLPreview} onOpenChange={setShowXMLPreview}>
-        <DialogContent className="max-w-4xl max-h-[80vh]">
-          <DialogHeader>
+        <DialogContent className="w-full max-w-[calc(100%-1rem)] sm:max-w-2xl md:max-w-3xl lg:max-w-4xl flex flex-col max-h-[90vh]">
+          <DialogHeader className="shrink-0">
             <DialogTitle>XML Gerado</DialogTitle>
             <DialogDescription>
               Revise o XML antes de enviar para a operadora
             </DialogDescription>
           </DialogHeader>
-          <div className="overflow-auto max-h-96 bg-muted rounded-lg p-4">
-            <pre className="text-xs font-mono whitespace-pre-wrap">{generatedXML}</pre>
+          <div className="flex-1 overflow-auto bg-muted rounded-lg p-3 sm:p-4 min-h-0">
+            <pre className="text-[10px] sm:text-xs font-mono whitespace-pre-wrap break-all">{generatedXML}</pre>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowXMLPreview(false)}>
+          <DialogFooter className="shrink-0 pt-4 border-t mt-2 flex-col sm:flex-row gap-2">
+            <Button variant="outline" onClick={() => setShowXMLPreview(false)} className="w-full sm:w-auto">
               Fechar
             </Button>
-            <Button onClick={() => handleDownloadXML(generatedXML, `lote_tiss_${Date.now()}.xml`)}>
+            <Button onClick={() => handleDownloadXML(generatedXML, `lote_tiss_${Date.now()}.xml`)} className="w-full sm:w-auto">
               <Download className="w-4 h-4 mr-2" />
               Download XML
             </Button>
@@ -1020,15 +1020,15 @@ Glosas: ${result.data.glosas.total} (R$ ${result.data.glosas.valor_total.toFixed
           setClinicalIndication("")
         }
       }}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
+        <DialogContent className="w-full max-w-[calc(100%-1rem)] sm:max-w-lg md:max-w-2xl lg:max-w-3xl flex flex-col max-h-[90vh]">
+          <DialogHeader className="shrink-0">
             <DialogTitle>Nova Guia TISS</DialogTitle>
             <DialogDescription>
               Preencha os dados da guia para faturamento
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
+          <div className="flex-1 overflow-y-auto space-y-4 pr-1">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Tipo de Guia</Label>
                 <Select value={guideType} onValueChange={(value: "consulta" | "sp_sadt" | "internacao" | "honorarios") => setGuideType(value)}>
@@ -1069,6 +1069,7 @@ Glosas: ${result.data.glosas.total} (R$ ${result.data.glosas.valor_total.toFixed
                 placeholder="Descreva a indicacao clinica..."
                 value={clinicalIndication}
                 onChange={(e) => setClinicalIndication(e.target.value)}
+                className="min-h-[80px] resize-none"
               />
             </div>
             <div className="space-y-2">
@@ -1080,7 +1081,7 @@ Glosas: ${result.data.glosas.total} (R$ ${result.data.glosas.valor_total.toFixed
                   <div className="relative flex-1">
                     <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                     <Input
-                      placeholder="Buscar por codigo ou descricao do procedimento..."
+                      placeholder="Buscar procedimento..."
                       value={guideTussSearch}
                       onChange={(e) => handleGuideTussSearch(e.target.value)}
                       onFocus={() => setShowTussSearch(true)}
@@ -1091,18 +1092,18 @@ Glosas: ${result.data.glosas.total} (R$ ${result.data.glosas.valor_total.toFixed
 
                 {/* Resultados da busca */}
                 {showTussSearch && guideTussResults.length > 0 && (
-                  <div className="absolute z-50 w-full mt-1 bg-background border rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                  <div className="absolute z-50 w-full mt-1 bg-background border rounded-lg shadow-lg max-h-48 overflow-y-auto">
                     {guideTussResults.map((proc) => (
                       <div
                         key={proc.code}
-                        className="p-3 hover:bg-muted cursor-pointer border-b last:border-b-0"
+                        className="p-2 sm:p-3 hover:bg-muted cursor-pointer border-b last:border-b-0"
                         onClick={() => handleAddProcedure(proc)}
                       >
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-start sm:items-center gap-2 flex-wrap sm:flex-nowrap">
                           <Badge variant="outline" className="font-mono text-xs shrink-0">
                             {proc.code}
                           </Badge>
-                          <span className="text-sm truncate">{proc.description}</span>
+                          <span className="text-xs sm:text-sm line-clamp-2 sm:truncate">{proc.description}</span>
                         </div>
                         {proc.group && (
                           <Badge variant="secondary" className="text-xs mt-1">
@@ -1117,20 +1118,20 @@ Glosas: ${result.data.glosas.total} (R$ ${result.data.glosas.valor_total.toFixed
 
               {/* Procedimentos selecionados */}
               {selectedProcedures.length > 0 ? (
-                <div className="border rounded-lg divide-y max-h-40 overflow-y-auto">
+                <div className="border rounded-lg divide-y max-h-32 sm:max-h-40 overflow-y-auto">
                   {selectedProcedures.map((proc) => (
-                    <div key={proc.code} className="p-3 flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-2 flex-1 min-w-0">
+                    <div key={proc.code} className="p-2 sm:p-3 flex items-center justify-between gap-2">
+                      <div className="flex items-start sm:items-center gap-2 flex-1 min-w-0 flex-wrap sm:flex-nowrap">
                         <Badge variant="outline" className="font-mono text-xs shrink-0">
                           {proc.code}
                         </Badge>
-                        <span className="text-sm truncate">{proc.description}</span>
+                        <span className="text-xs sm:text-sm line-clamp-2 sm:truncate">{proc.description}</span>
                       </div>
                       <Button
                         variant="ghost"
                         size="sm"
                         onClick={() => handleRemoveProcedure(proc.code)}
-                        className="shrink-0 h-8 w-8 p-0 text-muted-foreground hover:text-destructive"
+                        className="shrink-0 h-7 w-7 sm:h-8 sm:w-8 p-0 text-muted-foreground hover:text-destructive"
                       >
                         <X className="w-4 h-4" />
                       </Button>
@@ -1138,13 +1139,13 @@ Glosas: ${result.data.glosas.total} (R$ ${result.data.glosas.valor_total.toFixed
                   ))}
                 </div>
               ) : (
-                <div className="border rounded-lg p-4 text-center text-muted-foreground text-sm">
+                <div className="border rounded-lg p-3 sm:p-4 text-center text-muted-foreground text-xs sm:text-sm">
                   Nenhum procedimento adicionado. Use a busca acima para adicionar.
                 </div>
               )}
             </div>
           </div>
-          <DialogFooter>
+          <DialogFooter className="shrink-0 pt-4 border-t mt-2">
             <Button variant="outline" onClick={() => {
               setShowNewGuideModal(false)
               setSelectedPatient(null)
@@ -1177,8 +1178,8 @@ Glosas: ${result.data.glosas.total} (R$ ${result.data.glosas.valor_total.toFixed
 
       {/* Modal: Detalhes da Guia */}
       <Dialog open={showGuideDetailsModal} onOpenChange={setShowGuideDetailsModal}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
+        <DialogContent className="w-full max-w-[calc(100%-1rem)] sm:max-w-lg md:max-w-2xl flex flex-col max-h-[90vh]">
+          <DialogHeader className="shrink-0">
             <DialogTitle className="flex items-center gap-2">
               <FileText className="w-5 h-5" />
               Detalhes da Guia
@@ -1188,11 +1189,11 @@ Glosas: ${result.data.glosas.total} (R$ ${result.data.glosas.valor_total.toFixed
             </DialogDescription>
           </DialogHeader>
           {selectedGuide && (
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+            <div className="flex-1 overflow-y-auto space-y-4 pr-1">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                 <div>
                   <Label className="text-muted-foreground text-xs">Numero da Guia</Label>
-                  <p className="font-mono font-semibold">{selectedGuide.guide_number}</p>
+                  <p className="font-mono font-semibold text-sm sm:text-base">{selectedGuide.guide_number}</p>
                 </div>
                 <div>
                   <Label className="text-muted-foreground text-xs">Tipo</Label>
@@ -1202,23 +1203,23 @@ Glosas: ${result.data.glosas.total} (R$ ${result.data.glosas.valor_total.toFixed
                 </div>
                 <div>
                   <Label className="text-muted-foreground text-xs">Paciente</Label>
-                  <p className="font-medium">{selectedGuide.patient_name}</p>
+                  <p className="font-medium text-sm sm:text-base truncate">{selectedGuide.patient_name}</p>
                 </div>
                 <div>
                   <Label className="text-muted-foreground text-xs">Carteirinha</Label>
-                  <p className="font-mono">{selectedGuide.beneficiary_card_number || "Nao informada"}</p>
+                  <p className="font-mono text-sm">{selectedGuide.beneficiary_card_number || "Nao informada"}</p>
                 </div>
                 <div>
                   <Label className="text-muted-foreground text-xs">Valor Total</Label>
-                  <p className="font-semibold text-lg">{formatCurrency(Number(selectedGuide.total_value) || 0)}</p>
+                  <p className="font-semibold text-base sm:text-lg">{formatCurrency(Number(selectedGuide.total_value) || 0)}</p>
                 </div>
                 <div>
                   <Label className="text-muted-foreground text-xs">Data de Criacao</Label>
-                  <p>{formatDate(selectedGuide.created_at)}</p>
+                  <p className="text-sm">{formatDate(selectedGuide.created_at)}</p>
                 </div>
               </div>
 
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-4">
                 <div>
                   <Label className="text-muted-foreground text-xs">Status</Label>
                   <div className="mt-1">{getStatusBadge(selectedGuide.status)}</div>
@@ -1232,16 +1233,16 @@ Glosas: ${result.data.glosas.total} (R$ ${result.data.glosas.valor_total.toFixed
               {selectedGuide.procedures && selectedGuide.procedures.length > 0 && (
                 <div>
                   <Label className="text-muted-foreground text-xs">Procedimentos</Label>
-                  <div className="mt-2 border rounded-lg divide-y max-h-48 overflow-y-auto">
+                  <div className="mt-2 border rounded-lg divide-y max-h-36 sm:max-h-48 overflow-y-auto">
                     {selectedGuide.procedures.map((proc: any, index: number) => (
-                      <div key={index} className="p-3 flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <Badge variant="outline" className="font-mono text-xs">
+                      <div key={index} className="p-2 sm:p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <div className="flex items-start sm:items-center gap-2 flex-wrap sm:flex-nowrap min-w-0">
+                          <Badge variant="outline" className="font-mono text-xs shrink-0">
                             {proc.code}
                           </Badge>
-                          <span className="text-sm">{proc.description}</span>
+                          <span className="text-xs sm:text-sm line-clamp-2 sm:truncate">{proc.description}</span>
                         </div>
-                        <span className="text-sm font-medium">
+                        <span className="text-xs sm:text-sm font-medium shrink-0">
                           {formatCurrency(Number(proc.unit_price) * (proc.quantity || 1))}
                         </span>
                       </div>
@@ -1251,8 +1252,8 @@ Glosas: ${result.data.glosas.total} (R$ ${result.data.glosas.valor_total.toFixed
               )}
             </div>
           )}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowGuideDetailsModal(false)}>
+          <DialogFooter className="shrink-0 pt-4 border-t mt-2">
+            <Button variant="outline" onClick={() => setShowGuideDetailsModal(false)} className="w-full sm:w-auto">
               Fechar
             </Button>
           </DialogFooter>
@@ -1261,8 +1262,8 @@ Glosas: ${result.data.glosas.total} (R$ ${result.data.glosas.valor_total.toFixed
 
       {/* Modal: Detalhes do Lote */}
       <Dialog open={showSubmissionDetailsModal} onOpenChange={setShowSubmissionDetailsModal}>
-        <DialogContent className="max-w-3xl max-h-[80vh]">
-          <DialogHeader>
+        <DialogContent className="w-full max-w-[calc(100%-1rem)] sm:max-w-xl md:max-w-2xl lg:max-w-3xl flex flex-col max-h-[90vh]">
+          <DialogHeader className="shrink-0">
             <DialogTitle className="flex items-center gap-2">
               <FileText className="w-5 h-5" />
               Detalhes do Lote
@@ -1272,11 +1273,11 @@ Glosas: ${result.data.glosas.total} (R$ ${result.data.glosas.valor_total.toFixed
             </DialogDescription>
           </DialogHeader>
           {selectedSubmission && (
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+            <div className="flex-1 overflow-y-auto space-y-4 pr-1">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
                 <div>
                   <Label className="text-muted-foreground text-xs">Numero do Lote</Label>
-                  <p className="font-mono font-semibold">{selectedSubmission.lote_number}</p>
+                  <p className="font-mono font-semibold text-sm sm:text-base break-all">{selectedSubmission.lote_number}</p>
                 </div>
                 <div>
                   <Label className="text-muted-foreground text-xs">Tipo de Guia</Label>
@@ -1290,30 +1291,30 @@ Glosas: ${result.data.glosas.total} (R$ ${result.data.glosas.valor_total.toFixed
                 </div>
                 <div>
                   <Label className="text-muted-foreground text-xs">Total de Guias</Label>
-                  <p className="font-semibold">{selectedSubmission.total_guides}</p>
+                  <p className="font-semibold text-sm sm:text-base">{selectedSubmission.total_guides}</p>
                 </div>
                 <div>
                   <Label className="text-muted-foreground text-xs">Valor Total</Label>
-                  <p className="font-semibold text-lg">{formatCurrency(Number(selectedSubmission.total_value) || 0)}</p>
+                  <p className="font-semibold text-base sm:text-lg">{formatCurrency(Number(selectedSubmission.total_value) || 0)}</p>
                 </div>
                 <div>
                   <Label className="text-muted-foreground text-xs">Codigo Operadora</Label>
-                  <p className="font-mono">{selectedSubmission.operadora_codigo}</p>
+                  <p className="font-mono text-sm">{selectedSubmission.operadora_codigo}</p>
                 </div>
                 {selectedSubmission.protocol_number && (
                   <div>
                     <Label className="text-muted-foreground text-xs">Protocolo</Label>
-                    <p className="font-mono font-semibold">{selectedSubmission.protocol_number}</p>
+                    <p className="font-mono font-semibold text-sm break-all">{selectedSubmission.protocol_number}</p>
                   </div>
                 )}
                 <div>
                   <Label className="text-muted-foreground text-xs">Data de Criacao</Label>
-                  <p>{formatDate(selectedSubmission.created_at)}</p>
+                  <p className="text-sm">{formatDate(selectedSubmission.created_at)}</p>
                 </div>
                 {selectedSubmission.sent_at && (
                   <div>
                     <Label className="text-muted-foreground text-xs">Data de Envio</Label>
-                    <p>{formatDate(selectedSubmission.sent_at)}</p>
+                    <p className="text-sm">{formatDate(selectedSubmission.sent_at)}</p>
                   </div>
                 )}
               </div>
@@ -1322,9 +1323,9 @@ Glosas: ${result.data.glosas.total} (R$ ${result.data.glosas.valor_total.toFixed
                 <div className="p-3 bg-orange-50 dark:bg-orange-950 rounded-lg border border-orange-200 dark:border-orange-800">
                   <div className="flex items-center gap-2 text-orange-600 dark:text-orange-400">
                     <AlertTriangle className="w-4 h-4" />
-                    <span className="font-medium">Glosas Registradas</span>
+                    <span className="font-medium text-sm">Glosas Registradas</span>
                   </div>
-                  <p className="text-sm mt-1">
+                  <p className="text-xs sm:text-sm mt-1">
                     {selectedSubmission.total_glosas} glosas no valor de {formatCurrency(Number(selectedSubmission.valor_glosado) || 0)}
                   </p>
                 </div>
@@ -1333,15 +1334,15 @@ Glosas: ${result.data.glosas.total} (R$ ${result.data.glosas.valor_total.toFixed
               {selectedSubmission.xml_content && (
                 <div>
                   <Label className="text-muted-foreground text-xs">Conteudo XML</Label>
-                  <div className="mt-2 overflow-auto max-h-48 bg-muted rounded-lg p-4">
-                    <pre className="text-xs font-mono whitespace-pre-wrap">{selectedSubmission.xml_content}</pre>
+                  <div className="mt-2 overflow-auto max-h-40 sm:max-h-48 bg-muted rounded-lg p-3 sm:p-4">
+                    <pre className="text-[10px] sm:text-xs font-mono whitespace-pre-wrap break-all">{selectedSubmission.xml_content}</pre>
                   </div>
                 </div>
               )}
             </div>
           )}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowSubmissionDetailsModal(false)}>
+          <DialogFooter className="shrink-0 pt-4 border-t mt-2 flex-col sm:flex-row gap-2">
+            <Button variant="outline" onClick={() => setShowSubmissionDetailsModal(false)} className="w-full sm:w-auto">
               Fechar
             </Button>
             {selectedSubmission?.xml_content && (
@@ -1349,7 +1350,7 @@ Glosas: ${result.data.glosas.total} (R$ ${result.data.glosas.valor_total.toFixed
                 if (selectedSubmission.xml_content) {
                   handleDownloadXML(selectedSubmission.xml_content, `lote_${selectedSubmission.lote_number}.xml`)
                 }
-              }}>
+              }} className="w-full sm:w-auto">
                 <Download className="w-4 h-4 mr-2" />
                 Download XML
               </Button>
