@@ -11,36 +11,38 @@ export async function createContract(data: {
   contract_type: string
   content: string
   template_id?: string
+  valid_from?: string
   valid_until?: string
 }) {
   try {
     const cookieStore = await cookies()
     const token = cookieStore.get('session')?.value
-    
-    if (!token) return { error: 'Não autenticado' }
+
+    if (!token) return { error: 'Nao autenticado' }
     const user = await verifyToken(token)
-    if (!user) return { error: 'Token inválido' }
+    if (!user) return { error: 'Token invalido' }
 
     await setUserContext(user.id)
     const db = await getDb()
 
-    // Gerar número do contrato
-    const count = await db`SELECT COUNT(*) FROM contracts WHERE tenant_id = ${user.tenant_id}`
-    const contractNumber = `CTR-${user.tenant_id.slice(0, 8)}-${(parseInt(count[0].count) + 1).toString().padStart(6, '0')}`
+    // Gerar numero do contrato
+    const count = await db`SELECT COUNT(*) FROM contracts WHERE user_id = ${user.id}`
+    const contractNumber = `CTR-${user.id.slice(0, 8)}-${(parseInt(count[0].count) + 1).toString().padStart(6, '0')}`
 
     const result = await db`
       INSERT INTO contracts (
-        tenant_id, user_id, patient_id, contract_number, title,
-        contract_type, content, template_id, valid_until, status
+        user_id, patient_id, contract_number, title,
+        contract_type, content, template_id, valid_from, valid_until, status
       ) VALUES (
-        ${user.tenant_id}, ${user.id}, ${data.patient_id}, ${contractNumber},
+        ${user.id}, ${data.patient_id}, ${contractNumber},
         ${data.title}, ${data.contract_type}, ${data.content},
-        ${data.template_id || null}, ${data.valid_until || null}, 'draft'
+        ${data.template_id || null}, ${data.valid_from || null}, ${data.valid_until || null}, 'draft'
       ) RETURNING *
     `
 
     return { success: true, data: result[0] }
   } catch (error: any) {
+    console.error('Erro ao criar contrato:', error)
     return { error: error.message }
   }
 }
@@ -49,40 +51,80 @@ export async function getContracts(filters?: { patient_id?: string; status?: str
   try {
     const cookieStore = await cookies()
     const token = cookieStore.get('session')?.value
-    
-    if (!token) return { error: 'Não autenticado' }
+
+    if (!token) return { error: 'Nao autenticado' }
     const user = await verifyToken(token)
-    if (!user) return { error: 'Token inválido' }
+    if (!user) return { error: 'Token invalido' }
 
     await setUserContext(user.id)
     const db = await getDb()
 
-    let query = `
-      SELECT c.*, p.name as patient_name
+    const result = filters?.patient_id && filters?.status
+      ? await db`
+          SELECT c.*, p.full_name as patient_name
+          FROM contracts c
+          JOIN patients p ON c.patient_id = p.id
+          WHERE c.user_id = ${user.id}
+          AND c.patient_id = ${filters.patient_id}
+          AND c.status = ${filters.status}
+          ORDER BY c.created_at DESC
+        `
+      : filters?.patient_id
+      ? await db`
+          SELECT c.*, p.full_name as patient_name
+          FROM contracts c
+          JOIN patients p ON c.patient_id = p.id
+          WHERE c.user_id = ${user.id}
+          AND c.patient_id = ${filters.patient_id}
+          ORDER BY c.created_at DESC
+        `
+      : filters?.status
+      ? await db`
+          SELECT c.*, p.full_name as patient_name
+          FROM contracts c
+          JOIN patients p ON c.patient_id = p.id
+          WHERE c.user_id = ${user.id}
+          AND c.status = ${filters.status}
+          ORDER BY c.created_at DESC
+        `
+      : await db`
+          SELECT c.*, p.full_name as patient_name
+          FROM contracts c
+          JOIN patients p ON c.patient_id = p.id
+          WHERE c.user_id = ${user.id}
+          ORDER BY c.created_at DESC
+        `
+
+    return { success: true, data: result }
+  } catch (error: any) {
+    console.error('Erro ao buscar contratos:', error)
+    return { error: error.message }
+  }
+}
+
+export async function getContractById(id: string) {
+  try {
+    const cookieStore = await cookies()
+    const token = cookieStore.get('session')?.value
+
+    if (!token) return { error: 'Nao autenticado' }
+    const user = await verifyToken(token)
+    if (!user) return { error: 'Token invalido' }
+
+    await setUserContext(user.id)
+    const db = await getDb()
+
+    const result = await db`
+      SELECT c.*, p.full_name as patient_name, p.cpf as patient_cpf
       FROM contracts c
       JOIN patients p ON c.patient_id = p.id
-      WHERE c.tenant_id = $1
+      WHERE c.id = ${id} AND c.user_id = ${user.id}
     `
-    const params = [user.tenant_id]
-    let paramIndex = 2
 
-    if (filters?.patient_id) {
-      query += ` AND c.patient_id = $${paramIndex}`
-      params.push(filters.patient_id)
-      paramIndex++
-    }
-
-    if (filters?.status) {
-      query += ` AND c.status = $${paramIndex}`
-      params.push(filters.status)
-      paramIndex++
-    }
-
-    query += ` ORDER BY c.created_at DESC`
-
-    const result = await db.query(query, params)
-    return { success: true, data: result.rows }
+    if (result.length === 0) return { error: 'Contrato nao encontrado' }
+    return { success: true, data: result[0] }
   } catch (error: any) {
+    console.error('Erro ao buscar contrato:', error)
     return { error: error.message }
   }
 }
@@ -91,30 +133,30 @@ export async function getContractTemplates(type?: string) {
   try {
     const cookieStore = await cookies()
     const token = cookieStore.get('session')?.value
-    
-    if (!token) return { error: 'Não autenticado' }
+
+    if (!token) return { error: 'Nao autenticado' }
     const user = await verifyToken(token)
-    if (!user) return { error: 'Token inválido' }
+    if (!user) return { error: 'Token invalido' }
 
     await setUserContext(user.id)
     const db = await getDb()
 
-    let query = `
-      SELECT * FROM contract_templates
-      WHERE (tenant_id = $1 OR is_public = true) AND is_active = true
-    `
-    const params = [user.tenant_id]
+    const result = type
+      ? await db`
+          SELECT * FROM contract_templates
+          WHERE (user_id = ${user.id} OR is_public = true) AND is_active = true
+          AND contract_type = ${type}
+          ORDER BY is_public DESC, name ASC
+        `
+      : await db`
+          SELECT * FROM contract_templates
+          WHERE (user_id = ${user.id} OR is_public = true) AND is_active = true
+          ORDER BY is_public DESC, name ASC
+        `
 
-    if (type) {
-      query += ` AND contract_type = $2`
-      params.push(type)
-    }
-
-    query += ` ORDER BY is_public DESC, name ASC`
-
-    const result = await db.query(query, params)
-    return { success: true, data: result.rows }
+    return { success: true, data: result }
   } catch (error: any) {
+    console.error('Erro ao buscar templates:', error)
     return { error: error.message }
   }
 }
@@ -122,34 +164,97 @@ export async function getContractTemplates(type?: string) {
 export async function signContract(data: {
   contract_id: string
   signature_url: string
-  ip_address: string
-  user_agent: string
+  ip_address?: string
+  user_agent?: string
 }) {
   try {
     const cookieStore = await cookies()
     const token = cookieStore.get('session')?.value
-    
-    if (!token) return { error: 'Não autenticado' }
+
+    if (!token) return { error: 'Nao autenticado' }
     const user = await verifyToken(token)
-    if (!user) return { error: 'Token inválido' }
+    if (!user) return { error: 'Token invalido' }
 
     await setUserContext(user.id)
     const db = await getDb()
 
     const result = await db`
       UPDATE contracts
-      SET 
+      SET
         professional_signed_at = NOW(),
         professional_signature_url = ${data.signature_url},
-        professional_ip_address = ${data.ip_address}::inet,
-        status = 'signed',
+        status = CASE
+          WHEN patient_signed_at IS NOT NULL THEN 'signed'
+          ELSE 'pending_signature'
+        END,
         updated_at = NOW()
-      WHERE id = ${data.contract_id} AND tenant_id = ${user.tenant_id}
+      WHERE id = ${data.contract_id} AND user_id = ${user.id}
       RETURNING *
     `
 
+    if (result.length === 0) return { error: 'Contrato nao encontrado' }
     return { success: true, data: result[0] }
   } catch (error: any) {
+    console.error('Erro ao assinar contrato:', error)
+    return { error: error.message }
+  }
+}
+
+export async function signContractPatient(data: {
+  contract_id: string
+  signature_url: string
+  ip_address?: string
+  user_agent?: string
+}) {
+  try {
+    const db = await getDb()
+
+    const result = await db`
+      UPDATE contracts
+      SET
+        patient_signed_at = NOW(),
+        patient_signature_url = ${data.signature_url},
+        patient_ip_address = ${data.ip_address || null}::inet,
+        patient_user_agent = ${data.user_agent || null},
+        status = CASE
+          WHEN professional_signed_at IS NOT NULL THEN 'signed'
+          ELSE 'pending_signature'
+        END,
+        updated_at = NOW()
+      WHERE id = ${data.contract_id}
+      RETURNING *
+    `
+
+    if (result.length === 0) return { error: 'Contrato nao encontrado' }
+    return { success: true, data: result[0] }
+  } catch (error: any) {
+    console.error('Erro ao assinar contrato (paciente):', error)
+    return { error: error.message }
+  }
+}
+
+export async function deleteContract(contract_id: string) {
+  try {
+    const cookieStore = await cookies()
+    const token = cookieStore.get('session')?.value
+
+    if (!token) return { error: 'Nao autenticado' }
+    const user = await verifyToken(token)
+    if (!user) return { error: 'Token invalido' }
+
+    await setUserContext(user.id)
+    const db = await getDb()
+
+    const result = await db`
+      DELETE FROM contracts
+      WHERE id = ${contract_id} AND user_id = ${user.id}
+      RETURNING *
+    `
+
+    if (result.length === 0) return { error: 'Contrato nao encontrado' }
+    return { success: true }
+  } catch (error: any) {
+    console.error('Erro ao deletar contrato:', error)
     return { error: error.message }
   }
 }

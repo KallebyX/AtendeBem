@@ -7,7 +7,6 @@ import { setUserContext } from '@/lib/db-init'
 
 export interface Anamnesis {
   id: string
-  tenant_id: string
   user_id: string
   patient_id: string
   appointment_id?: string
@@ -46,13 +45,13 @@ export interface Anamnesis {
 export async function createAnamnesis(data: {
   patient_id: string
   appointment_id?: string
-  specialty: string
+  specialty?: string
   template_id?: string
 }) {
   try {
     const cookieStore = await cookies()
     const token = cookieStore.get('session')?.value
-    
+
     if (!token) return { error: 'Não autenticado' }
     const user = await verifyToken(token)
     if (!user) return { error: 'Token inválido' }
@@ -62,10 +61,10 @@ export async function createAnamnesis(data: {
 
     const result = await db`
       INSERT INTO anamnesis (
-        tenant_id, user_id, patient_id, appointment_id, specialty, template_id, current_step
+        user_id, patient_id, appointment_id, specialty, template_id, current_step
       ) VALUES (
-        ${user.tenant_id}, ${user.id}, ${data.patient_id}, 
-        ${data.appointment_id || null}, ${data.specialty}, 
+        ${user.id}, ${data.patient_id},
+        ${data.appointment_id || null}, ${data.specialty || 'Clínica Geral'},
         ${data.template_id || null}, 1
       ) RETURNING *
     `
@@ -77,11 +76,15 @@ export async function createAnamnesis(data: {
   }
 }
 
-export async function updateAnamnesisStep(id: string, step: number, data: any) {
+export async function updateAnamnesisStep(data: {
+  anamnesis_id: string
+  step: number
+  data: any
+}) {
   try {
     const cookieStore = await cookies()
     const token = cookieStore.get('session')?.value
-    
+
     if (!token) return { error: 'Não autenticado' }
     const user = await verifyToken(token)
     if (!user) return { error: 'Token inválido' }
@@ -89,72 +92,82 @@ export async function updateAnamnesisStep(id: string, step: number, data: any) {
     await setUserContext(user.id)
     const db = await getDb()
 
-    const updates: any = {
+    const stepData = data.data
+    const step = data.step
+
+    // Build update fields based on step
+    let updateFields: any = {
       current_step: step,
       last_autosave: new Date().toISOString(),
       updated_at: new Date().toISOString()
     }
 
-    // Step 1: Identificação
-    if (step === 1) updates.identification = JSON.stringify(data.identification || {})
+    if (step === 1) {
+      updateFields.identification = JSON.stringify(stepData.identification || {})
+    }
 
-    // Step 2: Queixa Principal
     if (step === 2) {
-      updates.chief_complaint = data.chief_complaint
-      updates.chief_complaint_duration = data.chief_complaint_duration
-      updates.chief_complaint_severity = data.chief_complaint_severity
+      updateFields.chief_complaint = stepData.chief_complaint || null
+      updateFields.chief_complaint_duration = stepData.complaint_duration || null
     }
 
-    // Step 3: HDA
     if (step === 3) {
-      updates.history_present_illness = data.history_present_illness
-      updates.symptom_onset = data.symptom_onset
-      updates.symptom_progression = data.symptom_progression
-      updates.associated_symptoms = data.associated_symptoms
-      updates.aggravating_factors = data.aggravating_factors
-      updates.relieving_factors = data.relieving_factors
+      updateFields.history_present_illness = stepData.history_present_illness || null
+      updateFields.associated_symptoms = stepData.associated_symptoms || []
     }
 
-    // Step 4: Antecedentes
     if (step === 4) {
-      updates.past_medical_history = JSON.stringify(data.past_medical_history || {})
-      updates.family_history = JSON.stringify(data.family_history || {})
-      updates.social_history = JSON.stringify(data.social_history || {})
+      updateFields.past_medical_history = JSON.stringify(stepData.past_medical_history || {})
+      updateFields.family_history = JSON.stringify(stepData.family_history || {})
+      updateFields.social_history = JSON.stringify(stepData.social_history || {})
     }
 
-    // Step 5: Revisão de Sistemas
     if (step === 5) {
-      updates.systems_review = JSON.stringify(data.systems_review || {})
+      updateFields.systems_review = JSON.stringify(stepData.systems_review || {})
     }
 
-    // Step 6: Exame Físico
     if (step === 6) {
-      updates.physical_examination = JSON.stringify(data.physical_examination || {})
+      updateFields.physical_examination = JSON.stringify(stepData.physical_examination || {})
     }
 
-    // Step 7: Conduta
     if (step === 7) {
-      updates.assessment = data.assessment
-      updates.plan = data.plan
-      updates.diagnostic_hypothesis = data.diagnostic_hypothesis
-      updates.complementary_exams = data.complementary_exams
-      updates.prescriptions = data.prescriptions
-      updates.referrals = data.referrals
-      updates.follow_up = data.follow_up
-      updates.is_completed = true
-      updates.completed_at = new Date().toISOString()
+      updateFields.assessment = stepData.assessment || null
+      updateFields.plan = stepData.treatment_plan || null
+      updateFields.diagnostic_hypothesis = stepData.diagnostic_hypothesis || []
+      updateFields.prescriptions = stepData.prescriptions ? [stepData.prescriptions] : []
+      updateFields.is_completed = true
+      updateFields.completed_at = new Date().toISOString()
     }
 
-    const setClauses = Object.keys(updates).map((key, i) => `${key} = $${i + 2}`).join(', ')
-    const values = [id, ...Object.values(updates)]
-    
-    const result = await db.query(
-      `UPDATE anamnesis SET ${setClauses} WHERE id = $1 AND tenant_id = '${user.tenant_id}' RETURNING *`,
-      values
-    )
+    const result = await db`
+      UPDATE anamnesis
+      SET
+        current_step = ${updateFields.current_step},
+        last_autosave = ${updateFields.last_autosave},
+        updated_at = ${updateFields.updated_at},
+        identification = COALESCE(${updateFields.identification || null}::jsonb, identification),
+        chief_complaint = COALESCE(${updateFields.chief_complaint || null}, chief_complaint),
+        chief_complaint_duration = COALESCE(${updateFields.chief_complaint_duration || null}, chief_complaint_duration),
+        history_present_illness = COALESCE(${updateFields.history_present_illness || null}, history_present_illness),
+        associated_symptoms = COALESCE(${updateFields.associated_symptoms || null}, associated_symptoms),
+        past_medical_history = COALESCE(${updateFields.past_medical_history || null}::jsonb, past_medical_history),
+        family_history = COALESCE(${updateFields.family_history || null}::jsonb, family_history),
+        social_history = COALESCE(${updateFields.social_history || null}::jsonb, social_history),
+        systems_review = COALESCE(${updateFields.systems_review || null}::jsonb, systems_review),
+        physical_examination = COALESCE(${updateFields.physical_examination || null}::jsonb, physical_examination),
+        assessment = COALESCE(${updateFields.assessment || null}, assessment),
+        plan = COALESCE(${updateFields.plan || null}, plan),
+        diagnostic_hypothesis = COALESCE(${updateFields.diagnostic_hypothesis || null}, diagnostic_hypothesis),
+        prescriptions = COALESCE(${updateFields.prescriptions || null}, prescriptions),
+        is_completed = ${updateFields.is_completed || false},
+        completed_at = ${updateFields.completed_at || null}
+      WHERE id = ${data.anamnesis_id}
+      AND user_id = ${user.id}
+      RETURNING *
+    `
 
-    if (result.rows.length === 0) return { error: 'Anamnese não encontrada' }
-    return { success: true, data: result.rows[0] }
+    if (result.length === 0) return { error: 'Anamnese não encontrada' }
+    return { success: true, data: result[0] }
   } catch (error: any) {
     console.error('Erro ao atualizar anamnese:', error)
     return { error: error.message }
@@ -165,7 +178,7 @@ export async function getAnamnesisByPatient(patient_id: string) {
   try {
     const cookieStore = await cookies()
     const token = cookieStore.get('session')?.value
-    
+
     if (!token) return { error: 'Não autenticado' }
     const user = await verifyToken(token)
     if (!user) return { error: 'Token inválido' }
@@ -174,11 +187,11 @@ export async function getAnamnesisByPatient(patient_id: string) {
     const db = await getDb()
 
     const result = await db`
-      SELECT a.*, p.name as patient_name
+      SELECT a.*, p.full_name as patient_name
       FROM anamnesis a
       JOIN patients p ON a.patient_id = p.id
       WHERE a.patient_id = ${patient_id}
-      AND a.tenant_id = ${user.tenant_id}
+      AND a.user_id = ${user.id}
       ORDER BY a.created_at DESC
     `
 
@@ -193,7 +206,7 @@ export async function getAnamnesisById(id: string) {
   try {
     const cookieStore = await cookies()
     const token = cookieStore.get('session')?.value
-    
+
     if (!token) return { error: 'Não autenticado' }
     const user = await verifyToken(token)
     if (!user) return { error: 'Token inválido' }
@@ -202,11 +215,11 @@ export async function getAnamnesisById(id: string) {
     const db = await getDb()
 
     const result = await db`
-      SELECT a.*, p.name as patient_name
+      SELECT a.*, p.full_name as patient_name
       FROM anamnesis a
       JOIN patients p ON a.patient_id = p.id
       WHERE a.id = ${id}
-      AND a.tenant_id = ${user.tenant_id}
+      AND a.user_id = ${user.id}
     `
 
     if (result.length === 0) return { error: 'Anamnese não encontrada' }
@@ -221,7 +234,7 @@ export async function getAnamnesisTemplates(specialty?: string) {
   try {
     const cookieStore = await cookies()
     const token = cookieStore.get('session')?.value
-    
+
     if (!token) return { error: 'Não autenticado' }
     const user = await verifyToken(token)
     if (!user) return { error: 'Token inválido' }
@@ -229,22 +242,22 @@ export async function getAnamnesisTemplates(specialty?: string) {
     await setUserContext(user.id)
     const db = await getDb()
 
-    let query = `
-      SELECT * FROM anamnesis_templates
-      WHERE (is_public = true OR tenant_id = $1)
-      AND is_active = true
-    `
-    const params = [user.tenant_id]
+    const result = specialty
+      ? await db`
+          SELECT * FROM anamnesis_templates
+          WHERE (is_public = true OR user_id = ${user.id})
+          AND is_active = true
+          AND specialty = ${specialty}
+          ORDER BY is_public DESC, name
+        `
+      : await db`
+          SELECT * FROM anamnesis_templates
+          WHERE (is_public = true OR user_id = ${user.id})
+          AND is_active = true
+          ORDER BY is_public DESC, name
+        `
 
-    if (specialty) {
-      query += ` AND specialty = $2`
-      params.push(specialty)
-    }
-
-    query += ` ORDER BY is_public DESC, name`
-
-    const result = await db.query(query, params)
-    return { success: true, data: result.rows }
+    return { success: true, data: result }
   } catch (error: any) {
     console.error('Erro ao buscar templates:', error)
     return { error: error.message }
@@ -255,7 +268,7 @@ export async function deleteAnamnesis(id: string) {
   try {
     const cookieStore = await cookies()
     const token = cookieStore.get('session')?.value
-    
+
     if (!token) return { error: 'Não autenticado' }
     const user = await verifyToken(token)
     if (!user) return { error: 'Token inválido' }
@@ -264,10 +277,10 @@ export async function deleteAnamnesis(id: string) {
     const db = await getDb()
 
     const result = await db`
-      UPDATE anamnesis 
+      UPDATE anamnesis
       SET deleted_at = NOW()
       WHERE id = ${id}
-      AND tenant_id = ${user.tenant_id}
+      AND user_id = ${user.id}
       RETURNING *
     `
 
