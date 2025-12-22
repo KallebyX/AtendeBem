@@ -41,7 +41,7 @@ async function registerUser(data: {
       ${data.crm_uf},
       ${data.specialty}
     )
-    RETURNING id, name, email, crm, crm_uf, specialty
+    RETURNING id, name, email, crm, crm_uf, specialty, tenant_id
   `
 
   return result[0]
@@ -52,8 +52,8 @@ async function loginUser(email: string, password: string) {
 
   // Find user
   const users = await sql`
-    SELECT id, name, email, password_hash, crm, crm_uf, specialty 
-    FROM users 
+    SELECT id, name, email, password_hash, crm, crm_uf, specialty, tenant_id
+    FROM users
     WHERE email = ${email.toLowerCase()} AND is_active = true
   `
 
@@ -85,6 +85,7 @@ async function loginUser(email: string, password: string) {
     crm: user.crm,
     crm_uf: user.crm_uf,
     specialty: user.specialty,
+    tenant_id: user.tenant_id,
   }
 }
 
@@ -172,7 +173,7 @@ export async function getCurrentUser() {
 
     const sql = await getDb()
     const users = await sql`
-      SELECT id, name, email, crm, crm_uf, specialty
+      SELECT id, name, email, crm, crm_uf, specialty, tenant_id
       FROM users
       WHERE id = ${session.id}
     `

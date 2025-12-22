@@ -752,6 +752,13 @@ export async function createFinancialTransaction(data: {
 
     const db = await getDb()
 
+    // Obter tenant_id do usuário
+    const tenantId = user.tenantId || user.tenant_id
+    if (!tenantId) {
+      console.error("Erro: tenant_id não encontrado no usuário", { userId: user.id })
+      return { error: "Tenant não configurado para o usuário" }
+    }
+
     // Validações básicas
     if (!data.amount || data.amount <= 0) {
       return { error: "Valor deve ser maior que zero" }
@@ -781,7 +788,7 @@ export async function createFinancialTransaction(data: {
         patient_id,
         notes
       ) VALUES (
-        ${user.tenantId || user.tenant_id},
+        ${tenantId},
         ${user.id},
         ${data.type},
         ${data.category || (data.type === 'income' ? 'Receita Avulsa' : 'Despesa Avulsa')},

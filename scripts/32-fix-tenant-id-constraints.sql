@@ -149,6 +149,13 @@ CREATE TRIGGER trg_medical_images_tenant
     FOR EACH ROW
     EXECUTE FUNCTION public.auto_set_tenant_id_from_user();
 
+-- Financial Transactions
+DROP TRIGGER IF EXISTS trg_financial_transactions_tenant ON financial_transactions;
+CREATE TRIGGER trg_financial_transactions_tenant
+    BEFORE INSERT ON financial_transactions
+    FOR EACH ROW
+    EXECUTE FUNCTION public.auto_set_tenant_id_from_user();
+
 -- =====================================================
 -- 3. ADICIONAR COLUNA cost_price EM inventory_items
 -- =====================================================
