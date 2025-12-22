@@ -151,7 +151,7 @@ export default function EstoquePage() {
     return true
   })
 
-  const totalValue = filteredItems.reduce((sum, item) => sum + (item.current_stock * (item.unit_cost || 0)), 0)
+  const totalValue = filteredItems.reduce((sum, item) => sum + (item.current_stock * (parseFloat(item.unit_cost) || 0)), 0)
   const lowStockCount = items.filter(i => i.current_stock <= i.min_stock).length
 
   return (
@@ -327,12 +327,12 @@ export default function EstoquePage() {
                         </div>
                         <div>
                           <span className="block text-xs">Custo Unitario</span>
-                          <span className="font-medium text-foreground">R$ {(item.unit_cost || 0).toFixed(2)}</span>
+                          <span className="font-medium text-foreground">R$ {(parseFloat(item.unit_cost) || 0).toFixed(2)}</span>
                         </div>
                         <div>
                           <span className="block text-xs">Valor Total</span>
                           <span className="font-medium text-green-600">
-                            R$ {(item.current_stock * (item.unit_cost || 0)).toFixed(2)}
+                            R$ {(item.current_stock * (parseFloat(item.unit_cost) || 0)).toFixed(2)}
                           </span>
                         </div>
                       </div>
