@@ -29,6 +29,7 @@ import {
   Send,
   X,
   Loader2,
+  Activity,
 } from "lucide-react"
 import { useEffect, useState, useRef } from "react"
 import { createContract, getContracts, getContractTemplates, signContract } from "@/app/actions/contracts"
@@ -69,6 +70,8 @@ export default function ContratosPage() {
   const [loading, setLoading] = useState(true)
   const [isNewDialogOpen, setIsNewDialogOpen] = useState(false)
   const [previewContract, setPreviewContract] = useState<any>(null)
+  const [selectedContract, setSelectedContract] = useState<any>(null)
+  const [statusContract, setStatusContract] = useState<any>(null)
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState<string>("all")
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -640,11 +643,11 @@ export default function ContratosPage() {
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => setPreviewContract(contract)}
+                          onClick={() => setSelectedContract(contract)}
                           className="rounded-xl"
                         >
                           <Eye className="w-4 h-4 mr-2" />
-                          Visualizar
+                          Abrir
                         </Button>
 
                         {contract.status === "draft" && (
@@ -665,9 +668,13 @@ export default function ContratosPage() {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end" className="rounded-xl">
+                            <DropdownMenuItem onClick={() => setStatusContract(contract)}>
+                              <Activity className="w-4 h-4 mr-2" />
+                              Ver Status
+                            </DropdownMenuItem>
                             <DropdownMenuItem onClick={() => setPreviewContract(contract)}>
                               <Eye className="w-4 h-4 mr-2" />
-                              Visualizar
+                              Ver Contrato
                             </DropdownMenuItem>
                             <DropdownMenuItem>
                               <Download className="w-4 h-4 mr-2" />
@@ -853,6 +860,142 @@ export default function ContratosPage() {
                   Confirmar
                 </>
               )}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal de Seleção - Ver Status ou Ver Contrato */}
+      <Dialog open={!!selectedContract} onOpenChange={() => setSelectedContract(null)}>
+        <DialogContent className="max-w-sm w-[90vw] p-0 overflow-hidden">
+          <DialogHeader className="px-5 py-4 border-b bg-gradient-to-r from-blue-50 to-white">
+            <DialogTitle className="flex items-center gap-3 text-base font-semibold text-gray-900">
+              <div className="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center">
+                <FileText className="w-5 h-5 text-white" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="truncate">{selectedContract?.title}</p>
+                <p className="text-xs text-gray-500 font-normal mt-0.5">{selectedContract?.contract_number}</p>
+              </div>
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="p-5 space-y-3">
+            {/* Info do paciente */}
+            <div className="bg-gray-50 rounded-xl p-3 flex items-center gap-3">
+              <div className="w-9 h-9 rounded-lg bg-blue-100 flex items-center justify-center shrink-0">
+                <User className="w-4 h-4 text-blue-600" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-gray-900 truncate">{selectedContract?.patient_name}</p>
+                <p className="text-xs text-gray-500">
+                  {selectedContract && new Date(selectedContract.created_at).toLocaleDateString("pt-BR")}
+                </p>
+              </div>
+              {selectedContract && (
+                <span className={`ml-auto inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${statusConfig[selectedContract.status]?.bg} ${statusConfig[selectedContract.status]?.color}`}>
+                  {statusConfig[selectedContract.status]?.label}
+                </span>
+              )}
+            </div>
+
+            {/* Botões de ação */}
+            <div className="grid grid-cols-2 gap-3 pt-2">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setStatusContract(selectedContract)
+                  setSelectedContract(null)
+                }}
+                className="h-20 rounded-xl flex-col gap-2 border-2 hover:border-amber-300 hover:bg-amber-50 transition-all"
+              >
+                <div className="w-10 h-10 rounded-lg bg-amber-100 flex items-center justify-center">
+                  <Activity className="w-5 h-5 text-amber-600" />
+                </div>
+                <span className="text-sm font-medium text-gray-700">Ver Status</span>
+              </Button>
+
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setPreviewContract(selectedContract)
+                  setSelectedContract(null)
+                }}
+                className="h-20 rounded-xl flex-col gap-2 border-2 hover:border-blue-300 hover:bg-blue-50 transition-all"
+              >
+                <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center">
+                  <Eye className="w-5 h-5 text-blue-600" />
+                </div>
+                <span className="text-sm font-medium text-gray-700">Ver Contrato</span>
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal de Status - Timeline */}
+      <Dialog open={!!statusContract} onOpenChange={() => setStatusContract(null)}>
+        <DialogContent className="max-w-md w-[95vw] p-0 overflow-hidden">
+          <DialogHeader className="px-4 py-3 border-b bg-gradient-to-r from-amber-50 to-white">
+            <div className="flex items-center justify-between">
+              <DialogTitle className="flex items-center gap-2 text-base font-semibold text-gray-900">
+                <div className="w-8 h-8 rounded-lg bg-amber-500 flex items-center justify-center">
+                  <Activity className="w-4 h-4 text-white" />
+                </div>
+                Status do Contrato
+              </DialogTitle>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setStatusContract(null)}
+                className="rounded-lg h-8 w-8"
+              >
+                <X className="w-4 h-4" />
+              </Button>
+            </div>
+          </DialogHeader>
+
+          <div className="p-4 space-y-4">
+            {/* Info do contrato */}
+            <div className="bg-gray-50 rounded-xl p-3 flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center shrink-0">
+                <FileText className="w-5 h-5 text-blue-600" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium text-gray-900 truncate">{statusContract?.title}</p>
+                <p className="text-xs text-gray-500">{statusContract?.patient_name}</p>
+              </div>
+              {statusContract && (
+                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${statusConfig[statusContract.status]?.bg} ${statusConfig[statusContract.status]?.color}`}>
+                  {statusConfig[statusContract.status]?.label}
+                </span>
+              )}
+            </div>
+
+            {/* Timeline */}
+            <div className="bg-white rounded-xl border p-4">
+              {statusContract && <ContractTimeline contract={statusContract} />}
+            </div>
+          </div>
+
+          {/* Footer */}
+          <div className="px-4 py-3 border-t bg-gray-50 flex gap-2">
+            <Button
+              variant="ghost"
+              onClick={() => setStatusContract(null)}
+              className="flex-1 rounded-lg h-9 text-sm text-gray-600"
+            >
+              Fechar
+            </Button>
+            <Button
+              onClick={() => {
+                setPreviewContract(statusContract)
+                setStatusContract(null)
+              }}
+              className="flex-1 rounded-lg h-9 text-sm bg-blue-600 hover:bg-blue-700"
+            >
+              <Eye className="w-4 h-4 mr-1" />
+              Ver Contrato
             </Button>
           </div>
         </DialogContent>
