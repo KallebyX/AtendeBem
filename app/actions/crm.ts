@@ -89,11 +89,14 @@ export async function getPatientDetails(patientId: string) {
       return { success: false, error: "Paciente não encontrado" }
     }
 
-    // Histórico de consultas
+    // Histórico de consultas - buscar por patient_id ou fallback para CPF/nome
     const appointments = await sql`
-      SELECT * FROM appointments 
-      WHERE user_id = ${userId} 
-      AND (patient_cpf = ${patient.cpf} OR patient_name = ${patient.full_name})
+      SELECT * FROM appointments
+      WHERE user_id = ${userId}
+      AND (
+        patient_id = ${patientId}
+        OR (patient_id IS NULL AND (patient_cpf = ${patient.cpf} OR patient_name = ${patient.full_name}))
+      )
       ORDER BY appointment_date DESC
     `
 
