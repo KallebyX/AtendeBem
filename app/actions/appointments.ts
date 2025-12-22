@@ -5,6 +5,7 @@ import { cookies } from "next/headers"
 import { verifyToken } from "@/lib/session"
 
 export async function createAppointment(data: {
+  patientId?: string
   patientName: string
   patientCpf?: string
   patientAge?: number
@@ -39,6 +40,7 @@ export async function createAppointment(data: {
     const result = await sql`
       INSERT INTO appointments (
         user_id,
+        patient_id,
         patient_name,
         patient_cpf,
         patient_age,
@@ -52,6 +54,7 @@ export async function createAppointment(data: {
       )
       VALUES (
         ${user.id},
+        ${data.patientId || null},
         ${data.patientName},
         ${data.patientCpf || null},
         ${data.patientAge || null},
@@ -74,6 +77,7 @@ export async function createAppointment(data: {
         INSERT INTO procedures (
           appointment_id,
           user_id,
+          patient_id,
           procedure_code,
           procedure_name,
           patient_name,
@@ -86,6 +90,7 @@ export async function createAppointment(data: {
         VALUES (
           ${appointmentId},
           ${user.id},
+          ${data.patientId || null},
           ${proc.code},
           ${proc.friendlyName},
           ${data.patientName},

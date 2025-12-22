@@ -120,27 +120,29 @@ function convertToCSV(data: any): string {
   let csv = "GUIA DE CONSULTA TISS\n\n"
 
   csv += "DADOS DA GUIA\n"
-  csv += `Registro ANS,${data.guia.registroANS}\n`
-  csv += `Número da Guia,${data.guia.numeroGuia}\n`
-  csv += `Data do Atendimento,${data.guia.dataAtendimento}\n\n`
+  csv += `Número da Guia,${data.guia?.numeroGuia || ""}\n`
+  csv += `Data do Atendimento,${data.guia?.dataAtendimento || ""}\n`
+  csv += `Horário,${data.guia?.horario || ""}\n`
+  csv += `Status,${data.guia?.status || ""}\n\n`
 
   csv += "DADOS DO BENEFICIÁRIO\n"
-  csv += `Número da Carteira,${data.beneficiario.numeroCarteira}\n`
-  csv += `Nome,${data.beneficiario.nome}\n`
-  csv += `CNS,${data.beneficiario.cns}\n\n`
+  csv += `Nome,${data.beneficiario?.nome || ""}\n`
+  csv += `CPF,${data.beneficiario?.cpf || ""}\n`
+  csv += `CNS,${data.beneficiario?.cns || ""}\n\n`
 
   csv += "DADOS DO PRESTADOR\n"
-  csv += `Código,${data.prestador.codigo}\n`
-  csv += `Nome,${data.prestador.nome}\n`
-  csv += `CRM,${data.prestador.crm}\n`
-  csv += `UF,${data.prestador.uf}\n`
-  csv += `CBOS,${data.prestador.cbos}\n\n`
+  csv += `Nome,${data.prestador?.nome || ""}\n`
+  csv += `CRM,${data.prestador?.crm || ""}\n`
+  csv += `UF,${data.prestador?.uf || ""}\n`
+  csv += `Especialidade,${data.prestador?.especialidade || ""}\n\n`
 
-  csv += "PROCEDIMENTOS REALIZADOS\n"
-  csv += "Data,Tabela,Código,Descrição,Quantidade\n"
-  data.procedimentos.forEach((proc: any) => {
-    csv += `${proc.data},${proc.tabela},${proc.codigo},"${proc.descricao}",${proc.quantidade}\n`
-  })
+  if (data.procedimentos && data.procedimentos.length > 0) {
+    csv += "PROCEDIMENTOS REALIZADOS\n"
+    csv += "Código,Descrição,Quantidade,Valor Unitário,Valor Total\n"
+    data.procedimentos.forEach((proc: any) => {
+      csv += `${proc.codigo || ""},"${proc.descricao || ""}",${proc.quantidade || 1},${proc.valorUnitario || 0},${proc.valorTotal || 0}\n`
+    })
+  }
 
   if (data.observacoes) {
     csv += `\nOBSERVAÇÕES\n"${data.observacoes}"\n`

@@ -13,9 +13,12 @@ export async function exportAppointmentPDF(appointmentId: string) {
     const db = await getDb()
 
     const appointments = await db`
-      SELECT 
+      SELECT
         a.*,
-        p.name as patient_name, p.cpf as patient_cpf, p.cns as patient_cns, p.birth_date,
+        COALESCE(p.full_name, a.patient_name) as patient_name,
+        COALESCE(p.cpf, a.patient_cpf) as patient_cpf,
+        p.cns as patient_cns,
+        p.date_of_birth as birth_date,
         u.name as doctor_name, u.crm, u.crm_uf, u.specialty
       FROM appointments a
       LEFT JOIN patients p ON a.patient_id = p.id
@@ -30,8 +33,13 @@ export async function exportAppointmentPDF(appointmentId: string) {
     const appointment = appointments[0]
 
     const procedures = await db`
-      SELECT code, description, quantity, unit_price, total_price
-      FROM appointment_procedures
+      SELECT
+        procedure_code as code,
+        procedure_name as description,
+        1 as quantity,
+        0 as unit_price,
+        0 as total_price
+      FROM procedures
       WHERE appointment_id = ${appointmentId}
       ORDER BY created_at
     `
@@ -63,8 +71,8 @@ export async function exportAppointmentPDF(appointmentId: string) {
     <div class="section-title">DADOS DA GUIA</div>
     <table>
       <tr><td><strong>Número da Guia:</strong></td><td>${appointment.id}</td></tr>
-      <tr><td><strong>Data do Atendimento:</strong></td><td>${new Date(appointment.date).toLocaleDateString("pt-BR")}</td></tr>
-      <tr><td><strong>Horário:</strong></td><td>${appointment.time || "N/A"}</td></tr>
+      <tr><td><strong>Data do Atendimento:</strong></td><td>${appointment.appointment_date ? new Date(appointment.appointment_date).toLocaleDateString("pt-BR") : "N/A"}</td></tr>
+      <tr><td><strong>Horário:</strong></td><td>${appointment.appointment_date ? new Date(appointment.appointment_date).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : "N/A"}</td></tr>
       <tr><td><strong>Status:</strong></td><td>${appointment.status}</td></tr>
     </table>
   </div>
@@ -107,7 +115,7 @@ export async function exportAppointmentPDF(appointmentId: string) {
       <tbody>
         ${procedures
           .map(
-            (proc) => `
+            (proc: any) => `
         <tr>
           <td>${proc.code}</td>
           <td>${proc.description}</td>
@@ -126,11 +134,11 @@ export async function exportAppointmentPDF(appointmentId: string) {
   }
 
   ${
-    appointment.notes
+    appointment.observations
       ? `
   <div class="section">
     <div class="section-title">OBSERVAÇÕES</div>
-    <p>${appointment.notes}</p>
+    <p>${appointment.observations}</p>
   </div>
   `
       : ""
@@ -161,9 +169,11 @@ export async function exportAppointmentExcel(appointmentId: string) {
     const db = await getDb()
 
     const appointments = await db`
-      SELECT 
+      SELECT
         a.*,
-        p.name as patient_name, p.cpf as patient_cpf, p.cns as patient_cns,
+        COALESCE(p.full_name, a.patient_name) as patient_name,
+        COALESCE(p.cpf, a.patient_cpf) as patient_cpf,
+        p.cns as patient_cns,
         u.name as doctor_name, u.crm, u.crm_uf, u.specialty
       FROM appointments a
       LEFT JOIN patients p ON a.patient_id = p.id
@@ -178,8 +188,13 @@ export async function exportAppointmentExcel(appointmentId: string) {
     const appointment = appointments[0]
 
     const procedures = await db`
-      SELECT code, description, quantity, unit_price, total_price
-      FROM appointment_procedures
+      SELECT
+        procedure_code as code,
+        procedure_name as description,
+        1 as quantity,
+        0 as unit_price,
+        0 as total_price
+      FROM procedures
       WHERE appointment_id = ${appointmentId}
       ORDER BY created_at
     `
@@ -187,8 +202,8 @@ export async function exportAppointmentExcel(appointmentId: string) {
     const data = {
       guia: {
         numeroGuia: appointment.id,
-        dataAtendimento: new Date(appointment.date).toLocaleDateString("pt-BR"),
-        horario: appointment.time || "N/A",
+        dataAtendimento: appointment.appointment_date ? new Date(appointment.appointment_date).toLocaleDateString("pt-BR") : "N/A",
+        horario: appointment.appointment_date ? new Date(appointment.appointment_date).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : "N/A",
         status: appointment.status,
       },
       beneficiario: {
@@ -202,14 +217,14 @@ export async function exportAppointmentExcel(appointmentId: string) {
         uf: appointment.crm_uf,
         especialidade: appointment.specialty,
       },
-      procedimentos: procedures.map((proc) => ({
+      procedimentos: procedures.map((proc: any) => ({
         codigo: proc.code,
         descricao: proc.description,
         quantidade: proc.quantity,
         valorUnitario: proc.unit_price || 0,
         valorTotal: proc.total_price || 0,
       })),
-      observacoes: appointment.notes,
+      observacoes: appointment.observations,
     }
 
     return {

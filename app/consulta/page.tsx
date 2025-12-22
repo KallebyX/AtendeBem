@@ -238,6 +238,7 @@ function ConsultaPageContent() {
     try {
       // 1. Create appointment
       const appointmentResult = await createAppointment({
+        patientId: selectedPatient.id,
         patientName: selectedPatient.full_name,
         patientCpf: selectedPatient.cpf,
         appointmentType: "consulta",
