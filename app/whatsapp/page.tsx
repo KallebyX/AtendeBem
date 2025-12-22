@@ -15,7 +15,8 @@ import {
   getWhatsAppStatus,
   connectWhatsApp,
 } from "@/app/actions/whatsapp"
-import { MessageCircle, Send, Phone, Smartphone, QrCode, Check, RefreshCw, Search, Clock, CheckCheck } from "lucide-react"
+import { MessageCircle, Send, Phone, Smartphone, QrCode, Check, RefreshCw, Search, Clock, CheckCheck, Plus, UserPlus } from "lucide-react"
+import { Label } from "@/components/ui/label"
 import { NavigationHeader } from "@/components/navigation-header"
 import { toast } from "sonner"
 
@@ -30,6 +31,11 @@ export default function WhatsAppPage() {
   const [connectionStatus, setConnectionStatus] = useState<"disconnected" | "connecting" | "connected">("disconnected")
   const [showQRModal, setShowQRModal] = useState(false)
   const [qrCode, setQrCode] = useState<string | null>(null)
+  const [showNewConversationModal, setShowNewConversationModal] = useState(false)
+  const [newContactPhone, setNewContactPhone] = useState("")
+  const [newContactName, setNewContactName] = useState("")
+  const [newContactMessage, setNewContactMessage] = useState("")
+  const [creatingConversation, setCreatingConversation] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -122,6 +128,44 @@ export default function WhatsAppPage() {
     await loadQrCode()
   }
 
+  async function handleCreateNewConversation() {
+    if (!newContactPhone.trim() || !newContactMessage.trim()) {
+      toast.error("Preencha o telefone e a mensagem")
+      return
+    }
+
+    setCreatingConversation(true)
+
+    // Formatar telefone (remover caracteres especiais)
+    const formattedPhone = newContactPhone.replace(/\D/g, "")
+
+    const result = await sendWhatsAppMessage({
+      phone_number: formattedPhone,
+      message_text: newContactMessage,
+    })
+
+    if (result.success) {
+      toast.success("Mensagem enviada! Conversa criada.")
+      setShowNewConversationModal(false)
+      setNewContactPhone("")
+      setNewContactName("")
+      setNewContactMessage("")
+      await loadConversations()
+      // Selecionar a nova conversa
+      const updatedConversations = await getWhatsAppConversations()
+      if (updatedConversations.data) {
+        const newConv = updatedConversations.data.find((c: any) => c.phone_number === formattedPhone)
+        if (newConv) {
+          setSelectedConversation(newConv)
+        }
+      }
+    } else {
+      toast.error(result.error || "Erro ao enviar mensagem")
+    }
+
+    setCreatingConversation(false)
+  }
+
   function getStatusIcon(status: string) {
     switch (status) {
       case "sent": return <Check className="w-3 h-3 text-gray-400" />
@@ -165,7 +209,14 @@ export default function WhatsAppPage() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 h-[calc(100vh-250px)]">
           {/* Conversations List */}
           <Card className="lg:col-span-1 flex flex-col">
-            <CardHeader className="pb-3">
+            <CardHeader className="pb-3 space-y-3">
+              <Button
+                onClick={() => setShowNewConversationModal(true)}
+                className="w-full bg-green-600 hover:bg-green-700"
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                Nova Conversa
+              </Button>
               <div className="relative">
                 <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                 <Input
@@ -309,6 +360,84 @@ export default function WhatsAppPage() {
             )}
           </Card>
         </div>
+
+        {/* New Conversation Modal */}
+        <Dialog open={showNewConversationModal} onOpenChange={setShowNewConversationModal}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <UserPlus className="w-5 h-5 text-green-600" />
+                Nova Conversa
+              </DialogTitle>
+              <DialogDescription>
+                Inicie uma conversa com um novo contato
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label htmlFor="phone">Telefone (com DDD)</Label>
+                <Input
+                  id="phone"
+                  placeholder="55 99 99999-9999"
+                  value={newContactPhone}
+                  onChange={(e) => setNewContactPhone(e.target.value)}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Digite o numero completo com codigo do pais (55) e DDD
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="name">Nome do contato (opcional)</Label>
+                <Input
+                  id="name"
+                  placeholder="Nome do paciente"
+                  value={newContactName}
+                  onChange={(e) => setNewContactName(e.target.value)}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="message">Mensagem</Label>
+                <Textarea
+                  id="message"
+                  placeholder="Digite sua primeira mensagem..."
+                  value={newContactMessage}
+                  onChange={(e) => setNewContactMessage(e.target.value)}
+                  rows={3}
+                />
+              </div>
+
+              <div className="flex gap-2 pt-2">
+                <Button
+                  variant="outline"
+                  onClick={() => setShowNewConversationModal(false)}
+                  className="flex-1"
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  onClick={handleCreateNewConversation}
+                  disabled={creatingConversation || !newContactPhone.trim() || !newContactMessage.trim()}
+                  className="flex-1 bg-green-600 hover:bg-green-700"
+                >
+                  {creatingConversation ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                      Enviando...
+                    </>
+                  ) : (
+                    <>
+                      <Send className="w-4 h-4 mr-2" />
+                      Enviar
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
 
         {/* QR Code Modal */}
         <Dialog open={showQRModal} onOpenChange={setShowQRModal}>
