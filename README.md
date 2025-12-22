@@ -121,7 +121,7 @@ O AtendeBem funciona como um **Construtor de Atendimentos** visual onde o profis
 
 ## 🏗️ Arquitetura
 
-```
+\`\`\`
 ┌─────────────────────────────────────────────────────────────────┐
 │                         FRONTEND                                │
 │  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────────┐ │
@@ -153,11 +153,11 @@ O AtendeBem funciona como um **Construtor de Atendimentos** visual onde o profis
 │  │  (IA/LLM)   │  │  (Cert Dig) │  │   (Deploy/CDN)          │ │
 │  └─────────────┘  └─────────────┘  └─────────────────────────┘ │
 └─────────────────────────────────────────────────────────────────┘
-```
+\`\`\`
 
 ### Estrutura de Diretórios
 
-```
+\`\`\`
 atendebem/
 ├── app/                    # Next.js App Router
 │   ├── (auth)/            # Rotas de autenticação
@@ -178,11 +178,11 @@ atendebem/
 ├── scripts/              # Scripts de manutenção
 └── docs/                 # Documentação
     └── architecture/     # Diagramas e decisões
-```
+\`\`\`
 
 ### Modelo de Dados (Principais Entidades)
 
-```sql
+\`\`\`sql
 -- Multi-tenant: todas as tabelas possuem tenant_id
 tenants
 ├── id (uuid, PK)
@@ -218,7 +218,7 @@ prescriptions
 ├── medications (jsonb[])
 ├── digital_signature
 └── validation_qr_code
-```
+\`\`\`
 
 ---
 
@@ -233,7 +233,7 @@ prescriptions
 
 ### Passo a Passo
 
-```bash
+\`\`\`bash
 # 1. Clone o repositório
 git clone https://github.com/KallebyX/AtendeBem.git
 cd AtendeBem
@@ -243,11 +243,11 @@ pnpm install
 
 # 3. Configure as variáveis de ambiente
 cp .env.example .env.local
-```
+\`\`\`
 
 ### Variáveis de Ambiente
 
-```env
+\`\`\`env
 # Supabase
 NEXT_PUBLIC_SUPABASE_URL=https://seu-projeto.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=sua-anon-key
@@ -258,11 +258,11 @@ GEMINI_API_KEY=sua-api-key
 
 # App
 NEXT_PUBLIC_APP_URL=http://localhost:3000
-```
+\`\`\`
 
 ### Configuração do Banco de Dados
 
-```bash
+\`\`\`bash
 # Conecte ao Supabase CLI
 npx supabase login
 
@@ -271,18 +271,18 @@ npx supabase link --project-ref seu-project-ref
 
 # Execute as migrations
 npx supabase db push
-```
+\`\`\`
 
 ### Executando Localmente
 
-```bash
+\`\`\`bash
 # Desenvolvimento
 pnpm dev
 
 # Build de produção
 pnpm build
 pnpm start
-```
+\`\`\`
 
 Acesse [http://localhost:3000](http://localhost:3000)
 
@@ -315,48 +315,48 @@ Acesse [http://localhost:3000](http://localhost:3000)
 
 Todas as requisições devem incluir o header de autorização:
 
-```http
+\`\`\`http
 Authorization: Bearer <supabase-jwt-token>
-```
+\`\`\`
 
 ### Endpoints Principais
 
 #### Atendimentos
 
-```http
+\`\`\`http
 GET    /api/appointments         # Lista atendimentos
 POST   /api/appointments         # Cria atendimento
 GET    /api/appointments/:id     # Detalhes do atendimento
 PUT    /api/appointments/:id     # Atualiza atendimento
 DELETE /api/appointments/:id     # Remove atendimento
-```
+\`\`\`
 
 #### Pacientes
 
-```http
+\`\`\`http
 GET    /api/patients             # Lista pacientes
 POST   /api/patients             # Cadastra paciente
 GET    /api/patients/:id         # Detalhes do paciente
 PUT    /api/patients/:id         # Atualiza paciente
-```
+\`\`\`
 
 #### Códigos TUSS
 
-```http
+\`\`\`http
 GET    /api/tuss?q=consulta      # Busca códigos TUSS
 GET    /api/tuss/:code           # Detalhes do código
-```
+\`\`\`
 
 #### Exportação
 
-```http
+\`\`\`http
 POST   /api/export/pdf           # Gera PDF do atendimento
 POST   /api/export/excel         # Gera planilha Excel
-```
+\`\`\`
 
 ### Exemplo de Requisição
 
-```typescript
+\`\`\`typescript
 // Criar novo atendimento
 const response = await fetch('/api/appointments', {
   method: 'POST',
@@ -375,7 +375,7 @@ const response = await fetch('/api/appointments', {
     ]
   })
 });
-```
+\`\`\`
 
 ---
 
@@ -405,7 +405,7 @@ const response = await fetch('/api/appointments', {
 
 ## 🧪 Testes
 
-```bash
+\`\`\`bash
 # Testes unitários
 pnpm test
 
@@ -417,7 +417,7 @@ pnpm test:e2e
 
 # Lint
 pnpm lint
-```
+\`\`\`
 
 ---
 
@@ -471,7 +471,7 @@ Este projeto segue padrões profissionais de desenvolvimento. Para contribuir:
 
 Utilizamos [Conventional Commits](https://www.conventionalcommits.org/):
 
-```
+\`\`\`
 feat: nova funcionalidade
 fix: correção de bug
 docs: atualização de documentação
@@ -479,7 +479,7 @@ style: formatação (sem mudança de código)
 refactor: refatoração
 test: adição de testes
 chore: tarefas de manutenção
-```
+\`\`\`
 
 ### Code Review
 
