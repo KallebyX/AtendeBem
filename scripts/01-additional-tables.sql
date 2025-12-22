@@ -2,6 +2,31 @@
 -- Run this AFTER 00-complete-migration.sql
 -- Version 1.0 - Additional tables for extended features
 
+-- Enable UUID extension first
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
+-- ============================================
+-- PREREQUISITE CHECK: Ensure base tables exist
+-- ============================================
+
+DO $$
+BEGIN
+    -- Ensure users table exists (from 00-complete-migration.sql)
+    IF NOT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'users' AND table_schema = 'public') THEN
+        RAISE EXCEPTION 'Base table "users" does not exist. Please run 00-complete-migration.sql first.';
+    END IF;
+
+    -- Ensure patients table exists
+    IF NOT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'patients' AND table_schema = 'public') THEN
+        RAISE EXCEPTION 'Base table "patients" does not exist. Please run 00-complete-migration.sql first.';
+    END IF;
+
+    -- Ensure appointments table exists
+    IF NOT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'appointments' AND table_schema = 'public') THEN
+        RAISE EXCEPTION 'Base table "appointments" does not exist. Please run 00-complete-migration.sql first.';
+    END IF;
+END $$;
+
 -- ============================================
 -- CONTRACTS (Patient treatment contracts)
 -- ============================================
