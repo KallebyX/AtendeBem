@@ -216,8 +216,8 @@ export function sanitizeForISO88591(str: string): string {
     '—': '-',  // Em dash para hífen
     '"': '"',  // Aspas curvas para retas
     '"': '"',
-    ''': "'",  // Apóstrofe curvo para reto
-    ''': "'",
+    "\u2018": "'",  // Apóstrofe curvo esquerdo para reto (')
+    "\u2019": "'",  // Apóstrofe curvo direito para reto (')
     '…': '...',  // Reticências para três pontos
     '€': 'EUR',  // Euro (não existe em ISO-8859-1)
     '™': 'TM',   // Trademark
