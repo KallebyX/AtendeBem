@@ -14,9 +14,9 @@ export async function createInventoryItem(data: {
   current_stock?: number
   min_stock?: number
   max_stock?: number
-  cost_price?: number
+  unit_cost?: number
   sale_price?: number
-  supplier?: string
+  supplier_name?: string
   location?: string
   expiration_date?: string
 }) {
@@ -34,14 +34,14 @@ export async function createInventoryItem(data: {
     const result = await db`
       INSERT INTO inventory_items (
         user_id, name, description, sku, category, unit,
-        current_stock, min_stock, max_stock, cost_price,
-        sale_price, supplier, location, expiration_date
+        current_stock, min_stock, max_stock, unit_cost,
+        sale_price, supplier_name, location, expiration_date
       ) VALUES (
         ${user.id}, ${data.name}, ${data.description || null},
         ${data.sku || null}, ${data.category}, ${data.unit || 'unidade'},
         ${data.current_stock || 0}, ${data.min_stock || 0},
-        ${data.max_stock || null}, ${data.cost_price || null},
-        ${data.sale_price || null}, ${data.supplier || null},
+        ${data.max_stock || null}, ${data.unit_cost || null},
+        ${data.sale_price || null}, ${data.supplier_name || null},
         ${data.location || null}, ${data.expiration_date || null}
       ) RETURNING *
     `
@@ -62,9 +62,9 @@ export async function updateInventoryItem(id: string, data: {
   current_stock?: number
   min_stock?: number
   max_stock?: number
-  cost_price?: number
+  unit_cost?: number
   sale_price?: number
-  supplier?: string
+  supplier_name?: string
   location?: string
   expiration_date?: string
   is_active?: boolean
@@ -90,9 +90,9 @@ export async function updateInventoryItem(id: string, data: {
         current_stock = COALESCE(${data.current_stock ?? null}, current_stock),
         min_stock = COALESCE(${data.min_stock ?? null}, min_stock),
         max_stock = COALESCE(${data.max_stock ?? null}, max_stock),
-        cost_price = COALESCE(${data.cost_price ?? null}, cost_price),
+        unit_cost = COALESCE(${data.unit_cost ?? null}, unit_cost),
         sale_price = COALESCE(${data.sale_price ?? null}, sale_price),
-        supplier = COALESCE(${data.supplier || null}, supplier),
+        supplier_name = COALESCE(${data.supplier_name || null}, supplier_name),
         location = COALESCE(${data.location || null}, location),
         expiration_date = COALESCE(${data.expiration_date || null}, expiration_date),
         is_active = COALESCE(${data.is_active ?? null}, is_active),
@@ -111,11 +111,10 @@ export async function updateInventoryItem(id: string, data: {
 
 export async function createInventoryMovement(data: {
   item_id: string
-  movement_type: 'entry' | 'exit' | 'adjustment' | 'transfer'
+  type: 'entry' | 'exit' | 'adjustment' | 'transfer'
   quantity: number
   unit_cost?: number
-  reference_type?: string
-  reference_id?: string
+  reason?: string
   notes?: string
 }) {
   try {
@@ -140,14 +139,14 @@ export async function createInventoryMovement(data: {
     const currentStock = Number(item[0].current_stock) || 0
     let newStock = currentStock
 
-    if (data.movement_type === 'entry') {
+    if (data.type === 'entry') {
       newStock = currentStock + data.quantity
-    } else if (data.movement_type === 'exit') {
+    } else if (data.type === 'exit') {
       if (currentStock < data.quantity) {
         return { error: 'Estoque insuficiente' }
       }
       newStock = currentStock - data.quantity
-    } else if (data.movement_type === 'adjustment') {
+    } else if (data.type === 'adjustment') {
       newStock = data.quantity
     }
 
@@ -156,13 +155,12 @@ export async function createInventoryMovement(data: {
     // Create movement
     const movement = await db`
       INSERT INTO inventory_movements (
-        item_id, user_id, movement_type, quantity,
-        unit_cost, total_cost, reference_type, reference_id, notes
+        item_id, user_id, type, quantity,
+        unit_cost, total_cost, reason, notes, stock_after
       ) VALUES (
-        ${data.item_id}, ${user.id}, ${data.movement_type},
+        ${data.item_id}, ${user.id}, ${data.type},
         ${data.quantity}, ${data.unit_cost || null}, ${totalCost},
-        ${data.reference_type || null}, ${data.reference_id || null},
-        ${data.notes || null}
+        ${data.reason || null}, ${data.notes || null}, ${newStock}
       ) RETURNING *
     `
 
@@ -333,7 +331,7 @@ export async function getInventoryStats() {
         COUNT(*) as total_items,
         COUNT(*) FILTER (WHERE current_stock <= min_stock) as low_stock_count,
         COUNT(*) FILTER (WHERE current_stock = 0) as zero_stock_count,
-        COALESCE(SUM(current_stock * cost_price), 0) as total_value
+        COALESCE(SUM(current_stock * unit_cost), 0) as total_value
       FROM inventory_items
       WHERE user_id = ${user.id} AND is_active = true
     `

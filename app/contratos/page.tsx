@@ -87,7 +87,7 @@ export default function ContratosPage() {
     const result = await createContract({
       patient_id: selectedPatient,
       title,
-      contract_type: contractType || "general",
+      contract_type: contractType || "other",
       content: finalContent,
       template_id: selectedTemplate || undefined,
       valid_until: validUntil || undefined,
@@ -252,10 +252,13 @@ export default function ContratosPage() {
                         <SelectValue placeholder="Selecione..." />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="consent">Consentimento Informado</SelectItem>
-                        <SelectItem value="treatment">Plano de Tratamento</SelectItem>
-                        <SelectItem value="telemedicine">Telemedicina</SelectItem>
-                        <SelectItem value="general">Outro</SelectItem>
+                        <SelectItem value="informed_consent">Consentimento Informado</SelectItem>
+                        <SelectItem value="treatment_plan">Plano de Tratamento</SelectItem>
+                        <SelectItem value="telemedicine_consent">Telemedicina</SelectItem>
+                        <SelectItem value="service_agreement">Contrato de Serviço</SelectItem>
+                        <SelectItem value="privacy_policy">Política de Privacidade</SelectItem>
+                        <SelectItem value="payment_plan">Plano de Pagamento</SelectItem>
+                        <SelectItem value="other">Outro</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
