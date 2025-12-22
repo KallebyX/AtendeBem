@@ -13,6 +13,7 @@ import {
   getWhatsAppMessages,
   markConversationAsRead,
   getWhatsAppStatus,
+  connectWhatsApp,
 } from "@/app/actions/whatsapp"
 import { MessageCircle, Send, Phone, Smartphone, QrCode, Check, RefreshCw, Search, Clock, CheckCheck } from "lucide-react"
 import { NavigationHeader } from "@/components/navigation-header"
@@ -68,9 +69,18 @@ export default function WhatsAppPage() {
     const result = await getWhatsAppStatus()
     if (result.success && result.data) {
       setConnectionStatus(result.data.status)
-      if (result.data.qrCode) {
-        setQrCode(result.data.qrCode)
+      if (result.data.qr_code) {
+        setQrCode(result.data.qr_code)
       }
+    }
+  }
+
+  async function loadQrCode() {
+    const result = await connectWhatsApp()
+    if (result.success && result.data) {
+      setQrCode(result.data.qr_code)
+    } else if (result.error) {
+      toast.error(result.error)
     }
   }
 
@@ -108,7 +118,7 @@ export default function WhatsAppPage() {
   async function handleConnectWhatsApp() {
     setShowQRModal(true)
     setConnectionStatus("connecting")
-    await checkConnectionStatus()
+    await loadQrCode()
   }
 
   function getStatusIcon(status: string) {
@@ -340,7 +350,7 @@ export default function WhatsAppPage() {
               </div>
 
               <div className="flex gap-2">
-                <Button variant="outline" onClick={() => checkConnectionStatus()} className="flex-1">
+                <Button variant="outline" onClick={() => loadQrCode()} className="flex-1">
                   <RefreshCw className="w-4 h-4 mr-2" />
                   Atualizar QR Code
                 </Button>

@@ -244,14 +244,13 @@ function ConsultaPageContent() {
         context: "presencial",
         urgency: "eletivo",
         procedures: [],
-        linkedAppointmentId: null,
       })
 
       if (appointmentResult.error) {
         throw new Error(appointmentResult.error)
       }
 
-      const appointmentId = appointmentResult.appointment?.id
+      const appointmentId = appointmentResult.appointmentId
 
       // 2. Create anamnesis if data exists
       if (anamnesis.chiefComplaint) {
