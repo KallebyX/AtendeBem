@@ -62,7 +62,7 @@ export default function EstoquePage() {
     max_stock: 0,
     unit_cost: 0,
     barcode: '',
-    supplier: '',
+    supplier_name: '',
     location: ''
   })
 
@@ -105,7 +105,7 @@ export default function EstoquePage() {
         max_stock: 0,
         unit_cost: 0,
         barcode: '',
-        supplier: '',
+        supplier_name: '',
         location: ''
       })
       loadData()
@@ -451,8 +451,8 @@ export default function EstoquePage() {
                 <Label>Fornecedor</Label>
                 <Input
                   placeholder="Nome do fornecedor"
-                  value={newItem.supplier}
-                  onChange={(e) => setNewItem({ ...newItem, supplier: e.target.value })}
+                  value={newItem.supplier_name}
+                  onChange={(e) => setNewItem({ ...newItem, supplier_name: e.target.value })}
                 />
               </div>
               <div>
