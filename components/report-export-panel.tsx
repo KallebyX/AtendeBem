@@ -21,6 +21,10 @@ import {
   Calendar as CalendarIconSolid,
   Package,
   BarChart3,
+  Stethoscope,
+  Pill,
+  FileCheck,
+  Microscope,
 } from "lucide-react"
 import {
   exportFinancialToExcel,
@@ -28,11 +32,22 @@ import {
   exportAppointmentsToExcel,
   exportInventoryToExcel,
   exportIntegratedToExcel,
+  exportProceduresToExcel,
+  exportPrescriptionsToExcel,
+  exportTISSToExcel,
+  exportExamsToExcel,
   exportFinancialToPDF,
   exportIntegratedToPDF,
+  exportPatientsToPDF,
+  exportAppointmentsToPDF,
+  exportInventoryToPDF,
+  exportProceduresToPDF,
+  exportPrescriptionsToPDF,
+  exportTISSToPDF,
+  exportExamsToPDF,
 } from "@/app/actions/report-export"
 
-type ReportType = "financial" | "patients" | "appointments" | "inventory" | "integrated"
+type ReportType = "financial" | "patients" | "appointments" | "inventory" | "integrated" | "procedures" | "prescriptions" | "tiss" | "exams"
 type ExportFormat = "excel" | "pdf"
 
 interface DateRange {
@@ -40,13 +55,14 @@ interface DateRange {
   to: Date | undefined
 }
 
-const reportTypes: { value: ReportType; label: string; description: string; icon: any; hasPdf: boolean }[] = [
+const reportTypes: { value: ReportType; label: string; description: string; icon: any; hasPdf: boolean; usesDate: boolean }[] = [
   {
     value: "integrated",
     label: "Relatório Gerencial Integrado",
     description: "Visão consolidada de todos os módulos: financeiro, pacientes, agendamentos, estoque e faturamento",
     icon: BarChart3,
     hasPdf: true,
+    usesDate: true,
   },
   {
     value: "financial",
@@ -54,27 +70,63 @@ const reportTypes: { value: ReportType; label: string; description: string; icon
     description: "Receitas, despesas, contas a pagar/receber, evolução mensal e fluxo de caixa",
     icon: TrendingUp,
     hasPdf: true,
+    usesDate: true,
   },
   {
     value: "patients",
     label: "Relatório de Pacientes",
     description: "Lista completa de pacientes, distribuição por convênio e faixa etária",
     icon: Users,
-    hasPdf: false,
+    hasPdf: true,
+    usesDate: false,
   },
   {
     value: "appointments",
     label: "Relatório de Agendamentos",
     description: "Histórico de consultas, taxa de comparecimento e distribuição por profissional",
     icon: CalendarIconSolid,
-    hasPdf: false,
+    hasPdf: true,
+    usesDate: true,
   },
   {
     value: "inventory",
     label: "Relatório de Estoque",
     description: "Inventário completo, movimentações e alertas de estoque baixo ou vencimento",
     icon: Package,
-    hasPdf: false,
+    hasPdf: true,
+    usesDate: false,
+  },
+  {
+    value: "procedures",
+    label: "Relatório de Procedimentos",
+    description: "Procedimentos médicos realizados, códigos TUSS, valores e distribuição por profissional",
+    icon: Stethoscope,
+    hasPdf: true,
+    usesDate: true,
+  },
+  {
+    value: "prescriptions",
+    label: "Relatório de Prescrições",
+    description: "Receitas emitidas, medicamentos mais prescritos e status de assinatura digital",
+    icon: Pill,
+    hasPdf: true,
+    usesDate: true,
+  },
+  {
+    value: "tiss",
+    label: "Relatório de Guias TISS",
+    description: "Guias de convênios, status de autorização, valores por operadora",
+    icon: FileCheck,
+    hasPdf: true,
+    usesDate: true,
+  },
+  {
+    value: "exams",
+    label: "Relatório de Exames",
+    description: "Exames solicitados e realizados, tipos, urgência e status dos resultados",
+    icon: Microscope,
+    hasPdf: true,
+    usesDate: true,
   },
 ]
 
@@ -125,6 +177,18 @@ export function ReportExportPanel() {
           case "integrated":
             result = await exportIntegratedToExcel(startDate, endDate)
             break
+          case "procedures":
+            result = await exportProceduresToExcel(startDate, endDate)
+            break
+          case "prescriptions":
+            result = await exportPrescriptionsToExcel(startDate, endDate)
+            break
+          case "tiss":
+            result = await exportTISSToExcel(startDate, endDate)
+            break
+          case "exams":
+            result = await exportExamsToExcel(startDate, endDate)
+            break
         }
       } else {
         switch (selectedReport) {
@@ -133,6 +197,27 @@ export function ReportExportPanel() {
             break
           case "integrated":
             result = await exportIntegratedToPDF(startDate, endDate)
+            break
+          case "patients":
+            result = await exportPatientsToPDF()
+            break
+          case "appointments":
+            result = await exportAppointmentsToPDF(startDate, endDate)
+            break
+          case "inventory":
+            result = await exportInventoryToPDF()
+            break
+          case "procedures":
+            result = await exportProceduresToPDF(startDate, endDate)
+            break
+          case "prescriptions":
+            result = await exportPrescriptionsToPDF(startDate, endDate)
+            break
+          case "tiss":
+            result = await exportTISSToPDF(startDate, endDate)
+            break
+          case "exams":
+            result = await exportExamsToPDF(startDate, endDate)
             break
           default:
             toast.error("Este relatório não suporta exportação em PDF")
@@ -253,7 +338,7 @@ export function ReportExportPanel() {
         </div>
 
         {/* Período - apenas para relatórios que usam data */}
-        {selectedReport !== "patients" && selectedReport !== "inventory" && (
+        {selectedReportInfo?.usesDate && (
           <div className="space-y-3">
             <label className="text-sm font-medium">Período</label>
 
@@ -406,6 +491,42 @@ export function ReportExportPanel() {
                   <li>- Alertas de estoque baixo</li>
                   <li>- Produtos próximos ao vencimento</li>
                   <li>- Histórico de movimentações</li>
+                </>
+              )}
+              {selectedReport === "procedures" && (
+                <>
+                  <li>- Lista de procedimentos realizados</li>
+                  <li>- Códigos TUSS e valores</li>
+                  <li>- Distribuição por tipo e profissional</li>
+                  <li>- Receita total e ticket médio</li>
+                  <li>- Evolução mensal de procedimentos</li>
+                </>
+              )}
+              {selectedReport === "prescriptions" && (
+                <>
+                  <li>- Lista de prescrições emitidas</li>
+                  <li>- Status de assinatura digital</li>
+                  <li>- Medicamentos mais prescritos</li>
+                  <li>- Distribuição por tipo de receita</li>
+                  <li>- Receitas pendentes e assinadas</li>
+                </>
+              )}
+              {selectedReport === "tiss" && (
+                <>
+                  <li>- Lista de guias TISS</li>
+                  <li>- Status de autorização</li>
+                  <li>- Distribuição por operadora</li>
+                  <li>- Valores totais por convênio</li>
+                  <li>- Taxa de aprovação/negação</li>
+                </>
+              )}
+              {selectedReport === "exams" && (
+                <>
+                  <li>- Lista de exames solicitados</li>
+                  <li>- Status dos resultados</li>
+                  <li>- Distribuição por tipo de exame</li>
+                  <li>- Exames urgentes vs normais</li>
+                  <li>- Taxa de realização</li>
                 </>
               )}
             </ul>

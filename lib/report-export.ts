@@ -169,6 +169,96 @@ export interface IntegratedReportData extends ReportData {
 }
 
 // ============================================================================
+// NOVOS TIPOS DE RELATÓRIO
+// ============================================================================
+
+export interface ProceduresReportData extends ReportData {
+  summary: {
+    totalProcedimentos: number
+    totalReceita: number
+    ticketMedio: number
+    procedimentosPorDia: number
+  }
+  procedimentos: Array<{
+    data: string
+    paciente: string
+    procedimento: string
+    codigoTUSS: string
+    profissional: string
+    duracao: string
+    valor: number
+    status: string
+  }>
+  porTipo: Array<{ tipo: string; quantidade: number; receita: number; percentual: number }>
+  porProfissional: Array<{ profissional: string; quantidade: number; receita: number }>
+  evolucaoMensal: Array<{ mes: string; quantidade: number; receita: number }>
+}
+
+export interface PrescriptionsReportData extends ReportData {
+  summary: {
+    totalReceitas: number
+    receitasDigitais: number
+    receitasPendentes: number
+    receitasAssinadas: number
+  }
+  receitas: Array<{
+    data: string
+    numero: string
+    paciente: string
+    medicamentos: string
+    profissional: string
+    tipo: string
+    status: string
+    assinatura: string
+  }>
+  porTipo: Array<{ tipo: string; quantidade: number; percentual: number }>
+  medicamentosMaisPrescritos: Array<{ medicamento: string; quantidade: number; percentual: number }>
+}
+
+export interface TISSReportData extends ReportData {
+  summary: {
+    totalGuias: number
+    guiasAutorizadas: number
+    guiasPendentes: number
+    guiasNegadas: number
+    valorTotal: number
+  }
+  guias: Array<{
+    numero: string
+    data: string
+    paciente: string
+    operadora: string
+    tipo: string
+    procedimentos: string
+    valorTotal: number
+    status: string
+  }>
+  porOperadora: Array<{ operadora: string; quantidade: number; valorTotal: number; percentual: number }>
+  porTipo: Array<{ tipo: string; quantidade: number; percentual: number }>
+  porStatus: Array<{ status: string; quantidade: number; percentual: number }>
+}
+
+export interface ExamsReportData extends ReportData {
+  summary: {
+    totalExames: number
+    examesRealizados: number
+    examesPendentes: number
+    exameCancelados: number
+  }
+  exames: Array<{
+    data: string
+    paciente: string
+    tipoExame: string
+    solicitante: string
+    urgencia: string
+    resultado: string
+    status: string
+  }>
+  porTipo: Array<{ tipo: string; quantidade: number; percentual: number }>
+  porStatus: Array<{ status: string; quantidade: number; percentual: number }>
+}
+
+// ============================================================================
 // FUNÇÕES DE FORMATAÇÃO
 // ============================================================================
 
@@ -1300,4 +1390,1388 @@ export function generateIntegratedPDFHTML(data: IntegratedReportData): string {
 </body>
 </html>
 `
+}
+
+// ============================================================================
+// RELATÓRIO DE PROCEDIMENTOS - EXCEL
+// ============================================================================
+
+export function generateProceduresExcel(data: ProceduresReportData): XLSX.WorkBook {
+  const sheets: ExcelSheetConfig[] = []
+
+  // Folha 1: Resumo
+  const resumoData = [
+    ['RELATÓRIO DE PROCEDIMENTOS'],
+    [data.title],
+    [`Período: ${data.period || 'Todos os períodos'}`],
+    [`Gerado em: ${data.generatedAt}`],
+    [''],
+    ['RESUMO'],
+    [''],
+    ['Indicador', 'Valor'],
+    ['Total de Procedimentos', data.summary.totalProcedimentos.toString()],
+    ['Receita Total', formatCurrency(data.summary.totalReceita)],
+    ['Ticket Médio', formatCurrency(data.summary.ticketMedio)],
+    ['Procedimentos por Dia', data.summary.procedimentosPorDia.toFixed(1)],
+    [''],
+    ['POR TIPO DE PROCEDIMENTO'],
+    ['Tipo', 'Quantidade', 'Receita', 'Percentual'],
+    ...data.porTipo.map(t => [t.tipo, t.quantidade.toString(), formatCurrency(t.receita), formatPercent(t.percentual)]),
+    [''],
+    ['POR PROFISSIONAL'],
+    ['Profissional', 'Quantidade', 'Receita'],
+    ...data.porProfissional.map(p => [p.profissional, p.quantidade.toString(), formatCurrency(p.receita)])
+  ]
+
+  sheets.push({
+    name: 'Resumo',
+    data: resumoData,
+    columnWidths: [30, 15, 18, 15]
+  })
+
+  // Folha 2: Lista de Procedimentos
+  const procedimentosData = [
+    ['LISTA DE PROCEDIMENTOS'],
+    [''],
+    ['Data', 'Paciente', 'Procedimento', 'Código TUSS', 'Profissional', 'Duração', 'Valor', 'Status'],
+    ...data.procedimentos.map(p => [
+      p.data,
+      p.paciente,
+      p.procedimento,
+      p.codigoTUSS,
+      p.profissional,
+      p.duracao,
+      formatCurrency(p.valor),
+      p.status
+    ])
+  ]
+
+  sheets.push({
+    name: 'Procedimentos',
+    data: procedimentosData,
+    columnWidths: [12, 25, 30, 15, 25, 12, 15, 15]
+  })
+
+  // Folha 3: Evolução Mensal
+  if (data.evolucaoMensal.length > 0) {
+    const evolucaoData = [
+      ['EVOLUÇÃO MENSAL'],
+      [''],
+      ['Mês', 'Quantidade', 'Receita'],
+      ...data.evolucaoMensal.map(m => [m.mes, m.quantidade.toString(), formatCurrency(m.receita)])
+    ]
+
+    sheets.push({
+      name: 'Evolução Mensal',
+      data: evolucaoData,
+      columnWidths: [15, 15, 18]
+    })
+  }
+
+  return generateExcelWorkbook(sheets)
+}
+
+// ============================================================================
+// RELATÓRIO DE PRESCRIÇÕES - EXCEL
+// ============================================================================
+
+export function generatePrescriptionsExcel(data: PrescriptionsReportData): XLSX.WorkBook {
+  const sheets: ExcelSheetConfig[] = []
+
+  // Folha 1: Resumo
+  const resumoData = [
+    ['RELATÓRIO DE PRESCRIÇÕES'],
+    [data.title],
+    [`Gerado em: ${data.generatedAt}`],
+    [''],
+    ['RESUMO'],
+    [''],
+    ['Indicador', 'Valor'],
+    ['Total de Receitas', data.summary.totalReceitas.toString()],
+    ['Receitas Digitais', data.summary.receitasDigitais.toString()],
+    ['Receitas Assinadas', data.summary.receitasAssinadas.toString()],
+    ['Receitas Pendentes', data.summary.receitasPendentes.toString()],
+    [''],
+    ['POR TIPO'],
+    ['Tipo', 'Quantidade', 'Percentual'],
+    ...data.porTipo.map(t => [t.tipo, t.quantidade.toString(), formatPercent(t.percentual)]),
+    [''],
+    ['MEDICAMENTOS MAIS PRESCRITOS'],
+    ['Medicamento', 'Quantidade', 'Percentual'],
+    ...data.medicamentosMaisPrescritos.map(m => [m.medicamento, m.quantidade.toString(), formatPercent(m.percentual)])
+  ]
+
+  sheets.push({
+    name: 'Resumo',
+    data: resumoData,
+    columnWidths: [35, 15, 15]
+  })
+
+  // Folha 2: Lista de Receitas
+  const receitasData = [
+    ['LISTA DE PRESCRIÇÕES'],
+    [''],
+    ['Data', 'Número', 'Paciente', 'Medicamentos', 'Profissional', 'Tipo', 'Status', 'Assinatura'],
+    ...data.receitas.map(r => [
+      r.data,
+      r.numero,
+      r.paciente,
+      r.medicamentos,
+      r.profissional,
+      r.tipo,
+      r.status,
+      r.assinatura
+    ])
+  ]
+
+  sheets.push({
+    name: 'Receitas',
+    data: receitasData,
+    columnWidths: [12, 15, 25, 40, 25, 15, 15, 15]
+  })
+
+  return generateExcelWorkbook(sheets)
+}
+
+// ============================================================================
+// RELATÓRIO TISS - EXCEL
+// ============================================================================
+
+export function generateTISSExcel(data: TISSReportData): XLSX.WorkBook {
+  const sheets: ExcelSheetConfig[] = []
+
+  // Folha 1: Resumo
+  const resumoData = [
+    ['RELATÓRIO DE GUIAS TISS'],
+    [data.title],
+    [`Período: ${data.period || 'Todos os períodos'}`],
+    [`Gerado em: ${data.generatedAt}`],
+    [''],
+    ['RESUMO'],
+    [''],
+    ['Indicador', 'Valor'],
+    ['Total de Guias', data.summary.totalGuias.toString()],
+    ['Guias Autorizadas', data.summary.guiasAutorizadas.toString()],
+    ['Guias Pendentes', data.summary.guiasPendentes.toString()],
+    ['Guias Negadas', data.summary.guiasNegadas.toString()],
+    ['Valor Total', formatCurrency(data.summary.valorTotal)],
+    [''],
+    ['POR OPERADORA'],
+    ['Operadora', 'Quantidade', 'Valor Total', 'Percentual'],
+    ...data.porOperadora.map(o => [o.operadora, o.quantidade.toString(), formatCurrency(o.valorTotal), formatPercent(o.percentual)]),
+    [''],
+    ['POR STATUS'],
+    ['Status', 'Quantidade', 'Percentual'],
+    ...data.porStatus.map(s => [s.status, s.quantidade.toString(), formatPercent(s.percentual)])
+  ]
+
+  sheets.push({
+    name: 'Resumo',
+    data: resumoData,
+    columnWidths: [30, 15, 18, 15]
+  })
+
+  // Folha 2: Lista de Guias
+  const guiasData = [
+    ['LISTA DE GUIAS TISS'],
+    [''],
+    ['Número', 'Data', 'Paciente', 'Operadora', 'Tipo', 'Procedimentos', 'Valor Total', 'Status'],
+    ...data.guias.map(g => [
+      g.numero,
+      g.data,
+      g.paciente,
+      g.operadora,
+      g.tipo,
+      g.procedimentos,
+      formatCurrency(g.valorTotal),
+      g.status
+    ])
+  ]
+
+  sheets.push({
+    name: 'Guias',
+    data: guiasData,
+    columnWidths: [15, 12, 25, 20, 20, 35, 15, 15]
+  })
+
+  return generateExcelWorkbook(sheets)
+}
+
+// ============================================================================
+// RELATÓRIO DE EXAMES - EXCEL
+// ============================================================================
+
+export function generateExamsExcel(data: ExamsReportData): XLSX.WorkBook {
+  const sheets: ExcelSheetConfig[] = []
+
+  // Folha 1: Resumo
+  const resumoData = [
+    ['RELATÓRIO DE EXAMES'],
+    [data.title],
+    [`Período: ${data.period || 'Todos os períodos'}`],
+    [`Gerado em: ${data.generatedAt}`],
+    [''],
+    ['RESUMO'],
+    [''],
+    ['Indicador', 'Valor'],
+    ['Total de Exames', data.summary.totalExames.toString()],
+    ['Exames Realizados', data.summary.examesRealizados.toString()],
+    ['Exames Pendentes', data.summary.examesPendentes.toString()],
+    ['Exames Cancelados', data.summary.exameCancelados.toString()],
+    [''],
+    ['POR TIPO DE EXAME'],
+    ['Tipo', 'Quantidade', 'Percentual'],
+    ...data.porTipo.map(t => [t.tipo, t.quantidade.toString(), formatPercent(t.percentual)]),
+    [''],
+    ['POR STATUS'],
+    ['Status', 'Quantidade', 'Percentual'],
+    ...data.porStatus.map(s => [s.status, s.quantidade.toString(), formatPercent(s.percentual)])
+  ]
+
+  sheets.push({
+    name: 'Resumo',
+    data: resumoData,
+    columnWidths: [30, 15, 15]
+  })
+
+  // Folha 2: Lista de Exames
+  const examesData = [
+    ['LISTA DE EXAMES'],
+    [''],
+    ['Data', 'Paciente', 'Tipo de Exame', 'Solicitante', 'Urgência', 'Resultado', 'Status'],
+    ...data.exames.map(e => [
+      e.data,
+      e.paciente,
+      e.tipoExame,
+      e.solicitante,
+      e.urgencia,
+      e.resultado,
+      e.status
+    ])
+  ]
+
+  sheets.push({
+    name: 'Exames',
+    data: examesData,
+    columnWidths: [12, 25, 25, 25, 12, 30, 15]
+  })
+
+  return generateExcelWorkbook(sheets)
+}
+
+// ============================================================================
+// PDF HTML - RELATÓRIO DE PACIENTES
+// ============================================================================
+
+export function generatePatientsPDFHTML(data: PatientReportData): string {
+  return `
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${data.title}</title>
+  <style>
+    ${getCommonPDFStyles()}
+    .patient-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      margin-bottom: 25px;
+    }
+  </style>
+</head>
+<body>
+  ${getPDFHeader(data)}
+
+  <div class="report-title">
+    <h2>👥 ${data.title}</h2>
+    <p>Cadastro completo de pacientes</p>
+  </div>
+
+  <div class="patient-grid">
+    <div class="card neutral">
+      <h4>Total de Pacientes</h4>
+      <div class="value">${data.summary.totalPacientes}</div>
+    </div>
+    <div class="card positive">
+      <h4>Novos no Mês</h4>
+      <div class="value">${data.summary.novosNoMes}</div>
+    </div>
+    <div class="card neutral">
+      <h4>Pacientes Ativos</h4>
+      <div class="value">${data.summary.ativos}</div>
+    </div>
+    <div class="card negative">
+      <h4>Pacientes Inativos</h4>
+      <div class="value">${data.summary.inativos}</div>
+    </div>
+  </div>
+
+  <div class="two-columns">
+    <div class="section">
+      <div class="section-header">
+        <h3>🏥 Distribuição por Convênio</h3>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>Convênio</th>
+            <th class="text-right">Qtd</th>
+            <th class="text-right">%</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${data.distribuicaoPorConvenio.map(c => `
+          <tr>
+            <td>${c.convenio}</td>
+            <td class="text-right">${c.quantidade}</td>
+            <td class="text-right">${formatPercent(c.percentual)}</td>
+          </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="section">
+      <div class="section-header">
+        <h3>📊 Distribuição por Idade</h3>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>Faixa Etária</th>
+            <th class="text-right">Qtd</th>
+            <th class="text-right">%</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${data.distribuicaoPorIdade.map(i => `
+          <tr>
+            <td>${i.faixa}</td>
+            <td class="text-right">${i.quantidade}</td>
+            <td class="text-right">${formatPercent(i.percentual)}</td>
+          </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-header">
+      <h3>📋 Lista de Pacientes</h3>
+      <span class="badge">${data.pacientes.length} registros</span>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>Nome</th>
+          <th>CPF</th>
+          <th>Telefone</th>
+          <th>Convênio</th>
+          <th class="text-center">Consultas</th>
+          <th class="text-right">Total Gasto</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${data.pacientes.slice(0, 30).map(p => `
+        <tr>
+          <td>${p.nome}</td>
+          <td>${p.cpf}</td>
+          <td>${p.telefone}</td>
+          <td>${p.convenio}</td>
+          <td class="text-center">${p.totalConsultas}</td>
+          <td class="text-right amount-positive">${formatCurrency(p.totalGasto)}</td>
+        </tr>
+        `).join('')}
+      </tbody>
+    </table>
+    ${data.pacientes.length > 30 ? `<p class="text-center" style="color: #64748b; margin-top: 10px;">... e mais ${data.pacientes.length - 30} pacientes</p>` : ''}
+  </div>
+
+  ${getPDFFooter(data)}
+</body>
+</html>
+`
+}
+
+// ============================================================================
+// PDF HTML - RELATÓRIO DE AGENDAMENTOS
+// ============================================================================
+
+export function generateAppointmentsPDFHTML(data: AppointmentReportData): string {
+  return `
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${data.title}</title>
+  <style>
+    ${getCommonPDFStyles()}
+  </style>
+</head>
+<body>
+  ${getPDFHeader(data)}
+
+  <div class="report-title">
+    <h2>📅 ${data.title}</h2>
+    <p>${data.period || 'Período completo'}</p>
+  </div>
+
+  <div class="summary-cards">
+    <div class="card neutral">
+      <h4>Total de Agendamentos</h4>
+      <div class="value">${data.summary.totalAgendamentos}</div>
+    </div>
+    <div class="card positive">
+      <h4>Realizados</h4>
+      <div class="value">${data.summary.realizados}</div>
+    </div>
+    <div class="card negative">
+      <h4>Cancelados</h4>
+      <div class="value">${data.summary.cancelados}</div>
+    </div>
+    <div class="card neutral">
+      <h4>Pendentes</h4>
+      <div class="value">${data.summary.pendentes}</div>
+    </div>
+    <div class="card positive">
+      <h4>Taxa Comparecimento</h4>
+      <div class="value">${formatPercent(data.summary.taxaComparecimento)}</div>
+    </div>
+  </div>
+
+  <div class="two-columns">
+    <div class="section">
+      <div class="section-header">
+        <h3>📊 Por Tipo de Atendimento</h3>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>Tipo</th>
+            <th class="text-right">Qtd</th>
+            <th class="text-right">%</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${data.porTipo.map(t => `
+          <tr>
+            <td>${t.tipo}</td>
+            <td class="text-right">${t.quantidade}</td>
+            <td class="text-right">${formatPercent(t.percentual)}</td>
+          </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="section">
+      <div class="section-header">
+        <h3>👨‍⚕️ Por Profissional</h3>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>Profissional</th>
+            <th class="text-right">Qtd</th>
+            <th class="text-right">Receita</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${data.porProfissional.map(p => `
+          <tr>
+            <td>${p.profissional}</td>
+            <td class="text-right">${p.quantidade}</td>
+            <td class="text-right amount-positive">${formatCurrency(p.receita)}</td>
+          </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-header">
+      <h3>📋 Lista de Agendamentos</h3>
+      <span class="badge">${data.agendamentos.length} registros</span>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>Data</th>
+          <th>Horário</th>
+          <th>Paciente</th>
+          <th>Tipo</th>
+          <th>Profissional</th>
+          <th class="text-center">Status</th>
+          <th class="text-right">Valor</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${data.agendamentos.slice(0, 25).map(a => `
+        <tr>
+          <td>${a.data}</td>
+          <td>${a.horario}</td>
+          <td>${a.paciente}</td>
+          <td>${a.tipo}</td>
+          <td>${a.profissional}</td>
+          <td class="text-center">
+            <span class="status-badge ${a.status === 'Realizado' ? 'status-paid' : a.status === 'Cancelado' ? 'status-overdue' : 'status-pending'}">${a.status}</span>
+          </td>
+          <td class="text-right amount-positive">${formatCurrency(a.valor)}</td>
+        </tr>
+        `).join('')}
+      </tbody>
+    </table>
+    ${data.agendamentos.length > 25 ? `<p class="text-center" style="color: #64748b; margin-top: 10px;">... e mais ${data.agendamentos.length - 25} agendamentos</p>` : ''}
+  </div>
+
+  ${getPDFFooter(data)}
+</body>
+</html>
+`
+}
+
+// ============================================================================
+// PDF HTML - RELATÓRIO DE ESTOQUE
+// ============================================================================
+
+export function generateInventoryPDFHTML(data: InventoryReportData): string {
+  return `
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${data.title}</title>
+  <style>
+    ${getCommonPDFStyles()}
+  </style>
+</head>
+<body>
+  ${getPDFHeader(data)}
+
+  <div class="report-title">
+    <h2>📦 ${data.title}</h2>
+    <p>Inventário e movimentações</p>
+  </div>
+
+  <div class="summary-cards" style="grid-template-columns: repeat(4, 1fr);">
+    <div class="card neutral">
+      <h4>Total de Itens</h4>
+      <div class="value">${data.summary.totalItens}</div>
+    </div>
+    <div class="card positive">
+      <h4>Valor do Estoque</h4>
+      <div class="value">${formatCurrency(data.summary.valorTotalEstoque)}</div>
+    </div>
+    <div class="card negative">
+      <h4>Abaixo do Mínimo</h4>
+      <div class="value">${data.summary.itensAbaixoMinimo}</div>
+    </div>
+    <div class="card negative">
+      <h4>Próximo ao Vencimento</h4>
+      <div class="value">${data.summary.itensVencendo}</div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-header">
+      <h3>📋 Inventário Completo</h3>
+      <span class="badge">${data.itens.length} itens</span>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>Código</th>
+          <th>Nome</th>
+          <th>Categoria</th>
+          <th class="text-right">Estoque</th>
+          <th class="text-right">Mínimo</th>
+          <th class="text-right">Valor Total</th>
+          <th class="text-center">Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${data.itens.slice(0, 30).map(i => `
+        <tr>
+          <td>${i.codigo}</td>
+          <td>${i.nome}</td>
+          <td>${i.categoria}</td>
+          <td class="text-right">${i.estoqueAtual} ${i.unidade}</td>
+          <td class="text-right">${i.estoqueMinimo}</td>
+          <td class="text-right amount-positive">${formatCurrency(i.valorTotal)}</td>
+          <td class="text-center">
+            <span class="status-badge ${i.status === 'Normal' ? 'status-paid' : i.status === 'Sem Estoque' ? 'status-overdue' : 'status-pending'}">${i.status}</span>
+          </td>
+        </tr>
+        `).join('')}
+      </tbody>
+    </table>
+    ${data.itens.length > 30 ? `<p class="text-center" style="color: #64748b; margin-top: 10px;">... e mais ${data.itens.length - 30} itens</p>` : ''}
+  </div>
+
+  ${data.movimentacoes.length > 0 ? `
+  <div class="section">
+    <div class="section-header">
+      <h3>📊 Últimas Movimentações</h3>
+      <span class="badge">${data.movimentacoes.length} registros</span>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>Data</th>
+          <th>Item</th>
+          <th class="text-center">Tipo</th>
+          <th class="text-right">Qtd</th>
+          <th class="text-right">Total</th>
+          <th>Motivo</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${data.movimentacoes.slice(0, 20).map(m => `
+        <tr>
+          <td>${m.data}</td>
+          <td>${m.item}</td>
+          <td class="text-center">${m.tipo === 'entrada' ? '↑ Entrada' : '↓ Saída'}</td>
+          <td class="text-right">${m.quantidade}</td>
+          <td class="text-right ${m.tipo === 'entrada' ? 'amount-positive' : 'amount-negative'}">${formatCurrency(m.total)}</td>
+          <td>${m.motivo}</td>
+        </tr>
+        `).join('')}
+      </tbody>
+    </table>
+  </div>
+  ` : ''}
+
+  ${getPDFFooter(data)}
+</body>
+</html>
+`
+}
+
+// ============================================================================
+// PDF HTML - RELATÓRIO DE PROCEDIMENTOS
+// ============================================================================
+
+export function generateProceduresPDFHTML(data: ProceduresReportData): string {
+  return `
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${data.title}</title>
+  <style>
+    ${getCommonPDFStyles()}
+  </style>
+</head>
+<body>
+  ${getPDFHeader(data)}
+
+  <div class="report-title">
+    <h2>🏥 ${data.title}</h2>
+    <p>${data.period || 'Período completo'}</p>
+  </div>
+
+  <div class="summary-cards" style="grid-template-columns: repeat(4, 1fr);">
+    <div class="card neutral">
+      <h4>Total de Procedimentos</h4>
+      <div class="value">${data.summary.totalProcedimentos}</div>
+    </div>
+    <div class="card positive">
+      <h4>Receita Total</h4>
+      <div class="value">${formatCurrency(data.summary.totalReceita)}</div>
+    </div>
+    <div class="card neutral">
+      <h4>Ticket Médio</h4>
+      <div class="value">${formatCurrency(data.summary.ticketMedio)}</div>
+    </div>
+    <div class="card neutral">
+      <h4>Procedimentos/Dia</h4>
+      <div class="value">${data.summary.procedimentosPorDia.toFixed(1)}</div>
+    </div>
+  </div>
+
+  <div class="two-columns">
+    <div class="section">
+      <div class="section-header">
+        <h3>📊 Por Tipo de Procedimento</h3>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>Tipo</th>
+            <th class="text-right">Qtd</th>
+            <th class="text-right">Receita</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${data.porTipo.slice(0, 10).map(t => `
+          <tr>
+            <td>${t.tipo}</td>
+            <td class="text-right">${t.quantidade}</td>
+            <td class="text-right amount-positive">${formatCurrency(t.receita)}</td>
+          </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="section">
+      <div class="section-header">
+        <h3>👨‍⚕️ Por Profissional</h3>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>Profissional</th>
+            <th class="text-right">Qtd</th>
+            <th class="text-right">Receita</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${data.porProfissional.map(p => `
+          <tr>
+            <td>${p.profissional}</td>
+            <td class="text-right">${p.quantidade}</td>
+            <td class="text-right amount-positive">${formatCurrency(p.receita)}</td>
+          </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-header">
+      <h3>📋 Lista de Procedimentos</h3>
+      <span class="badge">${data.procedimentos.length} registros</span>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>Data</th>
+          <th>Paciente</th>
+          <th>Procedimento</th>
+          <th>Código TUSS</th>
+          <th class="text-right">Valor</th>
+          <th class="text-center">Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${data.procedimentos.slice(0, 25).map(p => `
+        <tr>
+          <td>${p.data}</td>
+          <td>${p.paciente}</td>
+          <td>${p.procedimento}</td>
+          <td>${p.codigoTUSS}</td>
+          <td class="text-right amount-positive">${formatCurrency(p.valor)}</td>
+          <td class="text-center">
+            <span class="status-badge ${p.status === 'Realizado' ? 'status-paid' : 'status-pending'}">${p.status}</span>
+          </td>
+        </tr>
+        `).join('')}
+      </tbody>
+    </table>
+  </div>
+
+  ${getPDFFooter(data)}
+</body>
+</html>
+`
+}
+
+// ============================================================================
+// PDF HTML - RELATÓRIO DE PRESCRIÇÕES
+// ============================================================================
+
+export function generatePrescriptionsPDFHTML(data: PrescriptionsReportData): string {
+  return `
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${data.title}</title>
+  <style>
+    ${getCommonPDFStyles()}
+  </style>
+</head>
+<body>
+  ${getPDFHeader(data)}
+
+  <div class="report-title">
+    <h2>💊 ${data.title}</h2>
+    <p>Prescrições e receitas médicas</p>
+  </div>
+
+  <div class="summary-cards" style="grid-template-columns: repeat(4, 1fr);">
+    <div class="card neutral">
+      <h4>Total de Receitas</h4>
+      <div class="value">${data.summary.totalReceitas}</div>
+    </div>
+    <div class="card positive">
+      <h4>Receitas Digitais</h4>
+      <div class="value">${data.summary.receitasDigitais}</div>
+    </div>
+    <div class="card positive">
+      <h4>Assinadas</h4>
+      <div class="value">${data.summary.receitasAssinadas}</div>
+    </div>
+    <div class="card neutral">
+      <h4>Pendentes</h4>
+      <div class="value">${data.summary.receitasPendentes}</div>
+    </div>
+  </div>
+
+  <div class="two-columns">
+    <div class="section">
+      <div class="section-header">
+        <h3>📊 Por Tipo de Receita</h3>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>Tipo</th>
+            <th class="text-right">Qtd</th>
+            <th class="text-right">%</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${data.porTipo.map(t => `
+          <tr>
+            <td>${t.tipo}</td>
+            <td class="text-right">${t.quantidade}</td>
+            <td class="text-right">${formatPercent(t.percentual)}</td>
+          </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="section">
+      <div class="section-header">
+        <h3>💊 Medicamentos Mais Prescritos</h3>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>Medicamento</th>
+            <th class="text-right">Qtd</th>
+            <th class="text-right">%</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${data.medicamentosMaisPrescritos.slice(0, 10).map(m => `
+          <tr>
+            <td>${m.medicamento}</td>
+            <td class="text-right">${m.quantidade}</td>
+            <td class="text-right">${formatPercent(m.percentual)}</td>
+          </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-header">
+      <h3>📋 Lista de Prescrições</h3>
+      <span class="badge">${data.receitas.length} registros</span>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>Data</th>
+          <th>Número</th>
+          <th>Paciente</th>
+          <th>Medicamentos</th>
+          <th class="text-center">Status</th>
+          <th class="text-center">Assinatura</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${data.receitas.slice(0, 25).map(r => `
+        <tr>
+          <td>${r.data}</td>
+          <td>${r.numero}</td>
+          <td>${r.paciente}</td>
+          <td>${r.medicamentos}</td>
+          <td class="text-center">
+            <span class="status-badge ${r.status === 'Emitida' ? 'status-paid' : 'status-pending'}">${r.status}</span>
+          </td>
+          <td class="text-center">
+            <span class="status-badge ${r.assinatura === 'Assinada' ? 'status-paid' : 'status-pending'}">${r.assinatura}</span>
+          </td>
+        </tr>
+        `).join('')}
+      </tbody>
+    </table>
+  </div>
+
+  ${getPDFFooter(data)}
+</body>
+</html>
+`
+}
+
+// ============================================================================
+// PDF HTML - RELATÓRIO TISS
+// ============================================================================
+
+export function generateTISSPDFHTML(data: TISSReportData): string {
+  return `
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${data.title}</title>
+  <style>
+    ${getCommonPDFStyles()}
+  </style>
+</head>
+<body>
+  ${getPDFHeader(data)}
+
+  <div class="report-title">
+    <h2>📄 ${data.title}</h2>
+    <p>${data.period || 'Período completo'}</p>
+  </div>
+
+  <div class="summary-cards">
+    <div class="card neutral">
+      <h4>Total de Guias</h4>
+      <div class="value">${data.summary.totalGuias}</div>
+    </div>
+    <div class="card positive">
+      <h4>Autorizadas</h4>
+      <div class="value">${data.summary.guiasAutorizadas}</div>
+    </div>
+    <div class="card neutral">
+      <h4>Pendentes</h4>
+      <div class="value">${data.summary.guiasPendentes}</div>
+    </div>
+    <div class="card negative">
+      <h4>Negadas</h4>
+      <div class="value">${data.summary.guiasNegadas}</div>
+    </div>
+    <div class="card positive">
+      <h4>Valor Total</h4>
+      <div class="value">${formatCurrency(data.summary.valorTotal)}</div>
+    </div>
+  </div>
+
+  <div class="two-columns">
+    <div class="section">
+      <div class="section-header">
+        <h3>🏥 Por Operadora</h3>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>Operadora</th>
+            <th class="text-right">Qtd</th>
+            <th class="text-right">Valor</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${data.porOperadora.map(o => `
+          <tr>
+            <td>${o.operadora}</td>
+            <td class="text-right">${o.quantidade}</td>
+            <td class="text-right amount-positive">${formatCurrency(o.valorTotal)}</td>
+          </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="section">
+      <div class="section-header">
+        <h3>📊 Por Status</h3>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>Status</th>
+            <th class="text-right">Qtd</th>
+            <th class="text-right">%</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${data.porStatus.map(s => `
+          <tr>
+            <td>${s.status}</td>
+            <td class="text-right">${s.quantidade}</td>
+            <td class="text-right">${formatPercent(s.percentual)}</td>
+          </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-header">
+      <h3>📋 Lista de Guias TISS</h3>
+      <span class="badge">${data.guias.length} guias</span>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>Número</th>
+          <th>Data</th>
+          <th>Paciente</th>
+          <th>Operadora</th>
+          <th>Tipo</th>
+          <th class="text-right">Valor</th>
+          <th class="text-center">Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${data.guias.slice(0, 25).map(g => `
+        <tr>
+          <td>${g.numero}</td>
+          <td>${g.data}</td>
+          <td>${g.paciente}</td>
+          <td>${g.operadora}</td>
+          <td>${g.tipo}</td>
+          <td class="text-right amount-positive">${formatCurrency(g.valorTotal)}</td>
+          <td class="text-center">
+            <span class="status-badge ${g.status === 'Autorizada' ? 'status-paid' : g.status === 'Negada' ? 'status-overdue' : 'status-pending'}">${g.status}</span>
+          </td>
+        </tr>
+        `).join('')}
+      </tbody>
+    </table>
+  </div>
+
+  ${getPDFFooter(data)}
+</body>
+</html>
+`
+}
+
+// ============================================================================
+// PDF HTML - RELATÓRIO DE EXAMES
+// ============================================================================
+
+export function generateExamsPDFHTML(data: ExamsReportData): string {
+  return `
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${data.title}</title>
+  <style>
+    ${getCommonPDFStyles()}
+  </style>
+</head>
+<body>
+  ${getPDFHeader(data)}
+
+  <div class="report-title">
+    <h2>🔬 ${data.title}</h2>
+    <p>${data.period || 'Período completo'}</p>
+  </div>
+
+  <div class="summary-cards" style="grid-template-columns: repeat(4, 1fr);">
+    <div class="card neutral">
+      <h4>Total de Exames</h4>
+      <div class="value">${data.summary.totalExames}</div>
+    </div>
+    <div class="card positive">
+      <h4>Realizados</h4>
+      <div class="value">${data.summary.examesRealizados}</div>
+    </div>
+    <div class="card neutral">
+      <h4>Pendentes</h4>
+      <div class="value">${data.summary.examesPendentes}</div>
+    </div>
+    <div class="card negative">
+      <h4>Cancelados</h4>
+      <div class="value">${data.summary.exameCancelados}</div>
+    </div>
+  </div>
+
+  <div class="two-columns">
+    <div class="section">
+      <div class="section-header">
+        <h3>📊 Por Tipo de Exame</h3>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>Tipo</th>
+            <th class="text-right">Qtd</th>
+            <th class="text-right">%</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${data.porTipo.map(t => `
+          <tr>
+            <td>${t.tipo}</td>
+            <td class="text-right">${t.quantidade}</td>
+            <td class="text-right">${formatPercent(t.percentual)}</td>
+          </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="section">
+      <div class="section-header">
+        <h3>📊 Por Status</h3>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>Status</th>
+            <th class="text-right">Qtd</th>
+            <th class="text-right">%</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${data.porStatus.map(s => `
+          <tr>
+            <td>${s.status}</td>
+            <td class="text-right">${s.quantidade}</td>
+            <td class="text-right">${formatPercent(s.percentual)}</td>
+          </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-header">
+      <h3>📋 Lista de Exames</h3>
+      <span class="badge">${data.exames.length} exames</span>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>Data</th>
+          <th>Paciente</th>
+          <th>Tipo de Exame</th>
+          <th>Solicitante</th>
+          <th class="text-center">Urgência</th>
+          <th class="text-center">Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${data.exames.slice(0, 25).map(e => `
+        <tr>
+          <td>${e.data}</td>
+          <td>${e.paciente}</td>
+          <td>${e.tipoExame}</td>
+          <td>${e.solicitante}</td>
+          <td class="text-center">
+            <span class="status-badge ${e.urgencia === 'Urgente' ? 'status-overdue' : 'status-pending'}">${e.urgencia}</span>
+          </td>
+          <td class="text-center">
+            <span class="status-badge ${e.status === 'Realizado' ? 'status-paid' : e.status === 'Cancelado' ? 'status-overdue' : 'status-pending'}">${e.status}</span>
+          </td>
+        </tr>
+        `).join('')}
+      </tbody>
+    </table>
+  </div>
+
+  ${getPDFFooter(data)}
+</body>
+</html>
+`
+}
+
+// ============================================================================
+// FUNÇÕES AUXILIARES PARA PDF
+// ============================================================================
+
+function getCommonPDFStyles(): string {
+  return `
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      font-size: 10pt;
+      line-height: 1.5;
+      color: #1a1a1a;
+      padding: 15mm;
+      max-width: 210mm;
+      margin: 0 auto;
+      background: #fff;
+    }
+
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      border-bottom: 3px solid #2dd4bf;
+      padding-bottom: 15px;
+      margin-bottom: 20px;
+    }
+
+    .logo h1 {
+      color: #0f172a;
+      font-size: 24pt;
+      font-weight: 700;
+    }
+    .logo h1 span { color: #2dd4bf; }
+    .logo p { color: #64748b; font-size: 9pt; }
+
+    .report-info {
+      text-align: right;
+      font-size: 9pt;
+      color: #64748b;
+    }
+
+    .report-title {
+      text-align: center;
+      margin: 20px 0;
+      padding: 15px;
+      background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+      border-radius: 8px;
+      color: white;
+    }
+    .report-title h2 { font-size: 16pt; margin-bottom: 5px; }
+    .report-title p { font-size: 10pt; opacity: 0.8; }
+
+    .summary-cards {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 12px;
+      margin-bottom: 25px;
+    }
+
+    .card {
+      background: #f8fafc;
+      padding: 15px;
+      border-radius: 8px;
+      text-align: center;
+      border: 1px solid #e2e8f0;
+    }
+    .card.positive { border-left: 4px solid #22c55e; }
+    .card.negative { border-left: 4px solid #ef4444; }
+    .card.neutral { border-left: 4px solid #3b82f6; }
+    .card h4 { font-size: 8pt; color: #64748b; margin-bottom: 5px; text-transform: uppercase; }
+    .card .value { font-size: 14pt; font-weight: 700; color: #0f172a; }
+    .card.positive .value { color: #16a34a; }
+    .card.negative .value { color: #dc2626; }
+
+    .section {
+      margin-bottom: 25px;
+      page-break-inside: avoid;
+    }
+    .section-header {
+      display: flex;
+      align-items: center;
+      margin-bottom: 12px;
+      padding-bottom: 8px;
+      border-bottom: 2px solid #e2e8f0;
+    }
+    .section-header h3 {
+      font-size: 12pt;
+      color: #0f172a;
+      flex: 1;
+    }
+    .section-header .badge {
+      background: #dbeafe;
+      color: #1e40af;
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 8pt;
+      font-weight: 600;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 9pt;
+    }
+    th {
+      background: #f1f5f9;
+      padding: 10px 8px;
+      text-align: left;
+      font-weight: 600;
+      color: #475569;
+      border-bottom: 2px solid #e2e8f0;
+    }
+    td {
+      padding: 10px 8px;
+      border-bottom: 1px solid #f1f5f9;
+    }
+    tr:hover { background: #f8fafc; }
+
+    .text-right { text-align: right; }
+    .text-center { text-align: center; }
+
+    .amount-positive { color: #16a34a; font-weight: 600; }
+    .amount-negative { color: #dc2626; font-weight: 600; }
+
+    .status-badge {
+      display: inline-block;
+      padding: 3px 8px;
+      border-radius: 12px;
+      font-size: 8pt;
+      font-weight: 500;
+    }
+    .status-paid { background: #dcfce7; color: #166534; }
+    .status-pending { background: #fef3c7; color: #92400e; }
+    .status-overdue { background: #fee2e2; color: #991b1b; }
+
+    .two-columns {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+    }
+
+    .footer {
+      margin-top: 30px;
+      padding-top: 15px;
+      border-top: 2px solid #e2e8f0;
+      text-align: center;
+      font-size: 8pt;
+      color: #94a3b8;
+    }
+
+    @media print {
+      body { padding: 10mm; }
+      .no-print { display: none; }
+      .section { page-break-inside: avoid; }
+    }
+  `
+}
+
+function getPDFHeader(data: ReportData): string {
+  return `
+  <div class="header">
+    <div class="logo">
+      <h1>Atende<span>Bem</span></h1>
+      <p>Sistema de Gestão de Clínicas</p>
+      ${data.clinicInfo ? `<p style="margin-top: 5px; font-weight: 500;">${data.clinicInfo.name}</p>` : ''}
+    </div>
+    <div class="report-info">
+      <p><strong>Relatório gerado em:</strong></p>
+      <p>${data.generatedAt}</p>
+      ${data.generatedBy ? `<p>Por: ${data.generatedBy}</p>` : ''}
+    </div>
+  </div>
+  `
+}
+
+function getPDFFooter(data: ReportData): string {
+  return `
+  <div class="footer">
+    <p>Relatório gerado automaticamente pelo sistema AtendeBem</p>
+    <p>Este documento é confidencial e destinado apenas ao uso interno da clínica</p>
+    <p>${data.clinicInfo?.name || 'AtendeBem'} - CNPJ: ${data.clinicInfo?.cnpj || 'Não informado'}</p>
+  </div>
+  `
 }
