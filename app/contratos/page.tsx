@@ -339,150 +339,131 @@ export default function ContratosPage() {
                 Novo Contrato
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-              <DialogHeader>
-                <DialogTitle className="flex items-center gap-2 text-xl">
-                  <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center">
-                    <FileText className="w-5 h-5 text-blue-600" />
+            <DialogContent className="max-w-xl w-[95vw] max-h-[85vh] overflow-hidden flex flex-col p-0">
+              <DialogHeader className="px-5 py-4 border-b bg-gradient-to-r from-blue-50 to-white shrink-0">
+                <DialogTitle className="flex items-center gap-3 text-lg font-semibold text-gray-900">
+                  <div className="w-9 h-9 rounded-lg bg-blue-600 flex items-center justify-center">
+                    <FileText className="w-4 h-4 text-white" />
                   </div>
-                  Criar Novo Contrato
+                  Novo Contrato
                 </DialogTitle>
               </DialogHeader>
 
-              <div className="space-y-6 mt-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label className="text-sm font-medium">Paciente *</Label>
-                    <Select value={selectedPatient} onValueChange={setSelectedPatient}>
-                      <SelectTrigger className="rounded-xl h-11">
-                        <SelectValue placeholder="Selecione o paciente..." />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {patients.map((p) => (
-                          <SelectItem key={p.id} value={p.id}>
-                            <div className="flex items-center gap-2">
-                              <User className="w-4 h-4 text-gray-400" />
+              <div className="flex-1 overflow-y-auto px-5 py-4">
+                <div className="space-y-4">
+                  {/* Paciente e Template */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-medium text-gray-600">Paciente *</Label>
+                      <Select value={selectedPatient} onValueChange={setSelectedPatient}>
+                        <SelectTrigger className="rounded-lg h-10 text-sm">
+                          <SelectValue placeholder="Selecione..." />
+                        </SelectTrigger>
+                        <SelectContent className="max-h-48">
+                          {patients.map((p) => (
+                            <SelectItem key={p.id} value={p.id} className="text-sm">
                               {p.full_name}
-                            </div>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
 
-                  <div className="space-y-2">
-                    <Label className="text-sm font-medium">Template</Label>
-                    <Select value={selectedTemplate} onValueChange={setSelectedTemplate}>
-                      <SelectTrigger className="rounded-xl h-11">
-                        <SelectValue placeholder="Escolha um template..." />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {templates.map((t) => (
-                          <SelectItem key={t.id} value={t.id}>
-                            <div className="flex items-center gap-2">
-                              <FileText className="w-4 h-4 text-gray-400" />
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-medium text-gray-600">Template</Label>
+                      <Select value={selectedTemplate} onValueChange={setSelectedTemplate}>
+                        <SelectTrigger className="rounded-lg h-10 text-sm">
+                          <SelectValue placeholder="Opcional..." />
+                        </SelectTrigger>
+                        <SelectContent className="max-h-48">
+                          {templates.map((t) => (
+                            <SelectItem key={t.id} value={t.id} className="text-sm">
                               {t.name}
-                            </div>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
-                </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label className="text-sm font-medium">Título *</Label>
+                  {/* Título e Tipo */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-medium text-gray-600">Título *</Label>
+                      <Input
+                        value={title}
+                        onChange={(e) => setTitle(e.target.value)}
+                        placeholder="Ex: Termo de Consentimento"
+                        className="rounded-lg h-10 text-sm"
+                      />
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-medium text-gray-600">Tipo</Label>
+                      <Select value={contractType} onValueChange={setContractType}>
+                        <SelectTrigger className="rounded-lg h-10 text-sm">
+                          <SelectValue placeholder="Selecione..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="informed_consent">Consentimento</SelectItem>
+                          <SelectItem value="treatment_plan">Tratamento</SelectItem>
+                          <SelectItem value="telemedicine_consent">Telemedicina</SelectItem>
+                          <SelectItem value="service_agreement">Serviço</SelectItem>
+                          <SelectItem value="privacy_policy">Privacidade</SelectItem>
+                          <SelectItem value="payment_plan">Pagamento</SelectItem>
+                          <SelectItem value="other">Outro</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  {/* Validade */}
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium text-gray-600">Validade (opcional)</Label>
                     <Input
-                      value={title}
-                      onChange={(e) => setTitle(e.target.value)}
-                      placeholder="Ex: Termo de Consentimento"
-                      className="rounded-xl h-11"
+                      type="date"
+                      value={validUntil}
+                      onChange={(e) => setValidUntil(e.target.value)}
+                      className="rounded-lg h-10 text-sm w-full sm:w-48"
                     />
                   </div>
 
-                  <div className="space-y-2">
-                    <Label className="text-sm font-medium">Tipo</Label>
-                    <Select value={contractType} onValueChange={setContractType}>
-                      <SelectTrigger className="rounded-xl h-11">
-                        <SelectValue placeholder="Selecione o tipo..." />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="informed_consent">Consentimento Informado</SelectItem>
-                        <SelectItem value="treatment_plan">Plano de Tratamento</SelectItem>
-                        <SelectItem value="telemedicine_consent">Telemedicina</SelectItem>
-                        <SelectItem value="service_agreement">Contrato de Serviço</SelectItem>
-                        <SelectItem value="privacy_policy">Política de Privacidade</SelectItem>
-                        <SelectItem value="payment_plan">Plano de Pagamento</SelectItem>
-                        <SelectItem value="other">Outro</SelectItem>
-                      </SelectContent>
-                    </Select>
+                  {/* Conteúdo */}
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-xs font-medium text-gray-600">Conteúdo *</Label>
+                      <span className="text-[10px] text-gray-400">Suporta Markdown</span>
+                    </div>
+                    <Textarea
+                      value={content}
+                      onChange={(e) => setContent(e.target.value)}
+                      placeholder="Digite ou selecione um template..."
+                      className="rounded-lg min-h-[140px] text-sm resize-none leading-relaxed"
+                    />
                   </div>
                 </div>
+              </div>
 
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium">Validade</Label>
-                  <Input
-                    type="date"
-                    value={validUntil}
-                    onChange={(e) => setValidUntil(e.target.value)}
-                    className="rounded-xl h-11"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium">Conteúdo do Contrato *</Label>
-                  <Textarea
-                    value={content}
-                    onChange={(e) => setContent(e.target.value)}
-                    placeholder="Digite o conteúdo do contrato ou selecione um template...
-
-Use formatação:
-# Título Principal
-## Subtítulo
-- Item de lista
-**texto em negrito**"
-                    className="rounded-xl min-h-[300px] font-mono text-sm resize-none"
-                  />
-                  <div className="flex flex-wrap gap-2 mt-2">
-                    <span className="text-xs px-2 py-1 bg-gray-100 rounded-lg text-gray-600">
-                      {"{PACIENTE_NOME}"}
-                    </span>
-                    <span className="text-xs px-2 py-1 bg-gray-100 rounded-lg text-gray-600">
-                      {"{PACIENTE_CPF}"}
-                    </span>
-                    <span className="text-xs px-2 py-1 bg-gray-100 rounded-lg text-gray-600">
-                      {"{DATA_HOJE}"}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="flex gap-3 pt-4 border-t">
-                  <Button
-                    variant="outline"
-                    onClick={() => setIsNewDialogOpen(false)}
-                    className="flex-1 rounded-xl h-11"
-                  >
-                    Cancelar
-                  </Button>
-                  <Button
-                    onClick={handleSubmit}
-                    disabled={isSubmitting}
-                    className="flex-1 rounded-xl h-11 bg-blue-600 hover:bg-blue-700"
-                  >
-                    {isSubmitting ? (
-                      <>
-                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                        Criando...
-                      </>
-                    ) : (
-                      <>
-                        <Plus className="w-4 h-4 mr-2" />
-                        Criar Contrato
-                      </>
-                    )}
-                  </Button>
-                </div>
+              {/* Footer */}
+              <div className="px-5 py-3 border-t bg-gray-50 flex gap-2 shrink-0">
+                <Button
+                  variant="ghost"
+                  onClick={() => setIsNewDialogOpen(false)}
+                  className="flex-1 rounded-lg h-9 text-sm text-gray-600"
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  onClick={handleSubmit}
+                  disabled={isSubmitting || !selectedPatient || !title || !content}
+                  className="flex-1 rounded-lg h-9 text-sm bg-blue-600 hover:bg-blue-700"
+                >
+                  {isSubmitting ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    "Criar Contrato"
+                  )}
+                </Button>
               </div>
             </DialogContent>
           </Dialog>
@@ -715,42 +696,82 @@ Use formatação:
 
       {/* Preview Dialog */}
       <Dialog open={!!previewContract} onOpenChange={() => setPreviewContract(null)}>
-        <DialogContent className="max-w-6xl max-h-[95vh] overflow-hidden p-0">
-          <div className="flex flex-col h-full max-h-[95vh]">
-            {/* Header */}
-            <div className="flex items-center justify-between px-6 py-4 border-b bg-white shrink-0">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center">
-                  <FileText className="w-5 h-5 text-blue-600" />
-                </div>
-                <div>
-                  <h2 className="font-semibold text-gray-900">{previewContract?.title}</h2>
-                  <p className="text-sm text-gray-500">{previewContract?.contract_number}</p>
-                </div>
+        <DialogContent className="max-w-3xl w-[95vw] max-h-[90vh] overflow-hidden flex flex-col p-0">
+          {/* Header compacto */}
+          <div className="flex items-center justify-between px-4 py-3 border-b bg-white shrink-0">
+            <div className="flex items-center gap-2 min-w-0">
+              <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center shrink-0">
+                <FileText className="w-4 h-4 text-white" />
               </div>
+              <div className="min-w-0">
+                <h2 className="font-medium text-gray-900 text-sm truncate">{previewContract?.title}</h2>
+                <p className="text-xs text-gray-500">{previewContract?.contract_number}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              {previewContract && (
+                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${statusConfig[previewContract.status]?.bg} ${statusConfig[previewContract.status]?.color}`}>
+                  {statusConfig[previewContract.status]?.label}
+                </span>
+              )}
               <Button
                 variant="ghost"
                 size="icon"
                 onClick={() => setPreviewContract(null)}
-                className="rounded-xl"
+                className="rounded-lg h-8 w-8"
               >
-                <X className="w-5 h-5" />
+                <X className="w-4 h-4" />
               </Button>
             </div>
+          </div>
 
-            {/* Content */}
-            <div className="flex-1 overflow-hidden">
-              <div className="grid grid-cols-1 lg:grid-cols-4 h-full">
-                {/* Timeline Sidebar */}
-                <div className="lg:col-span-1 border-r bg-gray-50 p-4 overflow-y-auto order-2 lg:order-1">
-                  {previewContract && <ContractTimeline contract={previewContract} />}
-                </div>
+          {/* Conteúdo */}
+          <div className="flex-1 overflow-y-auto bg-gray-50">
+            {/* Timeline compacta no topo - visível em mobile */}
+            <div className="lg:hidden p-3 bg-white border-b">
+              {previewContract && <ContractTimelineCompact contract={previewContract} />}
+            </div>
 
-                {/* PDF Viewer */}
-                <div className="lg:col-span-3 p-6 overflow-y-auto order-1 lg:order-2 bg-gray-100">
-                  {previewContract && <ContractPDFViewer contract={previewContract} />}
-                </div>
+            <div className="flex h-full">
+              {/* Timeline Sidebar - apenas desktop */}
+              <div className="hidden lg:block w-64 shrink-0 border-r bg-white p-4 overflow-y-auto">
+                {previewContract && <ContractTimeline contract={previewContract} />}
               </div>
+
+              {/* PDF Viewer */}
+              <div className="flex-1 p-4 overflow-y-auto">
+                {previewContract && <ContractPDFViewer contract={previewContract} />}
+              </div>
+            </div>
+          </div>
+
+          {/* Footer com ações */}
+          <div className="px-4 py-3 border-t bg-white flex items-center justify-between gap-2 shrink-0">
+            <div className="text-xs text-gray-500">
+              Criado em {previewContract && new Date(previewContract.created_at).toLocaleDateString("pt-BR")}
+            </div>
+            <div className="flex gap-2">
+              {previewContract?.status === "draft" && (
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    setPreviewContract(null)
+                    setSigningContract(previewContract)
+                  }}
+                  className="rounded-lg h-8 text-xs bg-blue-600 hover:bg-blue-700"
+                >
+                  <PenTool className="w-3 h-3 mr-1" />
+                  Assinar
+                </Button>
+              )}
+              <Button
+                variant="outline"
+                size="sm"
+                className="rounded-lg h-8 text-xs"
+              >
+                <Download className="w-3 h-3 mr-1" />
+                PDF
+              </Button>
             </div>
           </div>
         </DialogContent>
@@ -758,36 +779,39 @@ Use formatação:
 
       {/* Signature Dialog */}
       <Dialog open={!!signingContract} onOpenChange={() => setSigningContract(null)}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center">
-                <PenTool className="w-5 h-5 text-blue-600" />
+        <DialogContent className="max-w-md w-[95vw] p-0 overflow-hidden">
+          <DialogHeader className="px-4 py-3 border-b bg-gradient-to-r from-blue-50 to-white">
+            <DialogTitle className="flex items-center gap-2 text-base font-semibold text-gray-900">
+              <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center">
+                <PenTool className="w-4 h-4 text-white" />
               </div>
               Assinar Contrato
             </DialogTitle>
           </DialogHeader>
 
-          <div className="space-y-4 mt-4">
-            <div className="bg-gray-50 rounded-xl p-4">
-              <p className="text-sm text-gray-600">
-                <strong>Contrato:</strong> {signingContract?.title}
-              </p>
-              <p className="text-sm text-gray-600 mt-1">
-                <strong>Paciente:</strong> {signingContract?.patient_name}
-              </p>
+          <div className="p-4 space-y-4">
+            {/* Info do contrato - mais compacto */}
+            <div className="bg-gray-50 rounded-lg p-3 flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center shrink-0">
+                <FileText className="w-5 h-5 text-blue-600" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-gray-900 truncate">{signingContract?.title}</p>
+                <p className="text-xs text-gray-500">{signingContract?.patient_name}</p>
+              </div>
             </div>
 
+            {/* Canvas de assinatura */}
             <div>
-              <Label className="text-sm font-medium mb-2 block">
-                Desenhe sua assinatura abaixo
+              <Label className="text-xs font-medium text-gray-600 mb-2 block">
+                Desenhe sua assinatura
               </Label>
-              <div className="border-2 border-dashed border-gray-200 rounded-xl p-2 bg-white">
+              <div className="relative border-2 border-dashed border-gray-200 rounded-lg bg-white overflow-hidden">
                 <canvas
                   ref={canvasRef}
-                  width={450}
-                  height={180}
-                  className="w-full cursor-crosshair rounded-lg touch-none"
+                  width={380}
+                  height={150}
+                  className="w-full h-[150px] cursor-crosshair touch-none"
                   style={{ touchAction: "none" }}
                   onMouseDown={startDrawing}
                   onMouseMove={draw}
@@ -797,39 +821,39 @@ Use formatação:
                   onTouchMove={draw}
                   onTouchEnd={stopDrawing}
                 />
+                {/* Linha guia */}
+                <div className="absolute bottom-8 left-4 right-4 border-b border-gray-200 pointer-events-none" />
               </div>
-              <p className="text-xs text-gray-400 mt-2 text-center">
-                Use o mouse ou toque para desenhar sua assinatura
+              <p className="text-[10px] text-gray-400 mt-1.5 text-center">
+                Use o mouse ou toque para assinar
               </p>
             </div>
+          </div>
 
-            <div className="flex gap-3 pt-4 border-t">
-              <Button
-                variant="outline"
-                onClick={clearSignature}
-                className="flex-1 rounded-xl"
-              >
-                <XCircle className="w-4 h-4 mr-2" />
-                Limpar
-              </Button>
-              <Button
-                onClick={handleSign}
-                disabled={isSigning}
-                className="flex-1 rounded-xl bg-blue-600 hover:bg-blue-700"
-              >
-                {isSigning ? (
-                  <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Assinando...
-                  </>
-                ) : (
-                  <>
-                    <CheckCircle className="w-4 h-4 mr-2" />
-                    Confirmar Assinatura
-                  </>
-                )}
-              </Button>
-            </div>
+          {/* Footer com botões */}
+          <div className="px-4 py-3 border-t bg-gray-50 flex gap-2">
+            <Button
+              variant="ghost"
+              onClick={clearSignature}
+              className="rounded-lg h-9 text-sm text-gray-600"
+            >
+              <XCircle className="w-4 h-4 mr-1" />
+              Limpar
+            </Button>
+            <Button
+              onClick={handleSign}
+              disabled={isSigning}
+              className="flex-1 rounded-lg h-9 text-sm bg-blue-600 hover:bg-blue-700"
+            >
+              {isSigning ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <>
+                  <CheckCircle className="w-4 h-4 mr-1" />
+                  Confirmar
+                </>
+              )}
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
