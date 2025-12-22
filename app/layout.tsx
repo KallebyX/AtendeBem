@@ -181,6 +181,7 @@ export const metadata: Metadata = {
       should_fallback: true,
     },
   },
+    generator: 'v0.app'
 }
 
 // Viewport configuration
