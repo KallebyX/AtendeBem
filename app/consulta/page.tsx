@@ -275,8 +275,10 @@ function ConsultaPageContent() {
 
       // 3. Create prescriptions if medications exist
       if (medications.length > 0) {
-        await createPrescription({
+        const prescriptionResult = await createPrescription({
           patientId: selectedPatient.id,
+          patientName: selectedPatient.full_name,
+          patientCpf: selectedPatient.cpf,
           appointmentId: appointmentId,
           cid10Code: diagnosis.cid10Code,
           cid10Description: diagnosis.cid10Description,
@@ -290,11 +292,15 @@ function ConsultaPageContent() {
             administrationInstructions: m.instructions,
           })),
         })
+
+        if (!prescriptionResult.success) {
+          console.warn("Erro ao criar prescrição:", prescriptionResult.error)
+        }
       }
 
       // 4. Create lab orders if exams exist
       if (examRequests.length > 0) {
-        await createLabOrder({
+        const labResult = await createLabOrder({
           patient_id: selectedPatient.id,
           appointment_id: appointmentId,
           clinical_indication: diagnosis.primaryDiagnosis,
@@ -305,6 +311,10 @@ function ConsultaPageContent() {
             notes: e.notes,
           })),
         })
+
+        if (labResult.error) {
+          console.warn("Erro ao criar solicitação de exames:", labResult.error)
+        }
       }
 
       setConsultationId(appointmentId)

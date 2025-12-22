@@ -3,22 +3,25 @@
 import { cookies } from "next/headers"
 import { verifySession } from "@/lib/session"
 import { getDb } from "@/lib/db"
+import { setUserContext } from "@/lib/db-init"
 
 export async function createPrescription(data: {
-  patientId: number
-  appointmentId?: number
+  patientId: string
+  patientName?: string
+  patientCpf?: string
+  appointmentId?: string
   cid10Code?: string
   cid10Description?: string
   cid11Code?: string
   cid11Description?: string
   clinicalIndication: string
   medications: Array<{
-    medicationId?: number
+    medicationId?: string
     medicationName: string
     dosage: string
     frequency: string
     duration: string
-    quantity: number
+    quantity: string | number
     administrationInstructions?: string
     specialWarnings?: string
   }>
@@ -39,49 +42,69 @@ export async function createPrescription(data: {
     }
 
     const sql = await getDb()
+    await setUserContext(user.id)
 
-    // Criar prescrição
+    // Get patient info if not provided
+    let patientName = data.patientName
+    let patientCpf = data.patientCpf
+
+    if (!patientName || !patientCpf) {
+      const patientResult = await sql`
+        SELECT full_name, cpf FROM patients WHERE id = ${data.patientId}
+      `
+      if (patientResult.length > 0) {
+        patientName = patientName || patientResult[0].full_name
+        patientCpf = patientCpf || patientResult[0].cpf
+      }
+    }
+
+    // Format medications for JSONB storage
+    const medicationsJson = data.medications.map(med => ({
+      name: med.medicationName,
+      dosage: med.dosage,
+      frequency: med.frequency,
+      duration: med.duration,
+      quantity: med.quantity,
+      instructions: med.administrationInstructions || '',
+      warnings: med.specialWarnings || ''
+    }))
+
+    // Build instructions text
+    const instructionsText = [
+      data.clinicalIndication ? `Indicação: ${data.clinicalIndication}` : null,
+      data.cid10Code ? `CID-10: ${data.cid10Code} - ${data.cid10Description || ''}` : null,
+      data.notes
+    ].filter(Boolean).join('\n')
+
+    // Create prescription using the actual table schema
     const prescriptionResult = await sql`
       INSERT INTO prescriptions (
-        patient_id, user_id, appointment_id,
-        cid10_code, cid10_description,
-        cid11_code, cid11_description,
-        clinical_indication, notes, valid_until
+        user_id, appointment_id, patient_name, patient_cpf,
+        prescription_type, medications, instructions, validity_days
       ) VALUES (
-        ${data.patientId}, ${user.id}, ${data.appointmentId || null},
-        ${data.cid10Code || null}, ${data.cid10Description || null},
-        ${data.cid11Code || null}, ${data.cid11Description || null},
-        ${data.clinicalIndication}, ${data.notes || null}, ${data.validUntil || null}
+        ${user.id}, ${data.appointmentId || null},
+        ${patientName || 'Paciente'}, ${patientCpf || null},
+        'normal', ${JSON.stringify(medicationsJson)}::jsonb,
+        ${instructionsText || null}, ${data.validUntil ? 30 : 30}
       )
       RETURNING id
     `
 
     const prescriptionId = prescriptionResult[0].id
 
-    // Inserir medicamentos
-    for (const med of data.medications) {
+    // Registrar auditoria
+    try {
       await sql`
-        INSERT INTO prescription_items (
-          prescription_id, medication_id, medication_name,
-          dosage, frequency, duration, quantity,
-          administration_instructions, special_warnings
+        INSERT INTO audit_logs (
+          user_id, action, entity_type, entity_id, description
         ) VALUES (
-          ${prescriptionId}, ${med.medicationId || null}, ${med.medicationName},
-          ${med.dosage}, ${med.frequency}, ${med.duration}, ${med.quantity},
-          ${med.administrationInstructions || null}, ${med.specialWarnings || null}
+          ${user.id}, 'CREATE', 'prescription', ${prescriptionId},
+          ${"Prescrição médica criada para paciente: " + (patientName || data.patientId)}
         )
       `
+    } catch (auditError) {
+      console.warn("Erro ao registrar auditoria (não crítico):", auditError)
     }
-
-    // Registrar auditoria
-    await sql`
-      INSERT INTO audit_logs (
-        user_id, action, entity_type, entity_id, description
-      ) VALUES (
-        ${user.id}, 'CREATE', 'prescription', ${prescriptionId},
-        ${"Prescrição médica criada para paciente ID: " + data.patientId}
-      )
-    `
 
     return { success: true, prescriptionId }
   } catch (error: any) {
@@ -90,7 +113,7 @@ export async function createPrescription(data: {
   }
 }
 
-export async function getPrescriptionsByPatient(patientId: number) {
+export async function getPrescriptionsByPatient(patientId: string) {
   try {
     const cookieStore = await cookies()
     const token = cookieStore.get("session")?.value

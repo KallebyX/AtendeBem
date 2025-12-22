@@ -47,6 +47,15 @@ export async function createAnamnesis(data: {
   appointment_id?: string
   specialty?: string
   template_id?: string
+  // Additional fields from consulta page
+  chief_complaint?: string
+  history_present_illness?: string
+  past_medical_history?: any
+  medications?: string[]
+  allergies?: string[]
+  physical_exam?: string
+  assessment?: string
+  plan?: string
 }) {
   try {
     const cookieStore = await cookies()
@@ -59,13 +68,29 @@ export async function createAnamnesis(data: {
     await setUserContext(user.id)
     const db = await getDb()
 
+    // Determine if this is a complete anamnesis or just initial creation
+    const isComplete = !!(data.chief_complaint || data.assessment)
+
     const result = await db`
       INSERT INTO anamnesis (
-        user_id, patient_id, appointment_id, specialty, template_id, current_step
+        user_id, patient_id, appointment_id, specialty, template_id, current_step,
+        chief_complaint, history_present_illness, past_medical_history,
+        medications, allergies, physical_examination, assessment, plan,
+        is_completed, completed_at
       ) VALUES (
         ${user.id}, ${data.patient_id},
         ${data.appointment_id || null}, ${data.specialty || 'Clínica Geral'},
-        ${data.template_id || null}, 1
+        ${data.template_id || null}, ${isComplete ? 7 : 1},
+        ${data.chief_complaint || null},
+        ${data.history_present_illness || null},
+        ${data.past_medical_history ? JSON.stringify(data.past_medical_history) : null}::jsonb,
+        ${data.medications || null},
+        ${data.allergies || null},
+        ${data.physical_exam ? data.physical_exam : null}::jsonb,
+        ${data.assessment || null},
+        ${data.plan || null},
+        ${isComplete},
+        ${isComplete ? new Date().toISOString() : null}
       ) RETURNING *
     `
 
