@@ -26,10 +26,10 @@ export async function trackEvent(data: {
 
     await db`
       INSERT INTO analytics_events (
-        tenant_id, user_id, event_type, event_data, patient_id,
+        user_id, event_type, event_data, patient_id,
         appointment_id, revenue_amount, cost_amount
       ) VALUES (
-        ${user.tenant_id}, ${user.id}, ${data.event_type},
+        ${user.id}, ${data.event_type},
         ${data.event_data ? JSON.stringify(data.event_data) : null},
         ${data.patient_id || null}, ${data.appointment_id || null},
         ${data.revenue_amount || null}, ${data.cost_amount || null}
@@ -61,7 +61,7 @@ export async function getAnalyticsDashboard(period?: { start: string; end: strin
     const eventsByType = await db`
       SELECT event_type, COUNT(*) as count
       FROM analytics_events
-      WHERE tenant_id = ${user.tenant_id}
+      WHERE user_id = ${user.id}
       AND created_at >= ${startDate}
       AND created_at <= ${endDate}
       GROUP BY event_type
@@ -70,13 +70,13 @@ export async function getAnalyticsDashboard(period?: { start: string; end: strin
 
     // Eventos por dia
     const eventsByDay = await db`
-      SELECT 
+      SELECT
         DATE(created_at) as date,
         COUNT(*) as count,
         SUM(revenue_amount) as revenue,
         SUM(cost_amount) as cost
       FROM analytics_events
-      WHERE tenant_id = ${user.tenant_id}
+      WHERE user_id = ${user.id}
       AND created_at >= ${startDate}
       AND created_at <= ${endDate}
       GROUP BY DATE(created_at)
@@ -85,17 +85,17 @@ export async function getAnalyticsDashboard(period?: { start: string; end: strin
 
     // Top pacientes
     const topPatients = await db`
-      SELECT 
-        p.id, p.name,
+      SELECT
+        p.id, p.full_name as name,
         COUNT(*) as visit_count,
         SUM(ae.revenue_amount) as total_revenue
       FROM analytics_events ae
       JOIN patients p ON ae.patient_id = p.id
-      WHERE ae.tenant_id = ${user.tenant_id}
+      WHERE ae.user_id = ${user.id}
       AND ae.created_at >= ${startDate}
       AND ae.created_at <= ${endDate}
       AND ae.patient_id IS NOT NULL
-      GROUP BY p.id, p.name
+      GROUP BY p.id, p.full_name
       ORDER BY total_revenue DESC
       LIMIT 10
     `
@@ -137,11 +137,11 @@ export async function createSavedReport(data: {
 
     const result = await db`
       INSERT INTO saved_reports (
-        tenant_id, user_id, name, description, report_type,
+        user_id, name, description, report_type,
         filters, date_range, grouping, is_scheduled,
         schedule_frequency, schedule_recipients
       ) VALUES (
-        ${user.tenant_id}, ${user.id}, ${data.name},
+        ${user.id}, ${data.name},
         ${data.description || null}, ${data.report_type},
         ${data.filters ? JSON.stringify(data.filters) : null},
         ${data.date_range ? JSON.stringify(data.date_range) : null},
@@ -172,7 +172,7 @@ export async function getSavedReports() {
       SELECT r.*, u.name as created_by_name
       FROM saved_reports r
       JOIN users u ON r.user_id = u.id
-      WHERE r.tenant_id = ${user.tenant_id}
+      WHERE r.user_id = ${user.id}
       AND r.is_active = true
       ORDER BY r.created_at DESC
     `
