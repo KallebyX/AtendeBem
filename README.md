@@ -508,13 +508,45 @@ O uso, cópia ou distribuição sem autorização expressa **não é permitido**
       <a href="https://github.com/KallebyX">
         <img src="https://github.com/KallebyX.png" width="100px;" alt="Kalleby Evangelho"/>
         <br />
-        <sub><b>Kalleby Evangelho</b></sub>
+        <sub><b>Kalleby Evangelho Mota</b></sub>
       </a>
       <br />
       <sub>CEO & Founder</sub>
+      <br />
+      <sub>Oryum Tech</sub>
+    </td>
+    <td align="center">
+      <a href="https://github.com/luizfr-jr">
+        <img src="https://github.com/luizfr-jr.png" width="100px;" alt="Prof. Luiz Fernando"/>
+        <br />
+        <sub><b>Prof. Luiz Fernando Rodrigues Jr.</b></sub>
+      </a>
+      <br />
+      <sub>Orientador Acadêmico</sub>
+      <br />
+      <sub>Universidade Franciscana (UFN)</sub>
+    </td>
+    <td align="center">
+      <a href="https://www.doctoralia.com.br/carlos-abdala/ortopedista-traumatologista/cacapava-do-sul">
+        <img src="https://ui-avatars.com/api/?name=Carlos+Abdala&background=0D9488&color=fff&size=100&bold=true" width="100px;" alt="Dr. Carlos Abdala"/>
+        <br />
+        <sub><b>Dr. Carlos Abdala</b></sub>
+      </a>
+      <br />
+      <sub>Consultor Médico</sub>
+      <br />
+      <sub>Ortopedista & Traumatologista</sub>
     </td>
   </tr>
 </table>
+
+### Papéis e Contribuições
+
+| Membro | Papel | Contribuição |
+|--------|-------|--------------|
+| **Kalleby Evangelho** | CEO & Founder | Arquitetura, desenvolvimento full-stack, gestão de produto |
+| **Prof. Luiz Fernando** | Orientador Acadêmico | Orientação técnica, metodologia, validação acadêmica |
+| **Dr. Carlos Abdala** | Consultor Médico | Validação clínica, requisitos médicos, fluxos de atendimento |
 
 ---
 
