@@ -99,33 +99,73 @@ export async function createTISSGuide(data: {
       data_execucao: proc.execution_date || new Date().toISOString().split('T')[0]
     }))
 
-    // Insere a guia
-    const result = await db`
-      INSERT INTO tiss_guides (
-        user_id, patient_id, appointment_id, guide_type, guide_number,
-        beneficiary_card_number, beneficiary_name, beneficiary_cpf,
-        professional_name, professional_council, professional_number, professional_uf, professional_cbo,
-        procedures, total_value, issue_date, clinical_indication, observations,
-        payment_status
-      ) VALUES (
-        ${user.id}, ${data.patient_id}, ${data.appointment_id || null},
-        ${data.guide_type}, ${guideNumber},
-        ${data.beneficiary_card_number || patient[0].insurance_number || null},
-        ${patient[0].full_name},
-        ${patient[0].cpf || null},
-        ${data.professional_name || user.name || null},
-        ${data.professional_council || 'CRM'},
-        ${data.professional_number || user.crm || null},
-        ${data.professional_uf || 'SP'},
-        ${data.professional_cbo || '225125'},
-        ${JSON.stringify(proceduresJson)}::jsonb,
-        ${totalValue},
-        ${new Date().toISOString().split('T')[0]},
-        ${data.clinical_indication || null},
-        ${data.observations || null},
-        'pending'
-      ) RETURNING *
+    // Check if status column exists
+    const statusColumnExists = await db`
+      SELECT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'tiss_guides' AND column_name = 'status'
+      ) as exists
     `
+
+    // Insere a guia
+    let result
+    if (statusColumnExists[0]?.exists) {
+      result = await db`
+        INSERT INTO tiss_guides (
+          user_id, patient_id, appointment_id, guide_type, guide_number,
+          beneficiary_card_number, beneficiary_name, beneficiary_cpf,
+          professional_name, professional_council, professional_number, professional_uf, professional_cbo,
+          procedures, total_value, issue_date, clinical_indication, observations,
+          status, payment_status
+        ) VALUES (
+          ${user.id}, ${data.patient_id}, ${data.appointment_id || null},
+          ${data.guide_type}, ${guideNumber},
+          ${data.beneficiary_card_number || patient[0].insurance_number || null},
+          ${patient[0].full_name},
+          ${patient[0].cpf || null},
+          ${data.professional_name || user.name || null},
+          ${data.professional_council || 'CRM'},
+          ${data.professional_number || user.crm || null},
+          ${data.professional_uf || 'SP'},
+          ${data.professional_cbo || '225125'},
+          ${JSON.stringify(proceduresJson)}::jsonb,
+          ${totalValue},
+          ${new Date().toISOString().split('T')[0]},
+          ${data.clinical_indication || null},
+          ${data.observations || null},
+          'draft',
+          'pending'
+        ) RETURNING *
+      `
+    } else {
+      // Fallback when status column doesn't exist
+      result = await db`
+        INSERT INTO tiss_guides (
+          user_id, patient_id, appointment_id, guide_type, guide_number,
+          beneficiary_card_number, beneficiary_name, beneficiary_cpf,
+          professional_name, professional_council, professional_number, professional_uf, professional_cbo,
+          procedures, total_value, issue_date, clinical_indication, observations,
+          payment_status
+        ) VALUES (
+          ${user.id}, ${data.patient_id}, ${data.appointment_id || null},
+          ${data.guide_type}, ${guideNumber},
+          ${data.beneficiary_card_number || patient[0].insurance_number || null},
+          ${patient[0].full_name},
+          ${patient[0].cpf || null},
+          ${data.professional_name || user.name || null},
+          ${data.professional_council || 'CRM'},
+          ${data.professional_number || user.crm || null},
+          ${data.professional_uf || 'SP'},
+          ${data.professional_cbo || '225125'},
+          ${JSON.stringify(proceduresJson)}::jsonb,
+          ${totalValue},
+          ${new Date().toISOString().split('T')[0]},
+          ${data.clinical_indication || null},
+          ${data.observations || null},
+          'pending'
+        ) RETURNING *
+      `
+    }
 
     return { success: true, data: result[0] }
   } catch (error: any) {
@@ -160,20 +200,46 @@ export async function getTISSGuides(filters?: {
 
     const limit = filters?.limit || 100
 
-    const result = await db`
-      SELECT g.*, p.full_name as patient_name, p.cpf as patient_cpf
-      FROM tiss_guides g
-      JOIN patients p ON g.patient_id = p.id
-      WHERE g.user_id = ${user.id}
-      ${filters?.patient_id ? db`AND g.patient_id = ${filters.patient_id}` : db``}
-      ${filters?.status ? db`AND g.status = ${filters.status}` : db``}
-      ${filters?.payment_status ? db`AND g.payment_status = ${filters.payment_status}` : db``}
-      ${filters?.guide_type ? db`AND g.guide_type = ${filters.guide_type}` : db``}
-      ${filters?.start_date ? db`AND g.created_at >= ${filters.start_date}` : db``}
-      ${filters?.end_date ? db`AND g.created_at <= ${filters.end_date}` : db``}
-      ORDER BY g.created_at DESC
-      LIMIT ${limit}
+    // Check if status column exists
+    const statusColumnExists = await db`
+      SELECT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'tiss_guides' AND column_name = 'status'
+      ) as exists
     `
+
+    let result
+    if (statusColumnExists[0]?.exists) {
+      result = await db`
+        SELECT g.*, p.full_name as patient_name, p.cpf as patient_cpf
+        FROM tiss_guides g
+        JOIN patients p ON g.patient_id = p.id
+        WHERE g.user_id = ${user.id}
+        ${filters?.patient_id ? db`AND g.patient_id = ${filters.patient_id}` : db``}
+        ${filters?.status ? db`AND g.status = ${filters.status}` : db``}
+        ${filters?.payment_status ? db`AND g.payment_status = ${filters.payment_status}` : db``}
+        ${filters?.guide_type ? db`AND g.guide_type = ${filters.guide_type}` : db``}
+        ${filters?.start_date ? db`AND g.created_at >= ${filters.start_date}` : db``}
+        ${filters?.end_date ? db`AND g.created_at <= ${filters.end_date}` : db``}
+        ORDER BY g.created_at DESC
+        LIMIT ${limit}
+      `
+    } else {
+      // Fallback when status column doesn't exist - add 'draft' as default status
+      result = await db`
+        SELECT g.*, 'draft' as status, p.full_name as patient_name, p.cpf as patient_cpf
+        FROM tiss_guides g
+        JOIN patients p ON g.patient_id = p.id
+        WHERE g.user_id = ${user.id}
+        ${filters?.patient_id ? db`AND g.patient_id = ${filters.patient_id}` : db``}
+        ${filters?.payment_status ? db`AND g.payment_status = ${filters.payment_status}` : db``}
+        ${filters?.guide_type ? db`AND g.guide_type = ${filters.guide_type}` : db``}
+        ${filters?.start_date ? db`AND g.created_at >= ${filters.start_date}` : db``}
+        ${filters?.end_date ? db`AND g.created_at <= ${filters.end_date}` : db``}
+        ORDER BY g.created_at DESC
+        LIMIT ${limit}
+      `
+    }
 
     return { success: true, data: result }
   } catch (error: any) {
@@ -361,12 +427,16 @@ export async function generateTISSSubmissionXML(data: {
       `
     }
 
-    // Atualiza status das guias
-    await db`
-      UPDATE tiss_guides
-      SET status = 'pending'
-      WHERE id = ANY(${data.guide_ids}) AND user_id = ${user.id}
-    `
+    // Atualiza status das guias (if column exists)
+    try {
+      await db`
+        UPDATE tiss_guides
+        SET status = 'pending'
+        WHERE id = ANY(${data.guide_ids}) AND user_id = ${user.id}
+      `
+    } catch {
+      // Column may not exist yet - ignore
+    }
 
     return {
       success: true,
@@ -444,13 +514,17 @@ export async function submitTISSToOperadora(data: {
         WHERE id = ${data.submission_id}
       `
 
-      // Atualiza status das guias
+      // Atualiza status das guias (if column exists)
       const guideIds = sub.guide_ids as string[]
-      await db`
-        UPDATE tiss_guides
-        SET status = 'sent'
-        WHERE id = ANY(${guideIds}) AND user_id = ${user.id}
-      `
+      try {
+        await db`
+          UPDATE tiss_guides
+          SET status = 'sent'
+          WHERE id = ANY(${guideIds}) AND user_id = ${user.id}
+        `
+      } catch {
+        // Column may not exist yet - ignore
+      }
 
       return {
         success: true,
@@ -471,11 +545,15 @@ export async function submitTISSToOperadora(data: {
       `
 
       const guideIds = sub.guide_ids as string[]
-      await db`
-        UPDATE tiss_guides
-        SET status = 'sent'
-        WHERE id = ANY(${guideIds}) AND user_id = ${user.id}
-      `
+      try {
+        await db`
+          UPDATE tiss_guides
+          SET status = 'sent'
+          WHERE id = ANY(${guideIds}) AND user_id = ${user.id}
+        `
+      } catch {
+        // Column may not exist yet - ignore
+      }
 
       return {
         success: true,
@@ -755,18 +833,42 @@ export async function updateTISSGuideStatus(guide_id: string, status: string, pa
     await setUserContext(user.id)
     const db = await getDb()
 
-    const result = await db`
-      UPDATE tiss_guides
-      SET status = ${status},
-          payment_status = COALESCE(${payment_data?.payment_status || null}, payment_status),
-          authorized_value = COALESCE(${payment_data?.authorized_value || null}, authorized_value),
-          paid_value = COALESCE(${payment_data?.paid_value || null}, paid_value),
-          gloss_value = COALESCE(${payment_data?.gloss_value || null}, gloss_value),
-          gloss_reason = COALESCE(${payment_data?.gloss_reason || null}, gloss_reason),
-          updated_at = NOW()
-      WHERE id = ${guide_id} AND user_id = ${user.id}
-      RETURNING *
+    // Check if status column exists
+    const statusColumnExists = await db`
+      SELECT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'tiss_guides' AND column_name = 'status'
+      ) as exists
     `
+
+    let result
+    if (statusColumnExists[0]?.exists) {
+      result = await db`
+        UPDATE tiss_guides
+        SET status = ${status},
+            payment_status = COALESCE(${payment_data?.payment_status || null}, payment_status),
+            authorized_value = COALESCE(${payment_data?.authorized_value || null}, authorized_value),
+            paid_value = COALESCE(${payment_data?.paid_value || null}, paid_value),
+            gloss_value = COALESCE(${payment_data?.gloss_value || null}, gloss_value),
+            gloss_reason = COALESCE(${payment_data?.gloss_reason || null}, gloss_reason),
+            updated_at = NOW()
+        WHERE id = ${guide_id} AND user_id = ${user.id}
+        RETURNING *
+      `
+    } else {
+      // Fallback when status column doesn't exist - update only payment fields
+      result = await db`
+        UPDATE tiss_guides
+        SET payment_status = COALESCE(${payment_data?.payment_status || null}, payment_status),
+            authorized_value = COALESCE(${payment_data?.authorized_value || null}, authorized_value),
+            paid_value = COALESCE(${payment_data?.paid_value || null}, paid_value),
+            gloss_value = COALESCE(${payment_data?.gloss_value || null}, gloss_value),
+            gloss_reason = COALESCE(${payment_data?.gloss_reason || null}, gloss_reason),
+            updated_at = NOW()
+        WHERE id = ${guide_id} AND user_id = ${user.id}
+        RETURNING *
+      `
+    }
 
     if (result.length === 0) return { error: 'Guia não encontrada' }
     return { success: true, data: result[0] }
@@ -864,21 +966,48 @@ export async function getTISSDashboard() {
     await setUserContext(user.id)
     const db = await getDb()
 
-    // Estatísticas gerais de guias
-    const guiasStats = await db`
-      SELECT
-        COUNT(*) as total,
-        COUNT(*) FILTER (WHERE status = 'draft') as rascunho,
-        COUNT(*) FILTER (WHERE status = 'pending') as pendente,
-        COUNT(*) FILTER (WHERE status = 'sent') as enviado,
-        COUNT(*) FILTER (WHERE status = 'processed') as processado,
-        COALESCE(SUM(total_value), 0) as valor_total,
-        COALESCE(SUM(total_value) FILTER (WHERE payment_status = 'paid'), 0) as valor_pago,
-        COALESCE(SUM(gloss_value), 0) as valor_glosado
-      FROM tiss_guides
-      WHERE user_id = ${user.id}
-      AND created_at >= CURRENT_DATE - INTERVAL '30 days'
+    // Check if status column exists
+    const statusColumnExists = await db`
+      SELECT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'tiss_guides' AND column_name = 'status'
+      ) as exists
     `
+
+    // Estatísticas gerais de guias
+    let guiasStats
+    if (statusColumnExists[0]?.exists) {
+      guiasStats = await db`
+        SELECT
+          COUNT(*) as total,
+          COUNT(*) FILTER (WHERE status = 'draft') as rascunho,
+          COUNT(*) FILTER (WHERE status = 'pending') as pendente,
+          COUNT(*) FILTER (WHERE status = 'sent') as enviado,
+          COUNT(*) FILTER (WHERE status = 'processed') as processado,
+          COALESCE(SUM(total_value), 0) as valor_total,
+          COALESCE(SUM(total_value) FILTER (WHERE payment_status = 'paid'), 0) as valor_pago,
+          COALESCE(SUM(gloss_value), 0) as valor_glosado
+        FROM tiss_guides
+        WHERE user_id = ${user.id}
+        AND created_at >= CURRENT_DATE - INTERVAL '30 days'
+      `
+    } else {
+      // Fallback when status column doesn't exist - use payment_status for basic stats
+      guiasStats = await db`
+        SELECT
+          COUNT(*) as total,
+          0 as rascunho,
+          COUNT(*) FILTER (WHERE payment_status = 'pending') as pendente,
+          0 as enviado,
+          COUNT(*) FILTER (WHERE payment_status = 'paid') as processado,
+          COALESCE(SUM(total_value), 0) as valor_total,
+          COALESCE(SUM(total_value) FILTER (WHERE payment_status = 'paid'), 0) as valor_pago,
+          COALESCE(SUM(gloss_value), 0) as valor_glosado
+        FROM tiss_guides
+        WHERE user_id = ${user.id}
+        AND created_at >= CURRENT_DATE - INTERVAL '30 days'
+      `
+    }
 
     // Estatísticas de submissões
     const submissoesStats = await db`

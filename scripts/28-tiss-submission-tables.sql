@@ -107,7 +107,12 @@ CREATE TABLE tiss_guides (
   -- Indicação clínica
   clinical_indication TEXT,
   observations TEXT,
-  
+
+  -- Status da guia (workflow)
+  status VARCHAR(50) DEFAULT 'draft' CHECK (status IN (
+    'draft', 'pending', 'sent', 'processing', 'processed', 'accepted', 'rejected', 'error'
+  )),
+
   -- Status de pagamento - coluna adicionada corretamente
   payment_status VARCHAR(50) DEFAULT 'pending' CHECK (payment_status IN (
     'pending', 'authorized', 'paid', 'denied', 'gloss'
@@ -131,6 +136,7 @@ DROP INDEX IF EXISTS idx_tiss_guides_submission;
 DROP INDEX IF EXISTS idx_tiss_guides_appointment;
 DROP INDEX IF EXISTS idx_tiss_guides_patient;
 DROP INDEX IF EXISTS idx_tiss_guides_payment;
+DROP INDEX IF EXISTS idx_tiss_guides_status;
 
 CREATE INDEX idx_tiss_submissions_user ON tiss_submissions(user_id);
 CREATE INDEX idx_tiss_submissions_status ON tiss_submissions(status);
@@ -140,6 +146,7 @@ CREATE INDEX idx_tiss_guides_submission ON tiss_guides(submission_id);
 CREATE INDEX idx_tiss_guides_appointment ON tiss_guides(appointment_id);
 CREATE INDEX idx_tiss_guides_patient ON tiss_guides(patient_id);
 CREATE INDEX idx_tiss_guides_payment ON tiss_guides(payment_status);
+CREATE INDEX idx_tiss_guides_status ON tiss_guides(status);
 
 -- RLS Policies
 ALTER TABLE tiss_submissions ENABLE ROW LEVEL SECURITY;
