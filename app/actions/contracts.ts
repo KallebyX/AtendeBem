@@ -61,7 +61,7 @@ export async function getContracts(filters?: { patient_id?: string; status?: str
 
     const result = filters?.patient_id && filters?.status
       ? await db`
-          SELECT c.*, p.full_name as patient_name
+          SELECT c.*, p.full_name as patient_name, p.cpf as patient_cpf
           FROM contracts c
           JOIN patients p ON c.patient_id = p.id
           WHERE c.user_id = ${user.id}
@@ -71,7 +71,7 @@ export async function getContracts(filters?: { patient_id?: string; status?: str
         `
       : filters?.patient_id
       ? await db`
-          SELECT c.*, p.full_name as patient_name
+          SELECT c.*, p.full_name as patient_name, p.cpf as patient_cpf
           FROM contracts c
           JOIN patients p ON c.patient_id = p.id
           WHERE c.user_id = ${user.id}
@@ -80,7 +80,7 @@ export async function getContracts(filters?: { patient_id?: string; status?: str
         `
       : filters?.status
       ? await db`
-          SELECT c.*, p.full_name as patient_name
+          SELECT c.*, p.full_name as patient_name, p.cpf as patient_cpf
           FROM contracts c
           JOIN patients p ON c.patient_id = p.id
           WHERE c.user_id = ${user.id}
@@ -88,7 +88,7 @@ export async function getContracts(filters?: { patient_id?: string; status?: str
           ORDER BY c.created_at DESC
         `
       : await db`
-          SELECT c.*, p.full_name as patient_name
+          SELECT c.*, p.full_name as patient_name, p.cpf as patient_cpf
           FROM contracts c
           JOIN patients p ON c.patient_id = p.id
           WHERE c.user_id = ${user.id}

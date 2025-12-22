@@ -12,6 +12,7 @@ interface ContractPDFViewerProps {
     contract_number: string
     content: string
     patient_name: string
+    patient_cpf?: string
     contract_type: string
     created_at: string
     valid_until?: string
@@ -32,10 +33,88 @@ const contractTypeLabels: Record<string, string> = {
   other: "Outro",
 }
 
-// Função para processar Markdown básico para texto
+// Função para detectar se o conteúdo já é HTML
+function isHTMLContent(content: string): boolean {
+  // Verifica se contém tags HTML comuns
+  return /<(h[1-6]|p|div|ul|ol|li|strong|em|br|span|table)[^>]*>/i.test(content)
+}
+
+// Função para remover tags HTML e extrair texto
+function stripHtmlTags(html: string): string {
+  return html
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/p>/gi, '\n\n')
+    .replace(/<\/li>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .trim()
+}
+
+// Função para processar Markdown básico ou HTML para texto
 function parseMarkdownForPDF(content: string): { type: 'heading' | 'subheading' | 'paragraph' | 'list-item' | 'empty', text: string }[] {
-  const lines = content.split('\n')
   const result: { type: 'heading' | 'subheading' | 'paragraph' | 'list-item' | 'empty', text: string }[] = []
+
+  // Se o conteúdo for HTML, processa de forma diferente
+  if (isHTMLContent(content)) {
+    // Extrair elementos HTML
+    const h2Matches = content.match(/<h2[^>]*>(.*?)<\/h2>/gi) || []
+    const h3Matches = content.match(/<h3[^>]*>(.*?)<\/h3>/gi) || []
+    const pMatches = content.match(/<p[^>]*>(.*?)<\/p>/gi) || []
+    const liMatches = content.match(/<li[^>]*>(.*?)<\/li>/gi) || []
+
+    // Criar um array com todos os elementos e suas posições
+    interface Element {
+      type: 'heading' | 'subheading' | 'paragraph' | 'list-item'
+      text: string
+      index: number
+    }
+
+    const elements: Element[] = []
+
+    h2Matches.forEach(match => {
+      const text = stripHtmlTags(match)
+      if (text) {
+        elements.push({ type: 'heading', text, index: content.indexOf(match) })
+      }
+    })
+
+    h3Matches.forEach(match => {
+      const text = stripHtmlTags(match)
+      if (text) {
+        elements.push({ type: 'subheading', text, index: content.indexOf(match) })
+      }
+    })
+
+    pMatches.forEach(match => {
+      const text = stripHtmlTags(match)
+      if (text) {
+        elements.push({ type: 'paragraph', text, index: content.indexOf(match) })
+      }
+    })
+
+    liMatches.forEach(match => {
+      const text = stripHtmlTags(match)
+      if (text) {
+        elements.push({ type: 'list-item', text, index: content.indexOf(match) })
+      }
+    })
+
+    // Ordenar por posição no documento
+    elements.sort((a, b) => a.index - b.index)
+
+    // Adicionar ao resultado
+    elements.forEach(el => {
+      result.push({ type: el.type, text: el.text })
+    })
+
+    return result
+  }
+
+  // Se for Markdown, processa normalmente
+  const lines = content.split('\n')
 
   for (const line of lines) {
     const trimmed = line.trim()
@@ -67,10 +146,31 @@ function parseMarkdownForPDF(content: string): { type: 'heading' | 'subheading' 
   return result
 }
 
+// Função para estilizar HTML existente
+function styleExistingHTML(content: string): string {
+  return content
+    // Adiciona classes ao HTML existente
+    .replace(/<h1([^>]*)>/gi, '<h1$1 class="text-xl font-bold text-gray-900 mt-8 mb-4 pb-2 border-b">')
+    .replace(/<h2([^>]*)>/gi, '<h2$1 class="text-xl font-bold text-gray-900 mt-6 mb-3">')
+    .replace(/<h3([^>]*)>/gi, '<h3$1 class="text-lg font-bold text-gray-900 mt-5 mb-2">')
+    .replace(/<h4([^>]*)>/gi, '<h4$1 class="text-base font-semibold text-gray-800 mt-4 mb-2">')
+    .replace(/<p([^>]*)>/gi, '<p$1 class="text-gray-700 leading-relaxed mb-3 text-justify">')
+    .replace(/<ul([^>]*)>/gi, '<ul$1 class="list-disc ml-6 mb-4 text-gray-700">')
+    .replace(/<ol([^>]*)>/gi, '<ol$1 class="list-decimal ml-6 mb-4 text-gray-700">')
+    .replace(/<li([^>]*)>/gi, '<li$1 class="mb-1">')
+    .replace(/<strong([^>]*)>/gi, '<strong$1 class="font-semibold">')
+}
+
 // Função para renderizar Markdown para HTML
 function renderMarkdownToHTML(content: string): string {
+  // Se o conteúdo já for HTML, apenas aplica estilos
+  if (isHTMLContent(content)) {
+    return styleExistingHTML(content)
+  }
+
+  // Se for Markdown, converte para HTML
   let html = content
-    // Escape HTML first
+    // Escape HTML first (apenas para Markdown)
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
@@ -97,6 +197,30 @@ function renderMarkdownToHTML(content: string): string {
   }
 
   return html
+}
+
+// Função para substituir variáveis do template
+function replaceTemplateVariables(content: string, contract: ContractPDFViewerProps['contract']): string {
+  const today = new Date().toLocaleDateString("pt-BR")
+  const patientCpf = contract.patient_cpf || "Não informado"
+
+  return content
+    // Variáveis de paciente
+    .replace(/\{\{patient_name\}\}/gi, contract.patient_name || "")
+    .replace(/\{\{patientname\}\}/gi, contract.patient_name || "")
+    .replace(/\{\{patient_cpf\}\}/gi, patientCpf)
+    .replace(/\{\{patientcpf\}\}/gi, patientCpf)
+    // Data e local
+    .replace(/\{\{date\}\}/gi, today)
+    .replace(/\{\{clinic_name\}\}/gi, "AtendeBem")
+    .replace(/\{\{clinicname\}\}/gi, "AtendeBem")
+    // Variáveis de procedimento - substituir por texto padrão se não preenchidas
+    .replace(/\{\{procedure_name\}\}/gi, "Procedimento definido pelo profissional")
+    .replace(/\{\{procedurename\}\}/gi, "Procedimento definido pelo profissional")
+    .replace(/\{\{procedure_description\}\}/gi, "Descrição do procedimento será detalhada pelo profissional.")
+    .replace(/\{\{proceduredescription\}\}/gi, "Descrição do procedimento será detalhada pelo profissional.")
+    .replace(/\{\{risks_benefits\}\}/gi, "Os riscos e benefícios serão explicados pelo profissional responsável.")
+    .replace(/\{\{risksbenefits\}\}/gi, "Os riscos e benefícios serão explicados pelo profissional responsável.")
 }
 
 export function ContractPDFViewer({ contract }: ContractPDFViewerProps) {
@@ -238,8 +362,9 @@ export function ContractPDFViewer({ contract }: ContractPDFViewerProps) {
       doc.line(margin, yPosition, pageWidth - margin, yPosition)
       yPosition += 10
 
-      // Conteúdo do contrato
-      const parsedContent = parseMarkdownForPDF(contract.content)
+      // Conteúdo do contrato (com variáveis substituídas)
+      const contentForPDF = replaceTemplateVariables(contract.content, contract)
+      const parsedContent = parseMarkdownForPDF(contentForPDF)
 
       for (const item of parsedContent) {
         checkNewPage(item.type === 'heading' ? 15 : 10)
@@ -374,7 +499,9 @@ export function ContractPDFViewer({ contract }: ContractPDFViewerProps) {
     window.print()
   }
 
-  const processedContent = renderMarkdownToHTML(contract.content)
+  // Primeiro substitui variáveis, depois renderiza o HTML/Markdown
+  const contentWithVariables = replaceTemplateVariables(contract.content, contract)
+  const processedContent = renderMarkdownToHTML(contentWithVariables)
 
   return (
     <div className="space-y-4">

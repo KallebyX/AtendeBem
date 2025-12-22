@@ -139,15 +139,38 @@ export default function ContratosPage() {
     setIsSubmitting(true)
     const selectedPatientData = patients.find((p) => p.id === selectedPatient)
 
-    // Substituir variáveis
+    // Substituir variáveis - suporta ambos os formatos: {VAR} e {{var}}
     let finalContent = content
+    const today = new Date().toLocaleDateString("pt-BR")
+
     if (selectedPatientData) {
       finalContent = finalContent
+        // Formato antigo: {VARIAVEL}
         .replace(/\{PACIENTE_NOME\}/g, selectedPatientData.full_name)
         .replace(/\{PACIENTE_CPF\}/g, selectedPatientData.cpf || "")
         .replace(/\{PACIENTE_RG\}/g, selectedPatientData.rg || "")
-        .replace(/\{DATA_HOJE\}/g, new Date().toLocaleDateString("pt-BR"))
+        .replace(/\{DATA_HOJE\}/g, today)
+        // Formato novo: {{variavel}} - templates do banco de dados
+        .replace(/\{\{patient_name\}\}/gi, selectedPatientData.full_name)
+        .replace(/\{\{patientname\}\}/gi, selectedPatientData.full_name)
+        .replace(/\{\{patient_cpf\}\}/gi, selectedPatientData.cpf || "Não informado")
+        .replace(/\{\{patientcpf\}\}/gi, selectedPatientData.cpf || "Não informado")
+        .replace(/\{\{date\}\}/gi, today)
+        .replace(/\{\{clinic_name\}\}/gi, "AtendeBem")
+        .replace(/\{\{clinicname\}\}/gi, "AtendeBem")
     }
+
+    // Substituir variáveis que não dependem do paciente
+    finalContent = finalContent
+      .replace(/\{\{date\}\}/gi, today)
+      .replace(/\{\{clinic_name\}\}/gi, "AtendeBem")
+      // Variáveis de procedimento - substituir por texto padrão se não preenchidas
+      .replace(/\{\{procedure_name\}\}/gi, "Procedimento a ser especificado")
+      .replace(/\{\{procedurename\}\}/gi, "Procedimento a ser especificado")
+      .replace(/\{\{procedure_description\}\}/gi, "Descrição do procedimento será detalhada pelo profissional.")
+      .replace(/\{\{proceduredescription\}\}/gi, "Descrição do procedimento será detalhada pelo profissional.")
+      .replace(/\{\{risks_benefits\}\}/gi, "Os riscos e benefícios serão explicados pelo profissional responsável.")
+      .replace(/\{\{risksbenefits\}\}/gi, "Os riscos e benefícios serão explicados pelo profissional responsável.")
 
     const result = await createContract({
       patient_id: selectedPatient,
