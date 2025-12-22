@@ -65,6 +65,7 @@ import {
   getNFeById,
   getNFeFullConfiguration,
 } from "@/app/actions/nfe"
+import { generateDANFEBlob, type DANFEData } from "@/lib/danfe-generator"
 import { getNFeServices } from "@/app/actions/nfe-services"
 import { getPatients } from "@/app/actions/patients"
 import {
@@ -319,6 +320,114 @@ export default function NFePage() {
     }
   }
 
+  async function handleDownloadPDF(id: string) {
+    try {
+      // Buscar dados completos da nota
+      const result = await getNFeById(id)
+      if (!result.success || !result.data) {
+        toast.error(result.error || "Erro ao carregar dados da nota")
+        return
+      }
+
+      const invoice = result.data
+
+      // Buscar configuração da empresa
+      const configResult = await getNFeFullConfiguration()
+      const config = configResult.data
+
+      // Preparar dados para o DANFE
+      const danfeData: DANFEData = {
+        invoiceType: invoice.invoice_type as 'nfe' | 'nfse',
+        invoiceNumber: invoice.invoice_number,
+        series: invoice.series || '1',
+        accessKey: invoice.access_key,
+        verificationCode: invoice.verification_code,
+        authorizationProtocol: invoice.authorization_protocol,
+        authorizationDate: invoice.authorization_date,
+        issueDate: invoice.created_at,
+        rpsNumber: invoice.rps_number,
+        rpsSeries: invoice.rps_series,
+        rpsDate: invoice.rps_date,
+        emitter: {
+          name: config?.company_name || 'Empresa',
+          fantasyName: config?.company_fantasy_name,
+          cnpj: config?.company_cnpj || '',
+          ie: config?.company_ie,
+          im: config?.company_im,
+          cnae: config?.company_cnae,
+          address: {
+            street: config?.address_street || '',
+            number: config?.address_number || '',
+            complement: config?.address_complement,
+            neighborhood: config?.address_neighborhood || '',
+            city: config?.address_city || '',
+            state: config?.address_state || '',
+            zipcode: config?.address_zipcode || '',
+            cityCode: config?.city_code,
+          },
+          phone: config?.contact_phone,
+          email: config?.contact_email,
+        },
+        recipient: {
+          name: invoice.customer_name,
+          cpfCnpj: invoice.customer_cpf_cnpj,
+          address: invoice.customer_address ? {
+            street: invoice.customer_address.street || '',
+            number: invoice.customer_address.number || '',
+            complement: invoice.customer_address.complement,
+            neighborhood: invoice.customer_address.neighborhood || '',
+            city: invoice.customer_address.city || '',
+            state: invoice.customer_address.state || '',
+            zipcode: invoice.customer_address.zipcode || '',
+          } : undefined,
+          email: invoice.patient_email,
+        },
+        items: (invoice.services || []).map((s: any) => ({
+          code: s.code,
+          description: s.description,
+          quantity: s.quantity || 1,
+          unitPrice: s.unit_price || s.unitPrice || 0,
+          totalPrice: s.total_value || s.totalValue || 0,
+          lc116Code: s.lc116_code,
+        })),
+        values: {
+          servicesValue: invoice.services_value || 0,
+          deductions: invoice.deductions || 0,
+          discount: invoice.discount || 0,
+          baseValue: invoice.services_value || 0,
+          issRate: invoice.iss_rate || 2,
+          issValue: invoice.iss_value || 0,
+          pisValue: invoice.pis_value,
+          cofinsValue: invoice.cofins_value,
+          irValue: invoice.ir_value,
+          csllValue: invoice.csll_value,
+          inssValue: invoice.inss_value,
+          netValue: invoice.net_value || invoice.services_value || 0,
+        },
+        additionalInfo: invoice.observations,
+      }
+
+      // Gerar PDF
+      const pdfBlob = generateDANFEBlob(danfeData)
+
+      // Fazer download
+      const url = URL.createObjectURL(pdfBlob)
+      const a = document.createElement("a")
+      a.href = url
+      const statusLabel = invoice.status === 'draft' ? 'rascunho' : 'danfe'
+      a.download = `${invoice.invoice_type}-${invoice.invoice_number}-${statusLabel}.pdf`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+
+      toast.success("PDF baixado com sucesso!")
+    } catch (error) {
+      console.error("Erro ao gerar PDF:", error)
+      toast.error("Erro ao gerar PDF")
+    }
+  }
+
   async function handleCancel() {
     if (!selectedInvoice) return
 
@@ -566,15 +675,21 @@ export default function NFePage() {
                               Enviar para SEFAZ
                             </DropdownMenuItem>
                           )}
+                          {invoice.status === "draft" && (
+                            <DropdownMenuItem onClick={() => handleDownloadPDF(invoice.id)}>
+                              <Download className="w-4 h-4 mr-2" />
+                              Baixar PDF (Rascunho)
+                            </DropdownMenuItem>
+                          )}
                           {invoice.status === "authorized" && (
                             <>
                               <DropdownMenuItem onClick={() => handleDownloadXML(invoice.id)}>
                                 <FileCode className="w-4 h-4 mr-2" />
                                 Baixar XML
                               </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => handleDownloadXML(invoice.id)}>
+                              <DropdownMenuItem onClick={() => handleDownloadPDF(invoice.id)}>
                                 <Download className="w-4 h-4 mr-2" />
-                                Baixar PDF
+                                Baixar DANFE (PDF)
                               </DropdownMenuItem>
                             </>
                           )}
@@ -802,12 +917,12 @@ export default function NFePage() {
               )}
 
               {selectedInvoice.status === "authorized" && (
-                <div className="flex gap-2 pt-4 border-t">
+                <div className="flex gap-2 pt-4 border-t flex-wrap">
                   <Button variant="outline" onClick={() => handleDownloadXML(selectedInvoice.id)}>
                     <FileCode className="w-4 h-4 mr-2" />
                     Baixar XML
                   </Button>
-                  <Button variant="outline">
+                  <Button variant="outline" onClick={() => handleDownloadPDF(selectedInvoice.id)}>
                     <Download className="w-4 h-4 mr-2" />
                     Baixar DANFE
                   </Button>
@@ -828,7 +943,11 @@ export default function NFePage() {
               )}
 
               {selectedInvoice.status === "draft" && (
-                <div className="flex gap-2 pt-4 border-t">
+                <div className="flex gap-2 pt-4 border-t flex-wrap">
+                  <Button variant="outline" onClick={() => handleDownloadPDF(selectedInvoice.id)}>
+                    <Download className="w-4 h-4 mr-2" />
+                    Baixar PDF (Rascunho)
+                  </Button>
                   <Button onClick={() => handleSendToSefaz(selectedInvoice.id)}>
                     <Send className="w-4 h-4 mr-2" />
                     Enviar para SEFAZ
