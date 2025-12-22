@@ -280,7 +280,7 @@ export function generateDANFENFSe(data: DANFEData): jsPDF {
   taxY += 5
 
   doc.text(`Alíquota ISS:`, margin + 2, taxY)
-  doc.text(`${data.values.issRate.toFixed(2)}%`, margin + 45, taxY)
+  doc.text(`${(Number(data.values.issRate) || 0).toFixed(2)}%`, margin + 45, taxY)
   taxY += 5
 
   doc.text(`Valor ISS:`, margin + 2, taxY)
@@ -627,7 +627,8 @@ function formatMonth(dateStr: string): string {
 }
 
 function formatCurrency(value: number): string {
-  return value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  const numValue = Number(value) || 0
+  return numValue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
 function formatAccessKey(key: string): string {
