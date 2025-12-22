@@ -1,11 +1,23 @@
 "use client"
 
+import type React from "react"
+
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { NavigationHeader } from "@/components/navigation-header"
-import { Send, Bot, User, Loader2, FileText, Stethoscope, Activity, PillBottle, RefreshCw } from "lucide-react"
+import {
+  Send,
+  Bot,
+  User,
+  Loader2,
+  FileText,
+  Stethoscope,
+  Activity,
+  PanelBottom as PillBottle,
+  RefreshCw,
+} from "lucide-react"
 import { useEffect, useRef, useState } from "react"
 
 interface Message {
@@ -32,23 +44,27 @@ export default function AssistentePage() {
     {
       icon: Stethoscope,
       title: "Consulta de Rotina",
-      prompt: "Gere uma nota SOAP completa para consulta de rotina: paciente adulto, 42 anos, sexo masculino, queixando-se de cefaleia ha 3 dias, de intensidade moderada, sem nauseas. Exame fisico: PA 120/80, FC 72, Temp 36.5C, ausculta pulmonar e cardiaca sem alteracoes. Sem comorbidades conhecidas."
+      prompt:
+        "Gere uma nota SOAP completa para consulta de rotina: paciente adulto, 42 anos, sexo masculino, queixando-se de cefaleia ha 3 dias, de intensidade moderada, sem nauseas. Exame fisico: PA 120/80, FC 72, Temp 36.5C, ausculta pulmonar e cardiaca sem alteracoes. Sem comorbidades conhecidas.",
     },
     {
       icon: Activity,
       title: "Retorno Pediatrico",
-      prompt: "Crie nota SOAP para retorno pediatrico: crianca 5 anos, sexo feminino, retorno apos 3 dias com febre (38.5C), tosse produtiva, inapetencia. Mae relata quadro gripal na escola. Exame fisico: orofaringe hiperemiada, ausculta pulmonar com roncos bilaterais."
+      prompt:
+        "Crie nota SOAP para retorno pediatrico: crianca 5 anos, sexo feminino, retorno apos 3 dias com febre (38.5C), tosse produtiva, inapetencia. Mae relata quadro gripal na escola. Exame fisico: orofaringe hiperemiada, ausculta pulmonar com roncos bilaterais.",
     },
     {
       icon: FileText,
       title: "Pre-Operatorio",
-      prompt: "Elabore nota SOAP para avaliacao pre-operatoria: cirurgia eletiva de colecistectomia videolaparoscopica, paciente 45 anos, sexo feminino, hipertensa controlada com losartana 50mg/dia, ASA II, exames laboratoriais normais."
+      prompt:
+        "Elabore nota SOAP para avaliacao pre-operatoria: cirurgia eletiva de colecistectomia videolaparoscopica, paciente 45 anos, sexo feminino, hipertensa controlada com losartana 50mg/dia, ASA II, exames laboratoriais normais.",
     },
     {
       icon: PillBottle,
       title: "Prescricao Cronica",
-      prompt: "Gere nota SOAP para renovacao de prescricao: paciente diabetico tipo 2, 58 anos, em uso de metformina 850mg 2x/dia e glibenclamida 5mg/dia, glicemias controladas (jejum 110mg/dL), sem queixas."
-    }
+      prompt:
+        "Gere nota SOAP para renovacao de prescricao: paciente diabetico tipo 2, 58 anos, em uso de metformina 850mg 2x/dia e glibenclamida 5mg/dia, glicemias controladas (jejum 110mg/dL), sem queixas.",
+    },
   ]
 
   const scrollToBottom = () => {
@@ -65,43 +81,55 @@ export default function AssistentePage() {
     const userMessage: Message = {
       id: Date.now().toString(),
       role: "user",
-      content: text.trim()
+      content: text.trim(),
     }
 
-    setMessages(prev => [...prev, userMessage])
+    setMessages((prev) => [...prev, userMessage])
     setInput("")
     setIsLoading(true)
 
     try {
+      console.log("[v0] [AI CHAT CLIENT] Sending message:", text.substring(0, 50) + "...")
+
       const response = await fetch("/api/chat", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          messages: [...messages, userMessage].map(m => ({
+          messages: [...messages, userMessage].map((m) => ({
             role: m.role,
-            content: m.content
-          }))
-        })
+            content: m.content,
+          })),
+        }),
       })
 
+      if (!response.ok) {
+        console.error("[v0] [AI CHAT CLIENT] HTTP error:", response.status, response.statusText)
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      }
+
       const data = await response.json()
+      console.log("[v0] [AI CHAT CLIENT] Response received")
 
       const assistantMessage: Message = {
         id: data.id || Date.now().toString(),
         role: "assistant",
-        content: data.content || "Desculpe, nao consegui processar sua solicitacao."
+        content: data.content || "Desculpe, nao consegui processar sua solicitacao.",
       }
 
-      setMessages(prev => [...prev, assistantMessage])
+      setMessages((prev) => [...prev, assistantMessage])
     } catch (error) {
-      console.error("Error sending message:", error)
-      setMessages(prev => [...prev, {
-        id: Date.now().toString(),
-        role: "assistant",
-        content: "Desculpe, ocorreu um erro ao processar sua mensagem. Verifique sua conexao e tente novamente."
-      }])
+      console.error("[v0] [AI CHAT CLIENT] Error:", error)
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: Date.now().toString(),
+          role: "assistant",
+          content:
+            "❌ Nao foi possivel conectar ao servidor de IA.\n\n**Verifique:**\n- Sua conexao com a internet\n- Se o servidor esta respondendo\n\nTente novamente em alguns instantes.",
+        },
+      ])
     } finally {
       setIsLoading(false)
     }
@@ -178,9 +206,7 @@ export default function AssistentePage() {
                           }`}
                         >
                           <CardContent className="p-4">
-                            <div className="leading-relaxed whitespace-pre-wrap">
-                              {message.content}
-                            </div>
+                            <div className="leading-relaxed whitespace-pre-wrap">{message.content}</div>
                           </CardContent>
                         </Card>
                         {message.role === "user" && (
@@ -260,10 +286,8 @@ export default function AssistentePage() {
                         </div>
                         <h3 className="font-semibold text-lg">{template.title}</h3>
                       </div>
-                      <p className="text-sm text-muted-foreground line-clamp-3">
-                        {template.prompt}
-                      </p>
-                      <Button variant="outline" className="w-full mt-4" size="sm">
+                      <p className="text-sm text-muted-foreground line-clamp-3">{template.prompt}</p>
+                      <Button variant="outline" className="w-full mt-4 bg-transparent" size="sm">
                         Gerar Nota SOAP
                       </Button>
                     </CardContent>
@@ -276,7 +300,9 @@ export default function AssistentePage() {
                 <div className="space-y-3 text-sm">
                   <div>
                     <p className="font-medium">S - Subjetivo:</p>
-                    <p className="text-muted-foreground">Queixa principal, historia da doenca atual, sintomas relatados pelo paciente</p>
+                    <p className="text-muted-foreground">
+                      Queixa principal, historia da doenca atual, sintomas relatados pelo paciente
+                    </p>
                   </div>
                   <div>
                     <p className="font-medium">O - Objetivo:</p>
@@ -288,7 +314,9 @@ export default function AssistentePage() {
                   </div>
                   <div>
                     <p className="font-medium">P - Plano:</p>
-                    <p className="text-muted-foreground">Conduta terapeutica, prescricoes, exames solicitados, orientacoes</p>
+                    <p className="text-muted-foreground">
+                      Conduta terapeutica, prescricoes, exames solicitados, orientacoes
+                    </p>
                   </div>
                 </div>
               </Card>

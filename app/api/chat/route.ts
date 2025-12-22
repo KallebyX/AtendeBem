@@ -33,20 +33,24 @@ export async function POST(req: Request) {
   try {
     const { messages } = await req.json()
 
+    console.log("[v0] [AI CHAT] Request received with", messages?.length, "messages")
+
     // Get API key from environment
     const apiKey = process.env.GOOGLE_AI_API_KEY || process.env.GEMINI_API_KEY
 
     if (!apiKey) {
-      // Fallback response when no API key is configured
+      console.log("[v0] [AI CHAT] No API key configured, using fallback response")
       const lastMessage = messages[messages.length - 1]?.content || ""
       const fallbackResponse = generateFallbackResponse(lastMessage)
 
       return NextResponse.json({
         id: Date.now().toString(),
         role: "assistant",
-        content: fallbackResponse
+        content: fallbackResponse,
       })
     }
+
+    console.log("[v0] [AI CHAT] Calling Gemini API...")
 
     // Call Google Gemini API
     const response = await fetch(
@@ -60,43 +64,56 @@ export async function POST(req: Request) {
           contents: [
             {
               role: "user",
-              parts: [{ text: SYSTEM_PROMPT }]
+              parts: [{ text: SYSTEM_PROMPT }],
             },
             ...messages.map((m: any) => ({
               role: m.role === "user" ? "user" : "model",
-              parts: [{ text: m.content || m.text || "" }]
-            }))
+              parts: [{ text: m.content || m.text || "" }],
+            })),
           ],
           generationConfig: {
             temperature: 0.7,
             maxOutputTokens: 2000,
           },
         }),
-      }
+      },
     )
 
     if (!response.ok) {
       const errorData = await response.text()
-      console.error("Gemini API error:", errorData)
-      throw new Error("API request failed")
+      console.error("[v0] [AI CHAT] Gemini API error:", response.status, errorData)
+
+      if (response.status === 401) {
+        return NextResponse.json({
+          id: Date.now().toString(),
+          role: "assistant",
+          content:
+            "⚠️ A chave de API do Google AI esta invalida ou expirada. Por favor, configure uma chave valida nas variaveis de ambiente (GOOGLE_AI_API_KEY ou GEMINI_API_KEY).\n\nEnquanto isso, posso fornecer respostas basicas sobre o sistema AtendeBem.",
+        })
+      }
+
+      throw new Error(`API request failed: ${response.status}`)
     }
 
     const data = await response.json()
-    const content = data.candidates?.[0]?.content?.parts?.[0]?.text || "Desculpe, nao consegui processar sua solicitacao."
+    const content =
+      data.candidates?.[0]?.content?.parts?.[0]?.text || "Desculpe, nao consegui processar sua solicitacao."
+
+    console.log("[v0] [AI CHAT] Response generated successfully")
 
     return NextResponse.json({
       id: Date.now().toString(),
       role: "assistant",
-      content
+      content,
     })
   } catch (error: any) {
-    console.error("Chat API error:", error)
+    console.error("[v0] [AI CHAT] Error:", error.message)
 
-    // Return fallback response on error
     return NextResponse.json({
       id: Date.now().toString(),
       role: "assistant",
-      content: "Desculpe, ocorreu um erro ao processar sua mensagem. Por favor, tente novamente. Se o problema persistir, entre em contato com o suporte."
+      content:
+        "❌ Desculpe, ocorreu um erro ao processar sua mensagem.\n\n**Solucoes:**\n1. Verifique se a API do Google AI esta configurada\n2. Tente novamente em alguns segundos\n3. Se o problema persistir, entre em contato com o suporte\n\n**Modo offline:** Posso responder perguntas basicas sobre TUSS, CID-10 e funcionalidades do AtendeBem.",
     })
   }
 }
