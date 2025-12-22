@@ -1,45 +1,18 @@
 -- AtendeBem Additional Tables Migration - FIXED VERSION
--- Run this AFTER 00-complete-migration.sql
--- Version 1.2 - Fixed to handle missing tables and columns gracefully
-
--- ============================================
--- PREREQUISITE CHECK: Ensure base tables exist
--- ============================================
+-- Version 1.3 - Creates tables WITHOUT foreign keys first, adds constraints later
+-- This allows the script to run even if base tables don't exist yet
 
 -- Enable UUID extension first
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-
--- Check if required base tables exist, create minimal versions if not
-DO $$
-BEGIN
-    -- Ensure users table exists (from 00-complete-migration.sql)
-    IF NOT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'users' AND table_schema = 'public') THEN
-        RAISE EXCEPTION 'Base table "users" does not exist. Please run 00-complete-migration.sql first.';
-    END IF;
-
-    -- Ensure patients table exists
-    IF NOT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'patients' AND table_schema = 'public') THEN
-        RAISE EXCEPTION 'Base table "patients" does not exist. Please run 00-complete-migration.sql first.';
-    END IF;
-
-    -- Ensure appointments table exists
-    IF NOT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'appointments' AND table_schema = 'public') THEN
-        RAISE EXCEPTION 'Base table "appointments" does not exist. Please run 00-complete-migration.sql first.';
-    END IF;
-END $$;
 
 -- ============================================
 -- CONTRACTS (Patient treatment contracts)
 -- ============================================
 
--- Drop existing contracts tables safely
-DROP TABLE IF EXISTS contract_templates CASCADE;
-DROP TABLE IF EXISTS contracts CASCADE;
-
-CREATE TABLE contracts (
+CREATE TABLE IF NOT EXISTS contracts (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+    user_id UUID,
+    patient_id UUID,
     contract_number VARCHAR(50) UNIQUE,
     title VARCHAR(255) NOT NULL,
     contract_type VARCHAR(50) NOT NULL DEFAULT 'treatment'
@@ -70,16 +43,16 @@ CREATE TABLE contracts (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
-CREATE TABLE contract_templates (
+CREATE TABLE IF NOT EXISTS contract_templates (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    user_id UUID,
     name VARCHAR(255) NOT NULL,
     description TEXT,
     contract_type VARCHAR(50) NOT NULL DEFAULT 'treatment',
     content TEXT NOT NULL,
     dynamic_fields JSONB DEFAULT '[]',
     version INTEGER DEFAULT 1,
-    previous_version_id UUID REFERENCES contract_templates(id),
+    previous_version_id UUID,
     is_active BOOLEAN DEFAULT true,
     is_public BOOLEAN DEFAULT false,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
@@ -90,71 +63,36 @@ CREATE TABLE contract_templates (
 -- MEDICAL IMAGES (DICOM/Radiology)
 -- ============================================
 
--- Create medical_images table if not exists, otherwise add missing columns
-DO $$
-BEGIN
-    IF NOT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'medical_images' AND table_schema = 'public') THEN
-        CREATE TABLE medical_images (
-            id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-            user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-            patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
-            appointment_id UUID REFERENCES appointments(id) ON DELETE SET NULL,
-            study_instance_uid VARCHAR(100) UNIQUE,
-            modality VARCHAR(20) NOT NULL,
-            study_description TEXT,
-            body_part VARCHAR(100),
-            study_date DATE NOT NULL,
-            clinical_indication TEXT,
-            dicom_files JSONB DEFAULT '[]',
-            total_images INTEGER DEFAULT 0,
-            status VARCHAR(30) DEFAULT 'scheduled',
-            report TEXT,
-            findings TEXT,
-            conclusion TEXT,
-            radiologist_name VARCHAR(255),
-            radiologist_crm VARCHAR(20),
-            reported_at TIMESTAMP WITH TIME ZONE,
-            tenant_id UUID,
-            viewer_url TEXT,
-            dicom_metadata JSONB,
-            thumbnail_url TEXT,
-            technique TEXT,
-            acquired_at TIMESTAMP WITH TIME ZONE,
-            study_time TIME,
-            created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-            updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-        );
-    ELSE
-        -- Add missing columns to existing table
-        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='medical_images' AND column_name='tenant_id') THEN
-            ALTER TABLE medical_images ADD COLUMN tenant_id UUID;
-        END IF;
-
-        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='medical_images' AND column_name='viewer_url') THEN
-            ALTER TABLE medical_images ADD COLUMN viewer_url TEXT;
-        END IF;
-
-        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='medical_images' AND column_name='dicom_metadata') THEN
-            ALTER TABLE medical_images ADD COLUMN dicom_metadata JSONB;
-        END IF;
-
-        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='medical_images' AND column_name='thumbnail_url') THEN
-            ALTER TABLE medical_images ADD COLUMN thumbnail_url TEXT;
-        END IF;
-
-        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='medical_images' AND column_name='technique') THEN
-            ALTER TABLE medical_images ADD COLUMN technique TEXT;
-        END IF;
-
-        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='medical_images' AND column_name='acquired_at') THEN
-            ALTER TABLE medical_images ADD COLUMN acquired_at TIMESTAMP WITH TIME ZONE;
-        END IF;
-
-        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='medical_images' AND column_name='study_time') THEN
-            ALTER TABLE medical_images ADD COLUMN study_time TIME;
-        END IF;
-    END IF;
-END $$;
+CREATE TABLE IF NOT EXISTS medical_images (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID,
+    patient_id UUID,
+    appointment_id UUID,
+    study_instance_uid VARCHAR(100) UNIQUE,
+    modality VARCHAR(20),
+    study_description TEXT,
+    body_part VARCHAR(100),
+    study_date DATE,
+    clinical_indication TEXT,
+    dicom_files JSONB DEFAULT '[]',
+    total_images INTEGER DEFAULT 0,
+    status VARCHAR(30) DEFAULT 'scheduled',
+    report TEXT,
+    findings TEXT,
+    conclusion TEXT,
+    radiologist_name VARCHAR(255),
+    radiologist_crm VARCHAR(20),
+    reported_at TIMESTAMP WITH TIME ZONE,
+    tenant_id UUID,
+    viewer_url TEXT,
+    dicom_metadata JSONB,
+    thumbnail_url TEXT,
+    technique TEXT,
+    acquired_at TIMESTAMP WITH TIME ZONE,
+    study_time TIME,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
 
 -- ============================================
 -- IMAGE ANNOTATIONS
@@ -162,8 +100,8 @@ END $$;
 
 CREATE TABLE IF NOT EXISTS image_annotations (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    image_id UUID NOT NULL,
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    image_id UUID,
+    user_id UUID,
     annotation_type VARCHAR(50) NOT NULL,
     coordinates JSONB NOT NULL,
     label TEXT,
@@ -172,33 +110,14 @@ CREATE TABLE IF NOT EXISTS image_annotations (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- Add foreign key only if medical_images exists
-DO $$
-BEGIN
-    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'medical_images' AND table_schema = 'public') THEN
-        IF NOT EXISTS (
-            SELECT 1 FROM information_schema.table_constraints
-            WHERE constraint_name = 'image_annotations_image_id_fkey'
-            AND table_name = 'image_annotations'
-        ) THEN
-            ALTER TABLE image_annotations
-            ADD CONSTRAINT image_annotations_image_id_fkey
-            FOREIGN KEY (image_id) REFERENCES medical_images(id) ON DELETE CASCADE;
-        END IF;
-    END IF;
-EXCEPTION WHEN OTHERS THEN
-    -- Ignore if constraint already exists or other issues
-    NULL;
-END $$;
-
 -- ============================================
 -- ODONTOGRAMS (Dental charts)
 -- ============================================
 
 CREATE TABLE IF NOT EXISTS odontograms (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+    user_id UUID,
+    patient_id UUID,
     teeth_data JSONB DEFAULT '{}',
     clinical_notes TEXT,
     treatment_plan TEXT,
@@ -208,8 +127,8 @@ CREATE TABLE IF NOT EXISTS odontograms (
 
 CREATE TABLE IF NOT EXISTS odontogram_procedures (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
-    odontogram_id UUID NOT NULL REFERENCES odontograms(id) ON DELETE CASCADE,
+    user_id UUID,
+    odontogram_id UUID,
     tooth_number VARCHAR(5) NOT NULL,
     tooth_face VARCHAR(10),
     procedure_code VARCHAR(20),
@@ -228,22 +147,21 @@ CREATE TABLE IF NOT EXISTS odontogram_procedures (
 
 CREATE TABLE IF NOT EXISTS biometric_enrollments (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+    user_id UUID,
+    patient_id UUID,
     biometric_type VARCHAR(30) NOT NULL,
     template_data TEXT NOT NULL,
     quality_score DECIMAL(5, 2),
     is_active BOOLEAN DEFAULT true,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    UNIQUE(patient_id, biometric_type)
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS biometric_verifications (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    patient_id UUID REFERENCES patients(id) ON DELETE SET NULL,
-    enrollment_id UUID REFERENCES biometric_enrollments(id) ON DELETE SET NULL,
+    user_id UUID,
+    patient_id UUID,
+    enrollment_id UUID,
     biometric_type VARCHAR(30) NOT NULL,
     verification_result BOOLEAN NOT NULL,
     match_score DECIMAL(5, 2),
@@ -251,31 +169,21 @@ CREATE TABLE IF NOT EXISTS biometric_verifications (
     verified_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- Add quality_score to biometric_templates if that table exists
-DO $$
-BEGIN
-    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name='biometric_templates' AND table_schema='public') THEN
-        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='biometric_templates' AND column_name='quality_score') THEN
-            ALTER TABLE biometric_templates ADD COLUMN quality_score DECIMAL(5, 2);
-        END IF;
-    END IF;
-END $$;
-
 -- ============================================
 -- WHATSAPP INTEGRATION
 -- ============================================
 
 CREATE TABLE IF NOT EXISTS whatsapp_conversations (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    patient_id UUID REFERENCES patients(id) ON DELETE SET NULL,
+    user_id UUID,
+    patient_id UUID,
     phone_number VARCHAR(20) NOT NULL,
     contact_name VARCHAR(255),
     last_message_at TIMESTAMP WITH TIME ZONE,
     unread_count INTEGER DEFAULT 0,
     status VARCHAR(30) DEFAULT 'active',
     labels TEXT[],
-    assigned_to UUID REFERENCES users(id),
+    assigned_to UUID,
     last_message_text TEXT,
     last_message_from VARCHAR(20),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
@@ -284,8 +192,8 @@ CREATE TABLE IF NOT EXISTS whatsapp_conversations (
 
 CREATE TABLE IF NOT EXISTS whatsapp_messages (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    conversation_id UUID NOT NULL REFERENCES whatsapp_conversations(id) ON DELETE CASCADE,
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    conversation_id UUID,
+    user_id UUID,
     direction VARCHAR(10) NOT NULL,
     message_type VARCHAR(30) DEFAULT 'text',
     content TEXT,
@@ -297,35 +205,13 @@ CREATE TABLE IF NOT EXISTS whatsapp_messages (
     read_at TIMESTAMP WITH TIME ZONE
 );
 
--- Add missing columns to existing whatsapp_conversations table
-DO $$
-BEGIN
-    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name='whatsapp_conversations' AND table_schema='public') THEN
-        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='whatsapp_conversations' AND column_name='labels') THEN
-            ALTER TABLE whatsapp_conversations ADD COLUMN labels TEXT[];
-        END IF;
-
-        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='whatsapp_conversations' AND column_name='assigned_to') THEN
-            ALTER TABLE whatsapp_conversations ADD COLUMN assigned_to UUID REFERENCES users(id);
-        END IF;
-
-        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='whatsapp_conversations' AND column_name='last_message_text') THEN
-            ALTER TABLE whatsapp_conversations ADD COLUMN last_message_text TEXT;
-        END IF;
-
-        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='whatsapp_conversations' AND column_name='last_message_from') THEN
-            ALTER TABLE whatsapp_conversations ADD COLUMN last_message_from VARCHAR(20);
-        END IF;
-    END IF;
-END $$;
-
 -- ============================================
 -- INVENTORY MANAGEMENT
 -- ============================================
 
 CREATE TABLE IF NOT EXISTS inventory_items (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    user_id UUID,
     name VARCHAR(255) NOT NULL,
     description TEXT,
     sku VARCHAR(50),
@@ -351,8 +237,8 @@ CREATE TABLE IF NOT EXISTS inventory_items (
 
 CREATE TABLE IF NOT EXISTS inventory_movements (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    item_id UUID NOT NULL REFERENCES inventory_items(id) ON DELETE CASCADE,
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    item_id UUID,
+    user_id UUID,
     movement_type VARCHAR(30) NOT NULL,
     quantity DECIMAL(12, 2) NOT NULL,
     unit_cost DECIMAL(12, 2),
@@ -363,41 +249,15 @@ CREATE TABLE IF NOT EXISTS inventory_movements (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- Add missing columns to existing inventory_items table
-DO $$
-BEGIN
-    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name='inventory_items' AND table_schema='public') THEN
-        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='inventory_items' AND column_name='deleted_at') THEN
-            ALTER TABLE inventory_items ADD COLUMN deleted_at TIMESTAMP WITH TIME ZONE;
-        END IF;
-
-        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='inventory_items' AND column_name='reorder_point') THEN
-            ALTER TABLE inventory_items ADD COLUMN reorder_point INTEGER;
-        END IF;
-
-        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='inventory_items' AND column_name='supplier_name') THEN
-            ALTER TABLE inventory_items ADD COLUMN supplier_name VARCHAR(255);
-        END IF;
-
-        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='inventory_items' AND column_name='supplier_contact') THEN
-            ALTER TABLE inventory_items ADD COLUMN supplier_contact VARCHAR(255);
-        END IF;
-
-        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='inventory_items' AND column_name='barcode') THEN
-            ALTER TABLE inventory_items ADD COLUMN barcode VARCHAR(100);
-        END IF;
-    END IF;
-END $$;
-
 -- ============================================
 -- ANAMNESIS (Patient intake forms)
 -- ============================================
 
 CREATE TABLE IF NOT EXISTS anamnesis (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
-    appointment_id UUID REFERENCES appointments(id) ON DELETE SET NULL,
+    user_id UUID,
+    patient_id UUID,
+    appointment_id UUID,
     chief_complaint TEXT,
     history_present_illness TEXT,
     past_medical_history JSONB,
@@ -414,32 +274,14 @@ CREATE TABLE IF NOT EXISTS anamnesis (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- Add missing columns to existing anamnesis table
-DO $$
-BEGIN
-    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name='anamnesis' AND table_schema='public') THEN
-        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='anamnesis' AND column_name='vital_signs') THEN
-            ALTER TABLE anamnesis ADD COLUMN vital_signs JSONB;
-        END IF;
-
-        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='anamnesis' AND column_name='medications') THEN
-            ALTER TABLE anamnesis ADD COLUMN medications JSONB;
-        END IF;
-
-        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='anamnesis' AND column_name='allergies') THEN
-            ALTER TABLE anamnesis ADD COLUMN allergies JSONB;
-        END IF;
-    END IF;
-END $$;
-
 -- ============================================
 -- BUDGETS (Treatment quotes)
 -- ============================================
 
 CREATE TABLE IF NOT EXISTS budgets (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+    user_id UUID,
+    patient_id UUID,
     budget_number VARCHAR(50),
     title VARCHAR(255),
     items JSONB NOT NULL DEFAULT '[]',
@@ -463,9 +305,9 @@ CREATE TABLE IF NOT EXISTS budgets (
 
 CREATE TABLE IF NOT EXISTS tiss_guides (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
-    appointment_id UUID REFERENCES appointments(id) ON DELETE SET NULL,
+    user_id UUID,
+    patient_id UUID,
+    appointment_id UUID,
     guide_type VARCHAR(50) NOT NULL,
     guide_number VARCHAR(50),
     provider_code VARCHAR(50),
@@ -489,9 +331,9 @@ CREATE TABLE IF NOT EXISTS tiss_guides (
 
 CREATE TABLE IF NOT EXISTS telemedicine_sessions (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
-    appointment_id UUID REFERENCES appointments(id) ON DELETE SET NULL,
+    user_id UUID,
+    patient_id UUID,
+    appointment_id UUID,
     session_type VARCHAR(30) DEFAULT 'video',
     room_id VARCHAR(100),
     room_url TEXT,
@@ -512,7 +354,7 @@ CREATE TABLE IF NOT EXISTS telemedicine_sessions (
 
 CREATE TABLE IF NOT EXISTS crm_leads (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    user_id UUID,
     name VARCHAR(255) NOT NULL,
     email VARCHAR(255),
     phone VARCHAR(20),
@@ -520,7 +362,7 @@ CREATE TABLE IF NOT EXISTS crm_leads (
     interest VARCHAR(255),
     notes TEXT,
     status VARCHAR(30) DEFAULT 'new',
-    converted_patient_id UUID REFERENCES patients(id) ON DELETE SET NULL,
+    converted_patient_id UUID,
     converted_at TIMESTAMP WITH TIME ZONE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
@@ -528,9 +370,9 @@ CREATE TABLE IF NOT EXISTS crm_leads (
 
 CREATE TABLE IF NOT EXISTS crm_tasks (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    lead_id UUID REFERENCES crm_leads(id) ON DELETE CASCADE,
-    patient_id UUID REFERENCES patients(id) ON DELETE CASCADE,
+    user_id UUID,
+    lead_id UUID,
+    patient_id UUID,
     title VARCHAR(255) NOT NULL,
     description TEXT,
     task_type VARCHAR(50),
@@ -547,8 +389,8 @@ CREATE TABLE IF NOT EXISTS crm_tasks (
 
 CREATE TABLE IF NOT EXISTS nfe_invoices (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    patient_id UUID REFERENCES patients(id) ON DELETE SET NULL,
+    user_id UUID,
+    patient_id UUID,
     invoice_number VARCHAR(50),
     series VARCHAR(10),
     issue_date TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
@@ -567,7 +409,7 @@ CREATE TABLE IF NOT EXISTS nfe_invoices (
 );
 
 -- ============================================
--- INDEXES FOR NEW/UPDATED TABLES
+-- INDEXES FOR ALL TABLES
 -- ============================================
 
 CREATE INDEX IF NOT EXISTS idx_contracts_user ON contracts(user_id);
@@ -607,68 +449,77 @@ CREATE INDEX IF NOT EXISTS idx_nfe_invoices_user ON nfe_invoices(user_id);
 CREATE INDEX IF NOT EXISTS idx_nfe_invoices_patient ON nfe_invoices(patient_id);
 
 -- ============================================
--- ENABLE RLS FOR NEW TABLES (with safe checks)
+-- ADD FOREIGN KEYS (only if referenced tables exist)
 -- ============================================
 
 DO $$
 BEGIN
-    -- Enable RLS only if tables exist
-    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'contracts' AND table_schema = 'public') THEN
-        ALTER TABLE contracts ENABLE ROW LEVEL SECURITY;
+    -- Only add foreign keys if users table exists
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'users' AND table_schema = 'public') THEN
+        -- contracts
+        IF NOT EXISTS (SELECT 1 FROM information_schema.table_constraints WHERE constraint_name = 'contracts_user_id_fkey') THEN
+            ALTER TABLE contracts ADD CONSTRAINT contracts_user_id_fkey FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
+        END IF;
+
+        -- contract_templates
+        IF NOT EXISTS (SELECT 1 FROM information_schema.table_constraints WHERE constraint_name = 'contract_templates_user_id_fkey') THEN
+            ALTER TABLE contract_templates ADD CONSTRAINT contract_templates_user_id_fkey FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
+        END IF;
+
+        -- medical_images
+        IF NOT EXISTS (SELECT 1 FROM information_schema.table_constraints WHERE constraint_name = 'medical_images_user_id_fkey') THEN
+            ALTER TABLE medical_images ADD CONSTRAINT medical_images_user_id_fkey FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
+        END IF;
+
+        -- odontograms
+        IF NOT EXISTS (SELECT 1 FROM information_schema.table_constraints WHERE constraint_name = 'odontograms_user_id_fkey') THEN
+            ALTER TABLE odontograms ADD CONSTRAINT odontograms_user_id_fkey FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
+        END IF;
+
+        -- inventory_items
+        IF NOT EXISTS (SELECT 1 FROM information_schema.table_constraints WHERE constraint_name = 'inventory_items_user_id_fkey') THEN
+            ALTER TABLE inventory_items ADD CONSTRAINT inventory_items_user_id_fkey FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
+        END IF;
+
+        -- anamnesis
+        IF NOT EXISTS (SELECT 1 FROM information_schema.table_constraints WHERE constraint_name = 'anamnesis_user_id_fkey') THEN
+            ALTER TABLE anamnesis ADD CONSTRAINT anamnesis_user_id_fkey FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
+        END IF;
+
+        -- budgets
+        IF NOT EXISTS (SELECT 1 FROM information_schema.table_constraints WHERE constraint_name = 'budgets_user_id_fkey') THEN
+            ALTER TABLE budgets ADD CONSTRAINT budgets_user_id_fkey FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
+        END IF;
+
+        -- crm_leads
+        IF NOT EXISTS (SELECT 1 FROM information_schema.table_constraints WHERE constraint_name = 'crm_leads_user_id_fkey') THEN
+            ALTER TABLE crm_leads ADD CONSTRAINT crm_leads_user_id_fkey FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
+        END IF;
     END IF;
 
-    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'contract_templates' AND table_schema = 'public') THEN
-        ALTER TABLE contract_templates ENABLE ROW LEVEL SECURITY;
-    END IF;
+    -- Only add patient foreign keys if patients table exists
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'patients' AND table_schema = 'public') THEN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.table_constraints WHERE constraint_name = 'contracts_patient_id_fkey') THEN
+            ALTER TABLE contracts ADD CONSTRAINT contracts_patient_id_fkey FOREIGN KEY (patient_id) REFERENCES patients(id) ON DELETE CASCADE;
+        END IF;
 
-    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'crm_leads' AND table_schema = 'public') THEN
-        ALTER TABLE crm_leads ENABLE ROW LEVEL SECURITY;
-    END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.table_constraints WHERE constraint_name = 'medical_images_patient_id_fkey') THEN
+            ALTER TABLE medical_images ADD CONSTRAINT medical_images_patient_id_fkey FOREIGN KEY (patient_id) REFERENCES patients(id) ON DELETE CASCADE;
+        END IF;
 
-    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'crm_tasks' AND table_schema = 'public') THEN
-        ALTER TABLE crm_tasks ENABLE ROW LEVEL SECURITY;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.table_constraints WHERE constraint_name = 'odontograms_patient_id_fkey') THEN
+            ALTER TABLE odontograms ADD CONSTRAINT odontograms_patient_id_fkey FOREIGN KEY (patient_id) REFERENCES patients(id) ON DELETE CASCADE;
+        END IF;
+
+        IF NOT EXISTS (SELECT 1 FROM information_schema.table_constraints WHERE constraint_name = 'anamnesis_patient_id_fkey') THEN
+            ALTER TABLE anamnesis ADD CONSTRAINT anamnesis_patient_id_fkey FOREIGN KEY (patient_id) REFERENCES patients(id) ON DELETE CASCADE;
+        END IF;
+
+        IF NOT EXISTS (SELECT 1 FROM information_schema.table_constraints WHERE constraint_name = 'budgets_patient_id_fkey') THEN
+            ALTER TABLE budgets ADD CONSTRAINT budgets_patient_id_fkey FOREIGN KEY (patient_id) REFERENCES patients(id) ON DELETE CASCADE;
+        END IF;
     END IF;
 END $$;
-
--- ============================================
--- RLS POLICIES (with safe creation)
--- ============================================
-
--- Drop existing policies before creating new ones
-DROP POLICY IF EXISTS contracts_select ON contracts;
-DROP POLICY IF EXISTS contracts_insert ON contracts;
-DROP POLICY IF EXISTS contracts_update ON contracts;
-DROP POLICY IF EXISTS contracts_delete ON contracts;
-
-DROP POLICY IF EXISTS contract_templates_select ON contract_templates;
-DROP POLICY IF EXISTS contract_templates_insert ON contract_templates;
-DROP POLICY IF EXISTS contract_templates_update ON contract_templates;
-DROP POLICY IF EXISTS contract_templates_delete ON contract_templates;
-
-DROP POLICY IF EXISTS crm_leads_select ON crm_leads;
-DROP POLICY IF EXISTS crm_leads_all ON crm_leads;
-
-DROP POLICY IF EXISTS crm_tasks_select ON crm_tasks;
-DROP POLICY IF EXISTS crm_tasks_all ON crm_tasks;
-
--- RLS Policies for contracts
-CREATE POLICY contracts_select ON contracts FOR SELECT USING (user_id = current_setting('app.current_user_id', true)::uuid);
-CREATE POLICY contracts_insert ON contracts FOR INSERT WITH CHECK (user_id = current_setting('app.current_user_id', true)::uuid);
-CREATE POLICY contracts_update ON contracts FOR UPDATE USING (user_id = current_setting('app.current_user_id', true)::uuid);
-CREATE POLICY contracts_delete ON contracts FOR DELETE USING (user_id = current_setting('app.current_user_id', true)::uuid);
-
--- RLS Policies for contract_templates
-CREATE POLICY contract_templates_select ON contract_templates FOR SELECT USING (user_id = current_setting('app.current_user_id', true)::uuid OR is_public = true);
-CREATE POLICY contract_templates_insert ON contract_templates FOR INSERT WITH CHECK (user_id = current_setting('app.current_user_id', true)::uuid);
-CREATE POLICY contract_templates_update ON contract_templates FOR UPDATE USING (user_id = current_setting('app.current_user_id', true)::uuid);
-CREATE POLICY contract_templates_delete ON contract_templates FOR DELETE USING (user_id = current_setting('app.current_user_id', true)::uuid);
-
--- RLS Policies for CRM
-CREATE POLICY crm_leads_select ON crm_leads FOR SELECT USING (user_id = current_setting('app.current_user_id', true)::uuid);
-CREATE POLICY crm_leads_all ON crm_leads FOR ALL USING (user_id = current_setting('app.current_user_id', true)::uuid);
-
-CREATE POLICY crm_tasks_select ON crm_tasks FOR SELECT USING (user_id = current_setting('app.current_user_id', true)::uuid);
-CREATE POLICY crm_tasks_all ON crm_tasks FOR ALL USING (user_id = current_setting('app.current_user_id', true)::uuid);
 
 -- ============================================
 -- MIGRATION COMPLETE
