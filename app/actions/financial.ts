@@ -380,41 +380,78 @@ export async function getDashboardMetrics() {
     }
 
     const db = await getDb()
-    const userId = user.id
+    const tenantId = user.tenantId || user.tenant_id
 
     // Últimos 30 dias
     const thirtyDaysAgo = new Date()
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+    const today = new Date()
 
+    // Total de receitas (income) pagas
     const revenueQuery = await db`
-      SELECT COALESCE(SUM(value), 0) as total
-      FROM appointments_schedule
-      WHERE user_id = ${userId}
+      SELECT COALESCE(SUM(amount), 0) as total, COUNT(*) as count
+      FROM financial_transactions
+      WHERE tenant_id = ${tenantId}
+        AND type = 'income'
         AND payment_status = 'paid'
-        AND appointment_date >= ${thirtyDaysAgo.toISOString()}
+        AND due_date >= ${thirtyDaysAgo.toISOString().split('T')[0]}
+        AND deleted_at IS NULL
     `
 
-    const pendingQuery = await db`
-      SELECT COALESCE(SUM(value), 0) as total
-      FROM appointments_schedule
-      WHERE user_id = ${userId}
+    // Total de despesas (expense) pagas
+    const expensesQuery = await db`
+      SELECT COALESCE(SUM(amount), 0) as total, COUNT(*) as count
+      FROM financial_transactions
+      WHERE tenant_id = ${tenantId}
+        AND type = 'expense'
+        AND payment_status = 'paid'
+        AND due_date >= ${thirtyDaysAgo.toISOString().split('T')[0]}
+        AND deleted_at IS NULL
+    `
+
+    // Contas a receber vencidas (income pendente com due_date passada)
+    const receivableQuery = await db`
+      SELECT COALESCE(SUM(amount), 0) as total, COUNT(*) as count
+      FROM financial_transactions
+      WHERE tenant_id = ${tenantId}
+        AND type = 'income'
         AND payment_status = 'pending'
+        AND due_date < ${today.toISOString().split('T')[0]}
+        AND deleted_at IS NULL
     `
 
-    const appointmentsQuery = await db`
-      SELECT COUNT(*) as total
-      FROM appointments_schedule
-      WHERE user_id = ${userId}
-        AND appointment_date >= ${thirtyDaysAgo.toISOString()}
+    // Contas a pagar vencidas (expense pendente com due_date passada)
+    const payableQuery = await db`
+      SELECT COALESCE(SUM(amount), 0) as total, COUNT(*) as count
+      FROM financial_transactions
+      WHERE tenant_id = ${tenantId}
+        AND type = 'expense'
+        AND payment_status = 'pending'
+        AND due_date < ${today.toISOString().split('T')[0]}
+        AND deleted_at IS NULL
     `
+
+    const totalRevenue = Number.parseFloat(revenueQuery[0]?.total || 0)
+    const totalExpenses = Number.parseFloat(expensesQuery[0]?.total || 0)
+    const revenueCount = Number.parseInt(revenueQuery[0]?.count || 0)
 
     return {
+      success: true,
       data: {
-        totalRevenue: Number.parseFloat(revenueQuery[0]?.total || 0),
-        pendingRevenue: Number.parseFloat(pendingQuery[0]?.total || 0),
-        totalAppointments: Number.parseInt(appointmentsQuery[0]?.total || 0),
-        averageTicket:
-          Number.parseFloat(revenueQuery[0]?.total || 0) / Number.parseInt(appointmentsQuery[0]?.total || 1),
+        totalRevenue,
+        totalExpenses,
+        profit: totalRevenue - totalExpenses,
+        revenueCount,
+        expensesCount: Number.parseInt(expensesQuery[0]?.count || 0),
+        avgTicket: revenueCount > 0 ? totalRevenue / revenueCount : 0,
+        accountsReceivable: {
+          total: Number.parseFloat(receivableQuery[0]?.total || 0),
+          count: Number.parseInt(receivableQuery[0]?.count || 0),
+        },
+        accountsPayable: {
+          total: Number.parseFloat(payableQuery[0]?.total || 0),
+          count: Number.parseInt(payableQuery[0]?.count || 0),
+        },
       },
     }
   } catch (error: any) {
@@ -431,6 +468,8 @@ export async function getFinancialTransactions(filters?: {
   endDate?: string
   status?: string
   paymentMethod?: string
+  type?: string
+  category?: string
 }) {
   try {
     const cookieStore = await cookies()
@@ -446,63 +485,88 @@ export async function getFinancialTransactions(filters?: {
     }
 
     const db = await getDb()
-    const userId = user.id
+    const tenantId = user.tenantId || user.tenant_id
 
     let query = `
-      SELECT 
-        a.id,
-        a.appointment_date as date,
-        p.full_name as patient_name,
-        a.value as amount,
-        a.payment_method,
-        a.payment_status as status,
-        a.notes as description
-      FROM appointments_schedule a
-      LEFT JOIN patients p ON a.patient_id = p.id
-      WHERE a.user_id = $1
-        AND a.value > 0
+      SELECT
+        ft.id,
+        ft.type,
+        ft.category,
+        ft.amount,
+        ft.description,
+        ft.payment_method,
+        ft.payment_status,
+        ft.due_date,
+        ft.paid_date,
+        ft.receipt_number,
+        ft.notes,
+        ft.created_at,
+        p.full_name as patient_name
+      FROM financial_transactions ft
+      LEFT JOIN patients p ON ft.patient_id = p.id
+      WHERE ft.tenant_id = $1
+        AND ft.deleted_at IS NULL
     `
 
-    const params: any[] = [userId]
+    const params: any[] = [tenantId]
     let paramIndex = 2
 
     if (filters?.startDate) {
-      query += ` AND a.appointment_date >= $${paramIndex}`
+      query += ` AND ft.due_date >= $${paramIndex}`
       params.push(filters.startDate)
       paramIndex++
     }
 
     if (filters?.endDate) {
-      query += ` AND a.appointment_date <= $${paramIndex}`
+      query += ` AND ft.due_date <= $${paramIndex}`
       params.push(filters.endDate)
       paramIndex++
     }
 
     if (filters?.status) {
-      query += ` AND a.payment_status = $${paramIndex}`
+      query += ` AND ft.payment_status = $${paramIndex}`
       params.push(filters.status)
       paramIndex++
     }
 
     if (filters?.paymentMethod) {
-      query += ` AND a.payment_method = $${paramIndex}`
+      query += ` AND ft.payment_method = $${paramIndex}`
       params.push(filters.paymentMethod)
       paramIndex++
     }
 
-    query += " ORDER BY a.appointment_date DESC LIMIT 100"
+    if (filters?.type) {
+      query += ` AND ft.type = $${paramIndex}`
+      params.push(filters.type)
+      paramIndex++
+    }
+
+    if (filters?.category) {
+      query += ` AND ft.category = $${paramIndex}`
+      params.push(filters.category)
+      paramIndex++
+    }
+
+    query += " ORDER BY ft.due_date DESC, ft.created_at DESC LIMIT 100"
 
     const result = await db.query(query, params)
 
     return {
+      success: true,
       data: result.rows.map((row) => ({
         id: row.id,
-        date: row.date,
-        patientName: row.patient_name || "Não especificado",
-        amount: Number.parseFloat(row.amount),
-        paymentMethod: row.payment_method || "Não especificado",
-        status: row.status,
-        description: row.description,
+        type: row.type,
+        category: row.category,
+        amount: Number.parseFloat(row.amount || 0),
+        description: row.description || row.category,
+        payment_method: row.payment_method || "Não especificado",
+        payment_status: row.payment_status || "pending",
+        due_date: row.due_date,
+        paid_date: row.paid_date,
+        receipt_number: row.receipt_number,
+        notes: row.notes,
+        patient_name: row.patient_name,
+        created_at: row.created_at,
       })),
     }
   } catch (error: any) {
@@ -529,13 +593,18 @@ export async function updateTransactionStatus(transactionId: string, status: str
     }
 
     const db = await getDb()
+    const tenantId = user.tenantId || user.tenant_id
+
+    // Atualizar na tabela financial_transactions
+    const paidDate = status === 'paid' ? new Date().toISOString().split('T')[0] : null
 
     await db`
-      UPDATE appointments_schedule
+      UPDATE financial_transactions
       SET payment_status = ${status},
+          paid_date = ${paidDate},
           updated_at = NOW()
       WHERE id = ${transactionId}
-        AND user_id = ${user.id}
+        AND tenant_id = ${tenantId}
     `
 
     return { success: true }
@@ -563,29 +632,40 @@ export async function getRevenueCategories() {
     }
 
     const db = await getDb()
+    const tenantId = user.tenantId || user.tenant_id
 
+    // Buscar categorias do banco
     const result = await db`
-      SELECT 
-        appointment_type as category,
-        COUNT(*) as count,
-        COALESCE(SUM(value), 0) as total
-      FROM appointments_schedule
-      WHERE user_id = ${user.id}
-        AND payment_status = 'paid'
-      GROUP BY appointment_type
-      ORDER BY total DESC
+      SELECT
+        id,
+        name,
+        type,
+        color,
+        icon
+      FROM revenue_categories
+      WHERE tenant_id = ${tenantId}
+        AND is_active = true
+      ORDER BY type, name
     `
 
+    // Se não houver categorias no banco, retorna array vazio (página usará fallback local)
+    if (!result || result.length === 0) {
+      return { success: true, data: [] }
+    }
+
     return {
+      success: true,
       data: result.map((row) => ({
-        category: row.category || "Outros",
-        count: Number.parseInt(row.count),
-        total: Number.parseFloat(row.total),
+        id: row.id,
+        name: row.name,
+        type: row.type,
+        color: row.color,
+        icon: row.icon,
       })),
     }
   } catch (error: any) {
     console.error("Erro ao buscar categorias:", error)
-    return { error: error.message }
+    return { success: true, data: [] } // Retorna vazio para usar fallback local
   }
 }
 
@@ -607,30 +687,38 @@ export async function getPaymentMethods() {
     }
 
     const db = await getDb()
+    const tenantId = user.tenantId || user.tenant_id
 
+    // Buscar métodos de pagamento do banco
     const result = await db`
-      SELECT 
-        payment_method,
-        COUNT(*) as count,
-        COALESCE(SUM(value), 0) as total
-      FROM appointments_schedule
-      WHERE user_id = ${user.id}
-        AND payment_status = 'paid'
-        AND payment_method IS NOT NULL
-      GROUP BY payment_method
-      ORDER BY total DESC
+      SELECT
+        id,
+        name,
+        type,
+        fees_percentage
+      FROM payment_methods
+      WHERE tenant_id = ${tenantId}
+        AND is_active = true
+      ORDER BY name
     `
 
+    // Se não houver métodos no banco, retorna array vazio (página usará fallback local)
+    if (!result || result.length === 0) {
+      return { success: true, data: [] }
+    }
+
     return {
+      success: true,
       data: result.map((row) => ({
-        method: row.payment_method,
-        count: Number.parseInt(row.count),
-        total: Number.parseFloat(row.total),
+        id: row.id,
+        name: row.name,
+        type: row.type,
+        fees: Number.parseFloat(row.fees_percentage || 0),
       })),
     }
   } catch (error: any) {
     console.error("Erro ao buscar métodos de pagamento:", error)
-    return { error: error.message }
+    return { success: true, data: [] } // Retorna vazio para usar fallback local
   }
 }
 
@@ -664,32 +752,47 @@ export async function createFinancialTransaction(data: {
 
     const db = await getDb()
 
-    // Usa a data de pagamento se pago, senão usa a data de vencimento
-    const transactionDate = data.payment_status === 'paid' && data.paid_date
-      ? data.paid_date
-      : data.due_date || new Date().toISOString().split('T')[0]
+    // Validações básicas
+    if (!data.amount || data.amount <= 0) {
+      return { error: "Valor deve ser maior que zero" }
+    }
+
+    if (!data.type || !['income', 'expense'].includes(data.type)) {
+      return { error: "Tipo deve ser 'income' ou 'expense'" }
+    }
+
+    const dueDate = data.due_date || new Date().toISOString().split('T')[0]
+    const paidDate = data.payment_status === 'paid'
+      ? (data.paid_date || new Date().toISOString().split('T')[0])
+      : null
 
     const result = await db`
-      INSERT INTO appointments_schedule (
+      INSERT INTO financial_transactions (
+        tenant_id,
         user_id,
-        patient_id,
-        appointment_date,
-        appointment_type,
-        value,
+        type,
+        category,
+        amount,
+        description,
         payment_method,
         payment_status,
-        notes,
-        status
+        due_date,
+        paid_date,
+        patient_id,
+        notes
       ) VALUES (
+        ${user.tenantId || user.tenant_id},
         ${user.id},
-        ${data.patient_id || null},
-        ${transactionDate},
+        ${data.type},
         ${data.category || (data.type === 'income' ? 'Receita Avulsa' : 'Despesa Avulsa')},
         ${data.amount},
+        ${data.description || data.category || 'Transação'},
         ${data.payment_method || 'Dinheiro'},
         ${data.payment_status || 'pending'},
-        ${data.description || data.notes || null},
-        'completed'
+        ${dueDate},
+        ${paidDate},
+        ${data.patient_id || null},
+        ${data.notes || null}
       )
       RETURNING id
     `
