@@ -79,8 +79,10 @@ CREATE INDEX IF NOT EXISTS idx_tuss_grupo ON tuss_terminologia(grupo);
 CREATE INDEX IF NOT EXISTS idx_tuss_ativo ON tuss_terminologia(ativo) WHERE ativo = true;
 
 -- Índice composto para busca de código vigente
-CREATE INDEX IF NOT EXISTS idx_tuss_codigo_vigente ON tuss_terminologia(codigo_tuss, tabela_origem)
-  WHERE ativo = true AND (vigencia_fim IS NULL OR vigencia_fim >= CURRENT_DATE);
+-- Nota: A verificação de vigencia_fim >= CURRENT_DATE deve ser feita na query,
+-- pois CURRENT_DATE não é IMMUTABLE e não pode ser usado em predicados de índice
+CREATE INDEX IF NOT EXISTS idx_tuss_codigo_vigente ON tuss_terminologia(codigo_tuss, tabela_origem, vigencia_fim)
+  WHERE ativo = true;
 
 -- Índice para ANVISA (materiais e medicamentos)
 CREATE INDEX IF NOT EXISTS idx_tuss_anvisa ON tuss_terminologia(registro_anvisa)
