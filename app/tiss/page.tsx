@@ -53,7 +53,8 @@ import {
   FileWarning,
   Loader2,
   Download,
-  Eye
+  Eye,
+  X
 } from "lucide-react"
 import { searchTUSS, tussStats, tussGroups, type TUSSProcedure } from "@/lib/tuss-complete"
 import { NavigationHeader } from "@/components/navigation-header"
@@ -164,6 +165,12 @@ export default function TISSPage() {
     email?: string
   } | null>(null)
 
+  // Nova Guia - procedimentos TUSS
+  const [guideTussSearch, setGuideTussSearch] = useState("")
+  const [guideTussResults, setGuideTussResults] = useState<TUSSProcedure[]>([])
+  const [selectedProcedures, setSelectedProcedures] = useState<TUSSProcedure[]>([])
+  const [showTussSearch, setShowTussSearch] = useState(false)
+
   // Refs
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -212,6 +219,32 @@ export default function TISSPage() {
     }
     setTussResults(filtered)
   }, [searchQuery, selectedGroup])
+
+  // Busca TUSS para Nova Guia
+  const handleGuideTussSearch = useCallback((query: string) => {
+    setGuideTussSearch(query)
+    if (query.length >= 2) {
+      const results = searchTUSS(query, 20)
+      setGuideTussResults(results)
+    } else {
+      setGuideTussResults([])
+    }
+  }, [])
+
+  // Adicionar procedimento à guia
+  const handleAddProcedure = (procedure: TUSSProcedure) => {
+    if (!selectedProcedures.find(p => p.code === procedure.code)) {
+      setSelectedProcedures([...selectedProcedures, procedure])
+    }
+    setGuideTussSearch("")
+    setGuideTussResults([])
+    setShowTussSearch(false)
+  }
+
+  // Remover procedimento da guia
+  const handleRemoveProcedure = (code: string) => {
+    setSelectedProcedures(selectedProcedures.filter(p => p.code !== code))
+  }
 
   // Gera lote XML
   const handleGenerateLote = async () => {
@@ -891,10 +924,16 @@ Glosas: ${result.data.glosas.total} (R$ ${result.data.glosas.valor_total.toFixed
         </DialogContent>
       </Dialog>
 
-      {/* Modal: Nova Guia (placeholder) */}
+      {/* Modal: Nova Guia */}
       <Dialog open={showNewGuideModal} onOpenChange={(open) => {
         setShowNewGuideModal(open)
-        if (!open) setSelectedPatient(null)
+        if (!open) {
+          setSelectedPatient(null)
+          setSelectedProcedures([])
+          setGuideTussSearch("")
+          setGuideTussResults([])
+          setShowTussSearch(false)
+        }
       }}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
@@ -944,20 +983,90 @@ Glosas: ${result.data.glosas.total} (R$ ${result.data.glosas.valor_total.toFixed
               <Textarea placeholder="Descreva a indicacao clinica..." />
             </div>
             <div className="space-y-2">
-              <Label>Procedimentos</Label>
-              <div className="border rounded-lg p-4 text-center text-muted-foreground">
-                Clique para buscar e adicionar procedimentos TUSS
+              <Label>Procedimentos TUSS</Label>
+
+              {/* Campo de busca TUSS */}
+              <div className="relative">
+                <div className="flex gap-2">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Buscar por codigo ou descricao do procedimento..."
+                      value={guideTussSearch}
+                      onChange={(e) => handleGuideTussSearch(e.target.value)}
+                      onFocus={() => setShowTussSearch(true)}
+                      className="pl-10"
+                    />
+                  </div>
+                </div>
+
+                {/* Resultados da busca */}
+                {showTussSearch && guideTussResults.length > 0 && (
+                  <div className="absolute z-50 w-full mt-1 bg-background border rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                    {guideTussResults.map((proc) => (
+                      <div
+                        key={proc.code}
+                        className="p-3 hover:bg-muted cursor-pointer border-b last:border-b-0"
+                        onClick={() => handleAddProcedure(proc)}
+                      >
+                        <div className="flex items-center gap-2">
+                          <Badge variant="outline" className="font-mono text-xs shrink-0">
+                            {proc.code}
+                          </Badge>
+                          <span className="text-sm truncate">{proc.description}</span>
+                        </div>
+                        {proc.group && (
+                          <Badge variant="secondary" className="text-xs mt-1">
+                            {proc.group}
+                          </Badge>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
+
+              {/* Procedimentos selecionados */}
+              {selectedProcedures.length > 0 ? (
+                <div className="border rounded-lg divide-y max-h-40 overflow-y-auto">
+                  {selectedProcedures.map((proc) => (
+                    <div key={proc.code} className="p-3 flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 flex-1 min-w-0">
+                        <Badge variant="outline" className="font-mono text-xs shrink-0">
+                          {proc.code}
+                        </Badge>
+                        <span className="text-sm truncate">{proc.description}</span>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleRemoveProcedure(proc.code)}
+                        className="shrink-0 h-8 w-8 p-0 text-muted-foreground hover:text-destructive"
+                      >
+                        <X className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="border rounded-lg p-4 text-center text-muted-foreground text-sm">
+                  Nenhum procedimento adicionado. Use a busca acima para adicionar.
+                </div>
+              )}
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => {
               setShowNewGuideModal(false)
               setSelectedPatient(null)
+              setSelectedProcedures([])
+              setGuideTussSearch("")
+              setGuideTussResults([])
+              setShowTussSearch(false)
             }}>
               Cancelar
             </Button>
-            <Button disabled={!selectedPatient}>
+            <Button disabled={!selectedPatient || selectedProcedures.length === 0}>
               Criar Guia
             </Button>
           </DialogFooter>
