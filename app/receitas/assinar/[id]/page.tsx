@@ -1,46 +1,80 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { Logo } from "@/components/logo"
-import { ArrowLeft, ShieldCheck, CheckCircle2, AlertCircle, Download, FileKey, Pill } from "lucide-react"
+import {
+  ArrowLeft,
+  ShieldCheck,
+  CheckCircle2,
+  AlertCircle,
+  Download,
+  FileKey,
+  Pill,
+  QrCode,
+  Loader2,
+  ExternalLink,
+  RefreshCw,
+  AlertTriangle
+} from "lucide-react"
 import Link from "next/link"
-import { useParams, useRouter } from "next/navigation"
+import { useParams, useRouter, useSearchParams } from "next/navigation"
 import {
   signDigitalPrescription,
   getDigitalPrescriptions,
   generatePrescriptionPDF,
+  initiateSignatureFlow,
 } from "@/app/actions/digital-prescriptions"
+
+type SignatureStep = "loading" | "ready" | "authorizing" | "signing" | "completed" | "error"
 
 export default function AssinarReceitaPage() {
   const params = useParams()
   const router = useRouter()
+  const searchParams = useSearchParams()
+
+  const [step, setStep] = useState<SignatureStep>("loading")
   const [loading, setLoading] = useState(true)
   const [signing, setSigning] = useState(false)
-  const [signed, setSigned] = useState(false)
   const [error, setError] = useState("")
   const [prescription, setPrescription] = useState<any>(null)
+  const [authorizationUrl, setAuthorizationUrl] = useState("")
+  const [vidaasConfigured, setVidaasConfigured] = useState(true)
+  const [signatureResult, setSignatureResult] = useState<any>(null)
 
+  // Verificar se recebemos código de autorização do VIDaaS
+  const authorizationCode = searchParams.get("code")
+  const authState = searchParams.get("state")
+  const authError = searchParams.get("error")
+
+  // Carregar receita
   useEffect(() => {
     async function fetchPrescription() {
       try {
         const result = await getDigitalPrescriptions()
         if (result.error) {
           setError(result.error)
+          setStep("error")
         } else if (result.prescriptions) {
           const found = result.prescriptions.find((p: any) => p.id === params.id)
           if (found) {
             setPrescription(found)
-            setSigned(found.is_digitally_signed)
+            if (found.is_digitally_signed) {
+              setStep("completed")
+            } else {
+              setStep("ready")
+            }
           } else {
             setError("Receita não encontrada")
+            setStep("error")
           }
         }
       } catch (err) {
         setError("Erro ao carregar receita")
+        setStep("error")
       } finally {
         setLoading(false)
       }
@@ -49,32 +83,153 @@ export default function AssinarReceitaPage() {
     fetchPrescription()
   }, [params.id])
 
-  const handleSign = async () => {
+  // Processar callback de autorização do VIDaaS
+  useEffect(() => {
+    async function processAuthorizationCallback() {
+      if (authError) {
+        setError(`Autorização negada: ${authError}`)
+        setStep("error")
+        return
+      }
+
+      if (authorizationCode && prescription && !prescription.is_digitally_signed) {
+        setStep("signing")
+        setSigning(true)
+
+        try {
+          // Gerar PDF para assinatura
+          const pdfResult = await generatePrescriptionPDF(params.id as string)
+          if (pdfResult.error) {
+            throw new Error(pdfResult.error)
+          }
+
+          // Chamar API para completar assinatura com código
+          const response = await fetch("/api/signature", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              action: "sign",
+              authorizationCode,
+              prescriptionId: params.id,
+              pdfBase64: btoa(pdfResult.html || "")
+            })
+          })
+
+          const result = await response.json()
+
+          if (!response.ok || !result.success) {
+            throw new Error(result.error || "Erro ao assinar documento")
+          }
+
+          // Atualizar estado local com dados da assinatura
+          await signDigitalPrescription({
+            digitalPrescriptionId: params.id as string,
+            certificateSerial: result.certificate?.alias || "",
+            certificateIssuer: result.certificate?.provider || "VIDaaS - Valid Certificadora",
+            signatureHash: result.signedPdf?.substring(0, 64) || "",
+            digitalSignatureData: result.signedPdf?.substring(0, 1000) || "",
+            signedPdfBase64: result.signedPdf
+          })
+
+          setSignatureResult(result)
+          setStep("completed")
+
+          // Limpar parâmetros da URL
+          router.replace(`/receitas/assinar/${params.id}`)
+
+        } catch (err: any) {
+          setError(err.message || "Erro ao processar assinatura")
+          setStep("error")
+        } finally {
+          setSigning(false)
+        }
+      }
+    }
+
+    if (prescription) {
+      processAuthorizationCallback()
+    }
+  }, [authorizationCode, prescription, params.id, router, authError])
+
+  // Iniciar fluxo de assinatura com VIDaaS
+  const handleInitiateSignature = async () => {
     setError("")
-    setSigning(true)
+    setStep("authorizing")
 
     try {
-      // Simular processo de assinatura digital com certificado ICP-Brasil
-      // Em produção, isso integraria com a API de certificado digital
-      await new Promise((resolve) => setTimeout(resolve, 2000))
+      // Verificar configuração VIDaaS
+      const checkResponse = await fetch(`/api/signature?action=check-certificate`)
+      const checkData = await checkResponse.json()
 
-      const mockSignatureData = {
-        digitalPrescriptionId: params.id as string,
-        certificateSerial: "0123456789ABCDEF",
-        certificateIssuer: "CN=AC Certisign RFB G5, OU=Secretaria da Receita Federal do Brasil",
-        signatureHash: "a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6",
-        digitalSignatureData: btoa(JSON.stringify({ timestamp: new Date().toISOString(), certificate: "mock" })),
+      if (checkData.mockMode) {
+        setVidaasConfigured(false)
+        // Usar fluxo mock para desenvolvimento
+        await handleMockSignature()
+        return
       }
 
-      const result = await signDigitalPrescription(mockSignatureData)
+      // Iniciar fluxo real VIDaaS
+      const result = await initiateSignatureFlow(params.id as string)
 
       if (result.error) {
-        setError(result.error)
-      } else {
-        setSigned(true)
+        if (result.mockMode) {
+          setVidaasConfigured(false)
+          await handleMockSignature()
+          return
+        }
+        throw new Error(result.error)
       }
-    } catch (err) {
-      setError("Erro ao assinar receita")
+
+      if (result.authorizationUrl) {
+        setAuthorizationUrl(result.authorizationUrl)
+        // Redirecionar para VIDaaS
+        window.location.href = result.authorizationUrl
+      }
+    } catch (err: any) {
+      setError(err.message || "Erro ao iniciar assinatura")
+      setStep("error")
+    }
+  }
+
+  // Assinatura mock para desenvolvimento (quando VIDaaS não está configurado)
+  const handleMockSignature = async () => {
+    setSigning(true)
+    setStep("signing")
+
+    try {
+      // Simular delay de processamento
+      await new Promise(resolve => setTimeout(resolve, 2000))
+
+      const response = await fetch("/api/signature", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "sign-mock",
+          prescriptionId: params.id
+        })
+      })
+
+      const result = await response.json()
+
+      if (!response.ok || !result.success) {
+        throw new Error(result.error || "Erro ao assinar documento")
+      }
+
+      // Atualizar estado local
+      await signDigitalPrescription({
+        digitalPrescriptionId: params.id as string,
+        certificateSerial: result.signature?.certificateSerial || "",
+        certificateIssuer: result.signature?.certificateIssuer || "AtendeBem Development CA",
+        signatureHash: result.signature?.signatureHash || "",
+        signatureTimestamp: result.signature?.timestamp
+      })
+
+      setSignatureResult(result)
+      setStep("completed")
+
+    } catch (err: any) {
+      setError(err.message || "Erro ao processar assinatura")
+      setStep("error")
     } finally {
       setSigning(false)
     }
@@ -87,7 +242,6 @@ export default function AssinarReceitaPage() {
       if (result.error) {
         setError(result.error)
       } else if (result.html) {
-        // Open HTML in new window for printing
         const printWindow = window.open("", "_blank")
         if (printWindow) {
           printWindow.document.write(result.html)
@@ -102,11 +256,16 @@ export default function AssinarReceitaPage() {
     }
   }
 
-  if (loading) {
+  const handleRetry = () => {
+    setError("")
+    setStep("ready")
+  }
+
+  if (step === "loading") {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4" />
+          <Loader2 className="h-12 w-12 animate-spin text-primary mx-auto mb-4" />
           <p className="text-muted-foreground">Carregando receita...</p>
         </div>
       </div>
@@ -144,17 +303,40 @@ export default function AssinarReceitaPage() {
             </p>
           </div>
 
-          {error && (
-            <Card className="rounded-3xl border-red-500 bg-red-50 dark:bg-red-950">
-              <CardContent className="p-4 flex items-center gap-3">
-                <AlertCircle className="h-5 w-5 text-red-600 dark:text-red-400" />
-                <p className="text-red-600 dark:text-red-400">{error}</p>
+          {/* Aviso de modo desenvolvimento */}
+          {!vidaasConfigured && (
+            <Card className="rounded-3xl border-amber-500 bg-amber-50 dark:bg-amber-950">
+              <CardContent className="p-4 flex items-start gap-3">
+                <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-amber-700 dark:text-amber-300 font-medium">Modo de Desenvolvimento</p>
+                  <p className="text-amber-600 dark:text-amber-400 text-sm">
+                    O VIDaaS não está configurado. A assinatura será simulada para testes.
+                    Configure as variáveis VIDAAS_CLIENT_ID e VIDAAS_CLIENT_SECRET para produção.
+                  </p>
+                </div>
               </CardContent>
             </Card>
           )}
 
-          {/* Status da Assinatura */}
-          {signed ? (
+          {/* Error State */}
+          {error && (
+            <Card className="rounded-3xl border-red-500 bg-red-50 dark:bg-red-950">
+              <CardContent className="p-4 space-y-3">
+                <div className="flex items-center gap-3">
+                  <AlertCircle className="h-5 w-5 text-red-600 dark:text-red-400" />
+                  <p className="text-red-600 dark:text-red-400">{error}</p>
+                </div>
+                <Button onClick={handleRetry} variant="outline" size="sm" className="rounded-xl">
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                  Tentar Novamente
+                </Button>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Completed State */}
+          {step === "completed" && (
             <Card className="rounded-3xl border-green-500 bg-green-50 dark:bg-green-950">
               <CardContent className="p-6 space-y-4">
                 <div className="flex items-center gap-3">
@@ -169,6 +351,20 @@ export default function AssinarReceitaPage() {
                   </div>
                 </div>
 
+                {signatureResult && (
+                  <div className="bg-green-100 dark:bg-green-900 rounded-xl p-4 text-sm space-y-1">
+                    <p className="text-green-800 dark:text-green-200">
+                      <strong>Certificado:</strong> {signatureResult.certificate?.alias || signatureResult.signature?.certificateSerial || "N/A"}
+                    </p>
+                    <p className="text-green-800 dark:text-green-200">
+                      <strong>Emissor:</strong> {signatureResult.certificate?.provider || signatureResult.signature?.certificateIssuer || "N/A"}
+                    </p>
+                    <p className="text-green-800 dark:text-green-200">
+                      <strong>Data/Hora:</strong> {new Date().toLocaleString("pt-BR")}
+                    </p>
+                  </div>
+                )}
+
                 <div className="flex flex-wrap gap-3 pt-4">
                   <Button onClick={handleDownloadPDF} disabled={loading} className="rounded-2xl">
                     <Download className="h-4 w-4 mr-2" />
@@ -180,7 +376,10 @@ export default function AssinarReceitaPage() {
                 </div>
               </CardContent>
             </Card>
-          ) : (
+          )}
+
+          {/* Ready/Authorizing/Signing States */}
+          {(step === "ready" || step === "authorizing" || step === "signing") && (
             <>
               {/* Resumo da Receita */}
               <Card className="rounded-3xl">
@@ -193,6 +392,10 @@ export default function AssinarReceitaPage() {
                     <div className="flex items-center justify-between">
                       <span className="text-sm text-muted-foreground">Paciente</span>
                       <span className="font-medium">{prescription?.patient_name || "Carregando..."}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-muted-foreground">CPF</span>
+                      <span className="font-medium">{prescription?.patient_cpf || "N/A"}</span>
                     </div>
                     <div className="flex items-center justify-between">
                       <span className="text-sm text-muted-foreground">Medicamentos</span>
@@ -215,8 +418,8 @@ export default function AssinarReceitaPage() {
                     <div className="flex items-center justify-between">
                       <span className="text-sm text-muted-foreground">Data de Emissão</span>
                       <span className="font-medium">
-                        {prescription?.created_at
-                          ? new Date(prescription.created_at).toLocaleDateString("pt-BR")
+                        {prescription?.prescription_date
+                          ? new Date(prescription.prescription_date).toLocaleDateString("pt-BR")
                           : new Date().toLocaleDateString("pt-BR")}
                       </span>
                     </div>
@@ -227,6 +430,17 @@ export default function AssinarReceitaPage() {
                           ? new Date(prescription.valid_until).toLocaleDateString("pt-BR")
                           : `${prescription?.validity_days || 30} dias`}
                       </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-muted-foreground">Tipo</span>
+                      <Badge
+                        variant={prescription?.is_controlled_substance ? "destructive" : "secondary"}
+                        className="rounded-full"
+                      >
+                        {prescription?.prescription_type === "controlled_b1" ? "Azul B1" :
+                         prescription?.prescription_type === "controlled_b2" ? "Azul B2" :
+                         prescription?.prescription_type === "special" ? "Especial" : "Simples"}
+                      </Badge>
                     </div>
                   </div>
                 </CardContent>
@@ -288,15 +502,26 @@ export default function AssinarReceitaPage() {
                       credenciadas pela ICP-Brasil
                     </p>
                     <p className="text-xs pt-2 text-amber-600 dark:text-amber-400">
-                      Certifique-se de que seu certificado está válido e instalado corretamente no dispositivo
+                      {vidaasConfigured
+                        ? "Você será redirecionado para o VIDaaS para autenticar com seu certificado digital"
+                        : "Modo de desenvolvimento: a assinatura será simulada"}
                     </p>
                   </div>
 
-                  <Button onClick={handleSign} disabled={signing} className="rounded-2xl w-full h-12 text-base">
-                    {signing ? (
+                  <Button
+                    onClick={handleInitiateSignature}
+                    disabled={signing || step === "authorizing"}
+                    className="rounded-2xl w-full h-12 text-base"
+                  >
+                    {step === "authorizing" ? (
                       <>
-                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2" />
-                        Assinando...
+                        <Loader2 className="h-5 w-5 mr-2 animate-spin" />
+                        Iniciando autorização...
+                      </>
+                    ) : step === "signing" ? (
+                      <>
+                        <Loader2 className="h-5 w-5 mr-2 animate-spin" />
+                        Assinando documento...
                       </>
                     ) : (
                       <>
@@ -305,6 +530,33 @@ export default function AssinarReceitaPage() {
                       </>
                     )}
                   </Button>
+
+                  {authorizationUrl && (
+                    <div className="pt-4 space-y-3">
+                      <p className="text-sm text-muted-foreground text-center">
+                        Ou escaneie o QR Code abaixo com o app VIDaaS:
+                      </p>
+                      <div className="flex justify-center">
+                        <div className="bg-white p-4 rounded-xl">
+                          <img
+                            src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(authorizationUrl)}`}
+                            alt="QR Code VIDaaS"
+                            className="w-48 h-48"
+                          />
+                        </div>
+                      </div>
+                      <div className="text-center">
+                        <a
+                          href={authorizationUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-sm text-primary hover:underline inline-flex items-center gap-1"
+                        >
+                          Abrir em nova aba <ExternalLink className="h-3 w-3" />
+                        </a>
+                      </div>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
 
@@ -318,7 +570,7 @@ export default function AssinarReceitaPage() {
                   </p>
                   <p>
                     A assinatura digital com certificado ICP-Brasil garante autenticidade, integridade e não-repúdio do
-                    documento, conforme legislação brasileira vigente.
+                    documento, conforme legislação brasileira vigente (MP 2.200-2/2001 e Lei 14.063/2020).
                   </p>
                 </CardContent>
               </Card>
