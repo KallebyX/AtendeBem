@@ -39,6 +39,8 @@ export default function FinancialDashboard() {
     endDate: ''
   })
   const [showNewTransaction, setShowNewTransaction] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const [newTransaction, setNewTransaction] = useState({
     type: 'income' as 'income' | 'expense',
     category: '',
@@ -92,25 +94,55 @@ export default function FinancialDashboard() {
   }
 
   async function handleCreateTransaction() {
-    const result = await createFinancialTransaction({
-      ...newTransaction,
-      amount: parseFloat(newTransaction.amount)
-    })
+    // Validação de campos obrigatórios
+    setError(null)
 
-    if (result.success) {
-      setShowNewTransaction(false)
-      setNewTransaction({
-        type: 'income',
-        category: '',
-        amount: '',
-        description: '',
-        payment_method: '',
-        payment_status: 'pending',
-        due_date: new Date().toISOString().split('T')[0],
-        paid_date: '',
-        notes: ''
+    if (!newTransaction.amount || parseFloat(newTransaction.amount) <= 0) {
+      setError('O valor é obrigatório e deve ser maior que zero')
+      return
+    }
+
+    if (!newTransaction.category) {
+      setError('Selecione uma categoria')
+      return
+    }
+
+    if (!newTransaction.payment_method) {
+      setError('Selecione um método de pagamento')
+      return
+    }
+
+    setSaving(true)
+
+    try {
+      const result = await createFinancialTransaction({
+        ...newTransaction,
+        amount: parseFloat(newTransaction.amount)
       })
-      loadData()
+
+      if (result.success) {
+        setShowNewTransaction(false)
+        setError(null)
+        setNewTransaction({
+          type: 'income',
+          category: '',
+          amount: '',
+          description: '',
+          payment_method: '',
+          payment_status: 'pending',
+          due_date: new Date().toISOString().split('T')[0],
+          paid_date: '',
+          notes: ''
+        })
+        loadData()
+      } else {
+        setError(result.error || 'Erro ao criar transação. Tente novamente.')
+      }
+    } catch (err: any) {
+      console.error('Erro ao criar transação:', err)
+      setError('Erro inesperado ao criar transação. Tente novamente.')
+    } finally {
+      setSaving(false)
     }
   }
 
@@ -493,12 +525,32 @@ export default function FinancialDashboard() {
                 />
               </div>
 
+              {error && (
+                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
+                  {error}
+                </div>
+              )}
+
               <div className="flex gap-2 justify-end pt-4">
-                <Button variant="outline" onClick={() => setShowNewTransaction(false)}>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setShowNewTransaction(false)
+                    setError(null)
+                  }}
+                  disabled={saving}
+                >
                   Cancelar
                 </Button>
-                <Button onClick={handleCreateTransaction}>
-                  Criar Transação
+                <Button onClick={handleCreateTransaction} disabled={saving}>
+                  {saving ? (
+                    <>
+                      <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
+                      Salvando...
+                    </>
+                  ) : (
+                    'Criar Transação'
+                  )}
                 </Button>
               </div>
             </CardContent>
