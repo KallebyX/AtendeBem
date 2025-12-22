@@ -133,7 +133,7 @@ O AtendeBem funciona como um **Construtor de Atendimentos** visual onde o profis
 
 O sistema segue uma arquitetura moderna baseada em serverless com Supabase como backend:
 
-```
+\`\`\`
 ┌────────────────────────────────────────────────────────────┐
 │                        CLIENTE                             │
 │                    (Next.js + React)                       │
@@ -161,11 +161,11 @@ O sistema segue uma arquitetura moderna baseada em serverless com Supabase como 
 │  │     (IA)     │  │ (Cert. Dig.) │  │   (CDN/Deploy)   │ │
 │  └──────────────┘  └──────────────┘  └──────────────────┘ │
 └────────────────────────────────────────────────────────────┘
-```
+\`\`\`
 
 ### Estrutura de Diretórios
 
-```
+\`\`\`
 atendebem/
 ├── app/                    # Next.js App Router
 │   ├── (auth)/            # Rotas de autenticação
@@ -185,7 +185,7 @@ atendebem/
 ├── public/               # Assets estáticos
 ├── scripts/              # Scripts de manutenção
 └── docs/                 # Documentação
-```
+\`\`\`
 
 ### Modelo de Dados
 
@@ -223,7 +223,7 @@ Principais entidades do sistema:
 
 ### Passo a Passo
 
-```bash
+\`\`\`bash
 # 1. Clone o repositório
 git clone https://github.com/KallebyX/AtendeBem.git
 cd AtendeBem
@@ -233,11 +233,11 @@ pnpm install
 
 # 3. Configure as variáveis de ambiente
 cp .env.example .env.local
-```
+\`\`\`
 
 ### Variáveis de Ambiente
 
-```env
+\`\`\`env
 # Supabase
 NEXT_PUBLIC_SUPABASE_URL=https://seu-projeto.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=sua-anon-key
@@ -248,28 +248,28 @@ GEMINI_API_KEY=sua-api-key
 
 # App
 NEXT_PUBLIC_APP_URL=http://localhost:3000
-```
+\`\`\`
 
 ### Configuração do Banco
 
-```bash
+\`\`\`bash
 # Conecte ao Supabase CLI
 npx supabase login
 npx supabase link --project-ref seu-project-ref
 
 # Execute as migrations
 npx supabase db push
-```
+\`\`\`
 
 ### Executando
 
-```bash
+\`\`\`bash
 # Desenvolvimento
 pnpm dev
 
 # Build de produção
 pnpm build && pnpm start
-```
+\`\`\`
 
 Acesse: http://localhost:3000
 
@@ -301,9 +301,9 @@ Acesse: http://localhost:3000
 
 Todas as requisições devem incluir:
 
-```http
+\`\`\`http
 Authorization: Bearer <supabase-jwt-token>
-```
+\`\`\`
 
 ### Endpoints Principais
 
@@ -342,7 +342,7 @@ Authorization: Bearer <supabase-jwt-token>
 
 ### Exemplo de Requisição
 
-```typescript
+\`\`\`typescript
 const response = await fetch('/api/appointments', {
   method: 'POST',
   headers: {
@@ -360,7 +360,7 @@ const response = await fetch('/api/appointments', {
     ]
   })
 });
-```
+\`\`\`
 
 ---
 
