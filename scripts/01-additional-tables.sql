@@ -1,31 +1,9 @@
 -- AtendeBem Additional Tables Migration
 -- Run this AFTER 00-complete-migration.sql
--- Version 1.0 - Additional tables for extended features
+-- Version 1.1 - Creates tables WITHOUT foreign keys to avoid dependency issues
 
 -- Enable UUID extension first
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-
--- ============================================
--- PREREQUISITE CHECK: Ensure base tables exist
--- ============================================
-
-DO $$
-BEGIN
-    -- Ensure users table exists (from 00-complete-migration.sql)
-    IF NOT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'users' AND table_schema = 'public') THEN
-        RAISE EXCEPTION 'Base table "users" does not exist. Please run 00-complete-migration.sql first.';
-    END IF;
-
-    -- Ensure patients table exists
-    IF NOT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'patients' AND table_schema = 'public') THEN
-        RAISE EXCEPTION 'Base table "patients" does not exist. Please run 00-complete-migration.sql first.';
-    END IF;
-
-    -- Ensure appointments table exists
-    IF NOT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'appointments' AND table_schema = 'public') THEN
-        RAISE EXCEPTION 'Base table "appointments" does not exist. Please run 00-complete-migration.sql first.';
-    END IF;
-END $$;
 
 -- ============================================
 -- CONTRACTS (Patient treatment contracts)
@@ -33,8 +11,8 @@ END $$;
 
 CREATE TABLE IF NOT EXISTS contracts (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+    user_id UUID,
+    patient_id UUID,
     contract_number VARCHAR(50) UNIQUE,
     title VARCHAR(255) NOT NULL,
     contract_type VARCHAR(50) NOT NULL DEFAULT 'treatment'
@@ -57,7 +35,7 @@ CREATE TABLE IF NOT EXISTS contracts (
 
 CREATE TABLE IF NOT EXISTS contract_templates (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    user_id UUID,
     name VARCHAR(255) NOT NULL,
     description TEXT,
     contract_type VARCHAR(50) NOT NULL DEFAULT 'treatment',
@@ -75,14 +53,14 @@ CREATE TABLE IF NOT EXISTS contract_templates (
 
 CREATE TABLE IF NOT EXISTS medical_images (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
-    appointment_id UUID REFERENCES appointments(id) ON DELETE SET NULL,
+    user_id UUID,
+    patient_id UUID,
+    appointment_id UUID,
     study_instance_uid VARCHAR(100) UNIQUE,
-    modality VARCHAR(20) NOT NULL,
+    modality VARCHAR(20),
     study_description TEXT,
     body_part VARCHAR(100),
-    study_date DATE NOT NULL,
+    study_date DATE,
     clinical_indication TEXT,
     dicom_files JSONB DEFAULT '[]',
     total_images INTEGER DEFAULT 0,
@@ -99,8 +77,8 @@ CREATE TABLE IF NOT EXISTS medical_images (
 
 CREATE TABLE IF NOT EXISTS image_annotations (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    image_id UUID NOT NULL REFERENCES medical_images(id) ON DELETE CASCADE,
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    image_id UUID,
+    user_id UUID,
     annotation_type VARCHAR(50) NOT NULL,
     coordinates JSONB NOT NULL,
     label TEXT,
@@ -115,8 +93,8 @@ CREATE TABLE IF NOT EXISTS image_annotations (
 
 CREATE TABLE IF NOT EXISTS odontograms (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+    user_id UUID,
+    patient_id UUID,
     teeth_data JSONB DEFAULT '{}',
     clinical_notes TEXT,
     treatment_plan TEXT,
@@ -126,8 +104,8 @@ CREATE TABLE IF NOT EXISTS odontograms (
 
 CREATE TABLE IF NOT EXISTS odontogram_procedures (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    odontogram_id UUID NOT NULL REFERENCES odontograms(id) ON DELETE CASCADE,
+    user_id UUID,
+    odontogram_id UUID,
     tooth_number VARCHAR(5) NOT NULL,
     tooth_face VARCHAR(10),
     procedure_code VARCHAR(20),
@@ -144,22 +122,21 @@ CREATE TABLE IF NOT EXISTS odontogram_procedures (
 
 CREATE TABLE IF NOT EXISTS biometric_enrollments (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+    user_id UUID,
+    patient_id UUID,
     biometric_type VARCHAR(30) NOT NULL,
     template_data TEXT NOT NULL,
     quality_score DECIMAL(5, 2),
     is_active BOOLEAN DEFAULT true,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    UNIQUE(patient_id, biometric_type)
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS biometric_verifications (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    patient_id UUID REFERENCES patients(id) ON DELETE SET NULL,
-    enrollment_id UUID REFERENCES biometric_enrollments(id) ON DELETE SET NULL,
+    user_id UUID,
+    patient_id UUID,
+    enrollment_id UUID,
     biometric_type VARCHAR(30) NOT NULL,
     verification_result BOOLEAN NOT NULL,
     match_score DECIMAL(5, 2),
@@ -173,8 +150,8 @@ CREATE TABLE IF NOT EXISTS biometric_verifications (
 
 CREATE TABLE IF NOT EXISTS whatsapp_conversations (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    patient_id UUID REFERENCES patients(id) ON DELETE SET NULL,
+    user_id UUID,
+    patient_id UUID,
     phone_number VARCHAR(20) NOT NULL,
     contact_name VARCHAR(255),
     last_message_at TIMESTAMP WITH TIME ZONE,
@@ -186,8 +163,8 @@ CREATE TABLE IF NOT EXISTS whatsapp_conversations (
 
 CREATE TABLE IF NOT EXISTS whatsapp_messages (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    conversation_id UUID NOT NULL REFERENCES whatsapp_conversations(id) ON DELETE CASCADE,
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    conversation_id UUID,
+    user_id UUID,
     direction VARCHAR(10) NOT NULL,
     message_type VARCHAR(30) DEFAULT 'text',
     content TEXT,
@@ -205,7 +182,7 @@ CREATE TABLE IF NOT EXISTS whatsapp_messages (
 
 CREATE TABLE IF NOT EXISTS inventory_items (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    user_id UUID,
     name VARCHAR(255) NOT NULL,
     description TEXT,
     sku VARCHAR(50),
@@ -226,8 +203,8 @@ CREATE TABLE IF NOT EXISTS inventory_items (
 
 CREATE TABLE IF NOT EXISTS inventory_movements (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    item_id UUID NOT NULL REFERENCES inventory_items(id) ON DELETE CASCADE,
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    item_id UUID,
+    user_id UUID,
     movement_type VARCHAR(30) NOT NULL,
     quantity DECIMAL(12, 2) NOT NULL,
     unit_cost DECIMAL(12, 2),
@@ -244,9 +221,9 @@ CREATE TABLE IF NOT EXISTS inventory_movements (
 
 CREATE TABLE IF NOT EXISTS anamnesis (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
-    appointment_id UUID REFERENCES appointments(id) ON DELETE SET NULL,
+    user_id UUID,
+    patient_id UUID,
+    appointment_id UUID,
     chief_complaint TEXT,
     history_present_illness TEXT,
     past_medical_history JSONB,
@@ -269,8 +246,8 @@ CREATE TABLE IF NOT EXISTS anamnesis (
 
 CREATE TABLE IF NOT EXISTS budgets (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+    user_id UUID,
+    patient_id UUID,
     budget_number VARCHAR(50),
     title VARCHAR(255),
     items JSONB NOT NULL DEFAULT '[]',
@@ -294,9 +271,9 @@ CREATE TABLE IF NOT EXISTS budgets (
 
 CREATE TABLE IF NOT EXISTS tiss_guides (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
-    appointment_id UUID REFERENCES appointments(id) ON DELETE SET NULL,
+    user_id UUID,
+    patient_id UUID,
+    appointment_id UUID,
     guide_type VARCHAR(50) NOT NULL,
     guide_number VARCHAR(50),
     provider_code VARCHAR(50),
@@ -320,9 +297,9 @@ CREATE TABLE IF NOT EXISTS tiss_guides (
 
 CREATE TABLE IF NOT EXISTS telemedicine_sessions (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
-    appointment_id UUID REFERENCES appointments(id) ON DELETE SET NULL,
+    user_id UUID,
+    patient_id UUID,
+    appointment_id UUID,
     session_type VARCHAR(30) DEFAULT 'video',
     room_id VARCHAR(100),
     room_url TEXT,
@@ -343,7 +320,7 @@ CREATE TABLE IF NOT EXISTS telemedicine_sessions (
 
 CREATE TABLE IF NOT EXISTS crm_leads (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    user_id UUID,
     name VARCHAR(255) NOT NULL,
     email VARCHAR(255),
     phone VARCHAR(20),
@@ -351,7 +328,7 @@ CREATE TABLE IF NOT EXISTS crm_leads (
     interest VARCHAR(255),
     notes TEXT,
     status VARCHAR(30) DEFAULT 'new',
-    converted_patient_id UUID REFERENCES patients(id) ON DELETE SET NULL,
+    converted_patient_id UUID,
     converted_at TIMESTAMP WITH TIME ZONE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
@@ -359,9 +336,9 @@ CREATE TABLE IF NOT EXISTS crm_leads (
 
 CREATE TABLE IF NOT EXISTS crm_tasks (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    lead_id UUID REFERENCES crm_leads(id) ON DELETE CASCADE,
-    patient_id UUID REFERENCES patients(id) ON DELETE CASCADE,
+    user_id UUID,
+    lead_id UUID,
+    patient_id UUID,
     title VARCHAR(255) NOT NULL,
     description TEXT,
     task_type VARCHAR(50),
@@ -378,8 +355,8 @@ CREATE TABLE IF NOT EXISTS crm_tasks (
 
 CREATE TABLE IF NOT EXISTS nfe_invoices (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    patient_id UUID REFERENCES patients(id) ON DELETE SET NULL,
+    user_id UUID,
+    patient_id UUID,
     invoice_number VARCHAR(50),
     series VARCHAR(10),
     issue_date TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
@@ -428,3 +405,5 @@ CREATE INDEX IF NOT EXISTS idx_telemedicine_sessions_patient ON telemedicine_ses
 -- ============================================
 -- ADDITIONAL MIGRATION COMPLETE
 -- ============================================
+
+SELECT 'Additional tables migration completed!' as status;
