@@ -8,8 +8,14 @@ import { setUserContext } from '@/lib/db-init'
 export async function createLabOrder(data: {
   patient_id: string
   appointment_id?: string
-  lab_name: string
-  exams: Array<{ exam_code?: string; exam_name: string; exam_type?: string }>
+  lab_name?: string
+  exams: Array<{
+    exam_code?: string
+    exam_name: string
+    exam_type?: string
+    urgency?: string
+    notes?: string
+  }>
   clinical_indication?: string
   expected_result_date?: string
 }) {
@@ -27,6 +33,13 @@ export async function createLabOrder(data: {
     // Create exams using patient_exams table
     const createdExams = []
     for (const exam of data.exams) {
+      // Build observations from clinical_indication, urgency and notes
+      const observations = [
+        data.clinical_indication,
+        exam.urgency ? `Urgência: ${exam.urgency}` : null,
+        exam.notes
+      ].filter(Boolean).join(' | ') || null
+
       const result = await db`
         INSERT INTO patient_exams (
           patient_id, user_id, appointment_id, exam_type,
@@ -34,8 +47,8 @@ export async function createLabOrder(data: {
         ) VALUES (
           ${data.patient_id}, ${user.id}, ${data.appointment_id || null},
           ${exam.exam_type || 'laboratorio'}, ${exam.exam_name},
-          ${new Date().toISOString().split('T')[0]}, ${data.lab_name},
-          ${user.name}, 'requested', ${data.clinical_indication || null}
+          ${new Date().toISOString().split('T')[0]}, ${data.lab_name || 'A definir'},
+          ${user.name}, 'requested', ${observations}
         ) RETURNING *
       `
       createdExams.push(result[0])
