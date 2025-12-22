@@ -7,10 +7,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { User, Calendar, FileText, Activity, DollarSign, Plus, X, Edit, Trash2 } from "lucide-react"
+import { User, Calendar, FileText, Activity, DollarSign, Plus, X, Edit, Trash2, Stethoscope, ClipboardList, TestTube } from "lucide-react"
 import { useEffect, useState } from "react"
 import { getPatientDetails, createSchedule, addExam, updatePatient, deletePatient } from "@/app/actions/crm"
 import { useParams, useRouter } from "next/navigation"
+import Link from "next/link"
 
 export default function PatientDetailPage() {
   const params = useParams()
@@ -222,7 +223,7 @@ export default function PatientDetailPage() {
     )
   }
 
-  const { patient, appointments, prescriptions, exams, schedules, medicalHistory, payments } = data
+  const { patient, appointments, prescriptions, exams, schedules, medicalHistory, payments, anamneses, labOrders } = data
 
   const totalSpent = payments?.reduce((sum: number, p: any) => sum + Number.parseFloat(p.amount || 0), 0) || 0
 
@@ -269,18 +270,28 @@ export default function PatientDetailPage() {
                   <Trash2 className="w-4 h-4 mr-2" />
                   Excluir
                 </Button>
-                <Button className="rounded-xl" onClick={() => setShowScheduleModal(true)}>
-                  <Plus className="w-4 h-4 mr-2" />
-                  Novo Agendamento
+                <Button variant="outline" className="rounded-xl bg-transparent" onClick={() => setShowScheduleModal(true)}>
+                  <Calendar className="w-4 h-4 mr-2" />
+                  Agendar
                 </Button>
+                <Link href={`/consulta?patient_id=${patientId}`}>
+                  <Button className="rounded-xl bg-green-600 hover:bg-green-700">
+                    <Stethoscope className="w-4 h-4 mr-2" />
+                    Iniciar Consulta
+                  </Button>
+                </Link>
               </div>
             </div>
 
             {/* Métricas Rápidas */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mt-6">
               <div className="p-4 rounded-2xl bg-accent/50">
                 <p className="text-sm text-muted-foreground">Consultas</p>
                 <p className="text-2xl font-bold">{appointments?.length || 0}</p>
+              </div>
+              <div className="p-4 rounded-2xl bg-accent/50">
+                <p className="text-sm text-muted-foreground">Anamneses</p>
+                <p className="text-2xl font-bold">{anamneses?.length || 0}</p>
               </div>
               <div className="p-4 rounded-2xl bg-accent/50">
                 <p className="text-sm text-muted-foreground">Receitas</p>
@@ -303,7 +314,11 @@ export default function PatientDetailPage() {
           <TabsList className="rounded-2xl flex-wrap h-auto gap-1">
             <TabsTrigger value="history" className="rounded-xl">
               <Activity className="w-4 h-4 mr-2" />
-              Histórico Médico
+              Histórico
+            </TabsTrigger>
+            <TabsTrigger value="anamnesis" className="rounded-xl">
+              <ClipboardList className="w-4 h-4 mr-2" />
+              Anamneses
             </TabsTrigger>
             <TabsTrigger value="appointments" className="rounded-xl">
               <Calendar className="w-4 h-4 mr-2" />
@@ -314,7 +329,7 @@ export default function PatientDetailPage() {
               Receitas
             </TabsTrigger>
             <TabsTrigger value="exams" className="rounded-xl">
-              <Activity className="w-4 h-4 mr-2" />
+              <TestTube className="w-4 h-4 mr-2" />
               Exames
             </TabsTrigger>
             <TabsTrigger value="financial" className="rounded-xl">
@@ -379,6 +394,60 @@ export default function PatientDetailPage() {
                 )}
               </div>
             )}
+          </TabsContent>
+
+          <TabsContent value="anamnesis">
+            <Card className="rounded-3xl border-border">
+              <CardHeader>
+                <CardTitle>Anamneses Registradas</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {!anamneses || anamneses.length === 0 ? (
+                  <p className="text-center text-muted-foreground py-8">Nenhuma anamnese registrada</p>
+                ) : (
+                  <div className="space-y-3">
+                    {anamneses.map((item: any) => (
+                      <div key={item.id} className="p-4 rounded-2xl border border-border">
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-2">
+                              <ClipboardList className="w-4 h-4 text-primary" />
+                              <h3 className="font-semibold">
+                                {new Date(item.created_at).toLocaleDateString("pt-BR")}
+                              </h3>
+                            </div>
+                            {item.chief_complaint && (
+                              <div className="mb-2">
+                                <p className="text-sm font-medium text-muted-foreground">Queixa Principal:</p>
+                                <p className="text-sm">{item.chief_complaint}</p>
+                              </div>
+                            )}
+                            {item.history_present_illness && (
+                              <div className="mb-2">
+                                <p className="text-sm font-medium text-muted-foreground">HDA:</p>
+                                <p className="text-sm">{item.history_present_illness}</p>
+                              </div>
+                            )}
+                            {item.assessment && (
+                              <div className="mb-2">
+                                <p className="text-sm font-medium text-muted-foreground">Avaliação:</p>
+                                <p className="text-sm">{item.assessment}</p>
+                              </div>
+                            )}
+                            {item.plan && (
+                              <div>
+                                <p className="text-sm font-medium text-muted-foreground">Conduta:</p>
+                                <p className="text-sm">{item.plan}</p>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           </TabsContent>
 
           <TabsContent value="appointments">

@@ -128,10 +128,36 @@ export async function getPatientDetails(patientId: string) {
 
     // Pagamentos
     const payments = await sql`
-      SELECT * FROM payments 
+      SELECT * FROM payments
       WHERE patient_id = ${patientId}
       ORDER BY payment_date DESC
     `
+
+    // Anamneses
+    let anamneses: any[] = []
+    try {
+      anamneses = await sql`
+        SELECT * FROM anamnesis
+        WHERE patient_id = ${patientId}
+        ORDER BY created_at DESC
+      `
+    } catch (e) {
+      // Table may not exist yet
+      anamneses = []
+    }
+
+    // Lab Orders
+    let labOrders: any[] = []
+    try {
+      labOrders = await sql`
+        SELECT lo.*
+        FROM lab_orders lo
+        WHERE lo.patient_id = ${patientId}
+        ORDER BY lo.created_at DESC
+      `
+    } catch (e) {
+      labOrders = []
+    }
 
     return {
       success: true,
@@ -142,6 +168,8 @@ export async function getPatientDetails(patientId: string) {
       schedules,
       medicalHistory,
       payments,
+      anamneses,
+      labOrders,
     }
   } catch (error: any) {
     return { success: false, error: error.message }
