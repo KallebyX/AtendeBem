@@ -68,7 +68,8 @@ export default function WhatsAppPage() {
   async function checkConnectionStatus() {
     const result = await getWhatsAppStatus()
     if (result.success && result.data) {
-      setConnectionStatus(result.data.status)
+      const status = result.data.status as "disconnected" | "connecting" | "connected"
+      setConnectionStatus(status)
       if (result.data.qr_code) {
         setQrCode(result.data.qr_code)
       }

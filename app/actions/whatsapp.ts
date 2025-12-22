@@ -2,6 +2,7 @@
 
 import { getDb } from "@/lib/db"
 import { getCurrentUser } from "@/lib/session"
+import { sendWhatsAppText, sendWhatsAppTemplate } from "@/lib/whatsapp"
 
 export async function sendWhatsAppMessage(data: {
   patient_id?: string
@@ -16,7 +17,7 @@ export async function sendWhatsAppMessage(data: {
 
     const db = await getDb()
 
-    // Buscar ou criar conversa (removed tenant_id)
+    // Buscar ou criar conversa
     let conversation = await db`
       SELECT * FROM whatsapp_conversations
       WHERE phone_number = ${data.phone_number}
@@ -40,7 +41,25 @@ export async function sendWhatsAppMessage(data: {
       `
     }
 
-    // Salvar mensagem (removed tenant_id)
+    // Enviar mensagem via WhatsApp Business API
+    try {
+      if (data.template_name && data.template_params) {
+        // Enviar template
+        await sendWhatsAppTemplate(
+          data.phone_number,
+          data.template_name,
+          Object.values(data.template_params)
+        )
+      } else {
+        // Enviar texto simples
+        await sendWhatsAppText(data.phone_number, data.message_text)
+      }
+    } catch (apiError: any) {
+      console.error("[WhatsApp API] Error sending message:", apiError)
+      // Continue to save message in DB even if API fails
+    }
+
+    // Salvar mensagem no banco
     await db`
       INSERT INTO whatsapp_messages (
         user_id, conversation_id, direction, from_number, to_number,
@@ -132,8 +151,23 @@ export async function getWhatsAppStatus() {
     const user = await getCurrentUser()
     if (!user) return { error: "Nao autenticado", data: null }
 
-    // Simulated WhatsApp Business API status
-    // In production, this would check the actual WhatsApp Business API connection
+    // Check if WhatsApp Business API is configured
+    const isConfigured = !!(process.env.WHATSAPP_BUSINESS_PHONE_ID && process.env.WHATSAPP_ACCESS_TOKEN)
+
+    if (isConfigured) {
+      return {
+        success: true,
+        data: {
+          connected: true,
+          phone_number: process.env.WHATSAPP_BUSINESS_PHONE_ID,
+          business_name: "WhatsApp Business API",
+          status: "connected",
+          qr_code: null,
+          last_connected_at: new Date().toISOString()
+        }
+      }
+    }
+
     return {
       success: true,
       data: {
