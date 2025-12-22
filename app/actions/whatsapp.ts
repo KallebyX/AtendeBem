@@ -126,3 +126,49 @@ export async function markConversationAsRead(conversation_id: string) {
     return { error: error.message }
   }
 }
+
+export async function getWhatsAppStatus() {
+  try {
+    const user = await getCurrentUser()
+    if (!user) return { error: "Nao autenticado", data: null }
+
+    // Simulated WhatsApp Business API status
+    // In production, this would check the actual WhatsApp Business API connection
+    return {
+      success: true,
+      data: {
+        connected: false,
+        phone_number: null,
+        business_name: null,
+        status: "disconnected",
+        qr_code: null,
+        last_connected_at: null
+      }
+    }
+  } catch (error: any) {
+    console.error("[v0] WhatsApp status error:", error)
+    return { error: error.message, data: null }
+  }
+}
+
+export async function connectWhatsApp() {
+  try {
+    const user = await getCurrentUser()
+    if (!user) return { error: "Nao autenticado" }
+
+    // Simulated QR code generation for WhatsApp Web connection
+    // In production, this would integrate with WhatsApp Business API
+    const mockQRCode = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=whatsapp-connect-${user.id}-${Date.now()}`
+
+    return {
+      success: true,
+      data: {
+        qr_code: mockQRCode,
+        expires_at: new Date(Date.now() + 60000).toISOString() // 1 minute expiry
+      }
+    }
+  } catch (error: any) {
+    console.error("[v0] WhatsApp connect error:", error)
+    return { error: error.message }
+  }
+}
