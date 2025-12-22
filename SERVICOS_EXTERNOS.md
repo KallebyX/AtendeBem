@@ -18,9 +18,9 @@ Este documento lista todos os serviços externos que precisam ser configurados c
   2. Clique em "Create API Key"
   3. Copie a chave gerada
   4. Adicione ao `.env.local`:
-     ```
+     \`\`\`
      GOOGLE_GENERATIVE_AI_API_KEY=sua_chave_aqui
-     ```
+     \`\`\`
   5. Reinicie o servidor com `npm run dev`
 - **IMPORTANTE:** Nunca commitar chaves API no repositório!
 

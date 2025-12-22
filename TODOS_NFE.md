@@ -306,12 +306,12 @@ Implementação completa do sistema de Nota Fiscal Eletrônica (NFE) e Nota Fisc
 ## DEPENDÊNCIAS TÉCNICAS
 
 ### Bibliotecas Necessárias
-```bash
+\`\`\`bash
 npm install xml2js xml-crypto xml-encryption node-forge fast-xml-parser pdfkit
-```
+\`\`\`
 
 ### Variáveis de Ambiente
-```env
+\`\`\`env
 # SEFAZ
 SEFAZ_ENVIRONMENT=homologation|production
 SEFAZ_UF=SP|RJ|MG|...
@@ -327,7 +327,7 @@ ACCOUNTANT_NAME=Nome do Contador
 # API Brasil (alternativa)
 API_BRASIL_TOKEN=token
 API_BRASIL_ENDPOINT=https://api.apibrasil.io/nfe
-```
+\`\`\`
 
 ---
 
