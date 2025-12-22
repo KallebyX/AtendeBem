@@ -6,45 +6,15 @@ import { cookies } from "next/headers"
 import { setUserContext } from "@/lib/db-init"
 import crypto from "crypto"
 
-// Função helper para criptografar dados biométricos
-function encryptBiometricData(data: string, keyId: string): string {
-  const algorithm = "aes-256-gcm"
-  const key = Buffer.from(process.env.ENCRYPTION_KEY || "", "hex")
-  const iv = crypto.randomBytes(16)
-
-  const cipher = crypto.createCipheriv(algorithm, key, iv)
-  let encrypted = cipher.update(data, "utf8", "hex")
-  encrypted += cipher.final("hex")
-
-  const authTag = cipher.getAuthTag()
-
-  return JSON.stringify({
-    encrypted,
-    iv: iv.toString("hex"),
-    authTag: authTag.toString("hex"),
-    keyId,
-  })
-}
-
-// Função helper para descriptografar
-function decryptBiometricData(encryptedData: string): string {
-  const { encrypted, iv, authTag } = JSON.parse(encryptedData)
-  const algorithm = "aes-256-gcm"
-  const key = Buffer.from(process.env.ENCRYPTION_KEY || "", "hex")
-
-  const decipher = crypto.createDecipheriv(algorithm, key, Buffer.from(iv, "hex"))
-  decipher.setAuthTag(Buffer.from(authTag, "hex"))
-
-  let decrypted = decipher.update(encrypted, "hex", "utf8")
-  decrypted += decipher.final("utf8")
-
-  return decrypted
+// Função helper para gerar hash de template (simulação)
+function hashTemplate(data: string): string {
+  return crypto.createHash('sha256').update(data).digest('hex')
 }
 
 export async function enrollBiometric(data: {
   patient_id: string
   biometric_type: "fingerprint" | "facial" | "iris" | "voice" | "palm"
-  template_data: string // Dados brutos do template
+  template_data?: string
   finger_position?: string
   face_angle?: string
   capture_device?: string
@@ -56,28 +26,28 @@ export async function enrollBiometric(data: {
     const cookieStore = await cookies()
     const token = cookieStore.get("session")?.value
 
-    if (!token) return { error: "Não autenticado" }
+    if (!token) return { error: "Nao autenticado" }
     const user = await verifyToken(token)
-    if (!user) return { error: "Token inválido" }
+    if (!user) return { error: "Token invalido" }
 
     await setUserContext(user.id)
     const db = await getDb()
 
-    // Criptografar template biométrico
-    const keyId = `bio-${Date.now()}`
-    const encryptedTemplate = encryptBiometricData(data.template_data, keyId)
+    // Gerar template simulado se não fornecido
+    const templateData = data.template_data || `template_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+    const templateHash = hashTemplate(templateData)
 
     const result = await db`
       INSERT INTO biometric_templates (
-        tenant_id, patient_id, user_id, biometric_type, template_data,
+        user_id, patient_id, biometric_type, template_data,
         finger_position, face_angle, capture_device, device_serial,
-        capture_quality, encryption_key_id, consent_given, consent_date,
+        capture_quality, is_active, consent_given, consent_date,
         consent_ip_address
       ) VALUES (
-        ${user.tenant_id}, ${data.patient_id}, ${user.id}, ${data.biometric_type},
-        ${encryptedTemplate}, ${data.finger_position || null}, ${data.face_angle || null},
-        ${data.capture_device || null}, ${data.device_serial || null},
-        ${data.capture_quality || null}, ${keyId}, true, NOW(),
+        ${user.id}, ${data.patient_id}, ${data.biometric_type},
+        ${templateHash}, ${data.finger_position || null}, ${data.face_angle || null},
+        ${data.capture_device || 'web_camera'}, ${data.device_serial || null},
+        ${data.capture_quality || 85}, true, true, NOW(),
         ${data.consent_ip || null}
       ) RETURNING id, biometric_type, finger_position, created_at
     `
@@ -91,7 +61,7 @@ export async function enrollBiometric(data: {
 export async function verifyBiometric(data: {
   patient_id: string
   biometric_type: string
-  template_data: string // Dados para comparação
+  template_data?: string
   verification_type: "authentication" | "authorization" | "attendance" | "prescription_signature"
   appointment_id?: string
   prescription_id?: string
@@ -101,9 +71,9 @@ export async function verifyBiometric(data: {
     const cookieStore = await cookies()
     const token = cookieStore.get("session")?.value
 
-    if (!token) return { error: "Não autenticado" }
+    if (!token) return { error: "Nao autenticado" }
     const user = await verifyToken(token)
-    if (!user) return { error: "Token inválido" }
+    if (!user) return { error: "Token invalido" }
 
     await setUserContext(user.id)
     const db = await getDb()
@@ -113,43 +83,29 @@ export async function verifyBiometric(data: {
       SELECT id, template_data, biometric_type
       FROM biometric_templates
       WHERE patient_id = ${data.patient_id}
-        AND tenant_id = ${user.tenant_id}
+        AND user_id = ${user.id}
         AND biometric_type = ${data.biometric_type}
         AND is_active = true
     `
 
     if (!templates.length) {
-      return { error: "Nenhum template biométrico cadastrado" }
+      return { error: "Nenhum template biometrico cadastrado" }
     }
 
-    // Simular comparação biométrica (em produção, usar SDK do fabricante)
-    let bestMatch = 0
-    let matchedTemplateId = null
-
-    for (const template of templates) {
-      // Em produção, descriptografar e comparar com SDK biométrico
-      // const decrypted = decryptBiometricData(template.template_data)
-      // const score = await biometricSDK.compare(decrypted, data.template_data)
-
-      // Simulação: score aleatório para demo
-      const score = Math.floor(Math.random() * 40) + 60 // 60-100
-
-      if (score > bestMatch) {
-        bestMatch = score
-        matchedTemplateId = template.id
-      }
-    }
-
-    const verificationResult = bestMatch >= 70 // Threshold de 70%
+    // Simular comparação biométrica
+    // Em produção, usar SDK do fabricante
+    const bestMatch = Math.floor(Math.random() * 25) + 75 // 75-100
+    const matchedTemplateId = templates[0].id
+    const verificationResult = bestMatch >= 70
 
     // Registrar verificação
     const verification = await db`
       INSERT INTO biometric_verifications (
-        tenant_id, template_id, verification_result, match_score,
+        user_id, template_id, verification_result, match_score,
         verification_type, appointment_id, prescription_id,
         device_info, ip_address
       ) VALUES (
-        ${user.tenant_id}, ${matchedTemplateId}, ${verificationResult},
+        ${user.id}, ${matchedTemplateId}, ${verificationResult},
         ${bestMatch}, ${data.verification_type}, ${data.appointment_id || null},
         ${data.prescription_id || null}, ${data.device_info ? JSON.stringify(data.device_info) : null},
         ${data.device_info?.ip || null}
@@ -160,7 +116,7 @@ export async function verifyBiometric(data: {
     if (verificationResult) {
       await db`
         UPDATE biometric_templates
-        SET verified_count = verified_count + 1,
+        SET verified_count = COALESCE(verified_count, 0) + 1,
             last_verified_at = NOW()
         WHERE id = ${matchedTemplateId}
       `
@@ -182,25 +138,37 @@ export async function getBiometricTemplates(patient_id?: string) {
     const cookieStore = await cookies()
     const token = cookieStore.get("session")?.value
 
-    if (!token) return { error: "Não autenticado" }
+    if (!token) return { error: "Nao autenticado" }
     const user = await verifyToken(token)
-    if (!user) return { error: "Token inválido" }
+    if (!user) return { error: "Token invalido" }
 
     await setUserContext(user.id)
     const db = await getDb()
 
-    const result = await db`
-      SELECT bt.id, bt.biometric_type, bt.finger_position, bt.face_angle,
-             bt.capture_quality, bt.is_active, bt.verified_count,
-             bt.last_verified_at, bt.created_at, bt.patient_id,
-             p.name as patient_name
-      FROM biometric_templates bt
-      JOIN patients p ON bt.patient_id = p.id
-      WHERE bt.tenant_id = ${user.tenant_id}
-      ${patient_id ? db`AND bt.patient_id = ${patient_id}` : db``}
-      ORDER BY bt.created_at DESC
-      LIMIT 100
-    `
+    const result = patient_id
+      ? await db`
+          SELECT bt.id, bt.biometric_type as template_type, bt.finger_position, bt.face_angle,
+                 bt.capture_quality, bt.is_active, bt.verified_count,
+                 bt.last_verified_at, bt.created_at, bt.patient_id,
+                 p.full_name as patient_name
+          FROM biometric_templates bt
+          JOIN patients p ON bt.patient_id = p.id
+          WHERE bt.user_id = ${user.id}
+          AND bt.patient_id = ${patient_id}
+          ORDER BY bt.created_at DESC
+          LIMIT 100
+        `
+      : await db`
+          SELECT bt.id, bt.biometric_type as template_type, bt.finger_position, bt.face_angle,
+                 bt.capture_quality, bt.is_active, bt.verified_count,
+                 bt.last_verified_at, bt.created_at, bt.patient_id,
+                 p.full_name as patient_name
+          FROM biometric_templates bt
+          JOIN patients p ON bt.patient_id = p.id
+          WHERE bt.user_id = ${user.id}
+          ORDER BY bt.created_at DESC
+          LIMIT 100
+        `
 
     return { success: true, data: result }
   } catch (error: any) {
@@ -213,9 +181,9 @@ export async function deactivateBiometricTemplate(template_id: string) {
     const cookieStore = await cookies()
     const token = cookieStore.get("session")?.value
 
-    if (!token) return { error: "Não autenticado" }
+    if (!token) return { error: "Nao autenticado" }
     const user = await verifyToken(token)
-    if (!user) return { error: "Token inválido" }
+    if (!user) return { error: "Token invalido" }
 
     await setUserContext(user.id)
     const db = await getDb()
@@ -223,7 +191,7 @@ export async function deactivateBiometricTemplate(template_id: string) {
     const result = await db`
       UPDATE biometric_templates
       SET is_active = false, updated_at = NOW()
-      WHERE id = ${template_id} AND tenant_id = ${user.tenant_id}
+      WHERE id = ${template_id} AND user_id = ${user.id}
       RETURNING *
     `
 
@@ -238,53 +206,58 @@ export async function deleteBiometricTemplate(template_id: string) {
     const cookieStore = await cookies()
     const token = cookieStore.get("session")?.value
 
-    if (!token) return { error: "Não autenticado" }
+    if (!token) return { error: "Nao autenticado" }
     const user = await verifyToken(token)
-    if (!user) return { error: "Token inválido" }
+    if (!user) return { error: "Token invalido" }
 
     await setUserContext(user.id)
     const db = await getDb()
 
     const result = await db`
       DELETE FROM biometric_templates
-      WHERE id = ${template_id} AND tenant_id = ${user.tenant_id}
+      WHERE id = ${template_id} AND user_id = ${user.id}
       RETURNING id
     `
 
-    if (result.length === 0) return { error: "Template não encontrado" }
+    if (result.length === 0) return { error: "Template nao encontrado" }
     return { success: true }
   } catch (error: any) {
     return { error: error.message }
   }
 }
 
-export async function getBiometricAuditLog(filters: {
-  patient_id?: string
-  start_date?: string
-  end_date?: string
-  limit?: number
-}) {
+export async function getVerificationHistory(patient_id?: string, limit: number = 50) {
   try {
     const cookieStore = await cookies()
     const token = cookieStore.get("session")?.value
 
-    if (!token) return { error: "Não autenticado" }
+    if (!token) return { error: "Nao autenticado" }
     const user = await verifyToken(token)
-    if (!user) return { error: "Token inválido" }
+    if (!user) return { error: "Token invalido" }
 
     await setUserContext(user.id)
     const db = await getDb()
 
-    const result = await db`
-      SELECT *
-      FROM biometric_audit_log
-      WHERE tenant_id = ${user.tenant_id}
-        ${filters.patient_id ? db`AND patient_id = ${filters.patient_id}` : db``}
-        ${filters.start_date ? db`AND created_at >= ${filters.start_date}` : db``}
-        ${filters.end_date ? db`AND created_at <= ${filters.end_date}` : db``}
-      ORDER BY created_at DESC
-      LIMIT ${filters.limit || 100}
-    `
+    const result = patient_id
+      ? await db`
+          SELECT bv.*, bt.biometric_type, p.full_name as patient_name
+          FROM biometric_verifications bv
+          JOIN biometric_templates bt ON bv.template_id = bt.id
+          JOIN patients p ON bt.patient_id = p.id
+          WHERE bv.user_id = ${user.id}
+          AND bt.patient_id = ${patient_id}
+          ORDER BY bv.created_at DESC
+          LIMIT ${limit}
+        `
+      : await db`
+          SELECT bv.*, bt.biometric_type, p.full_name as patient_name
+          FROM biometric_verifications bv
+          JOIN biometric_templates bt ON bv.template_id = bt.id
+          JOIN patients p ON bt.patient_id = p.id
+          WHERE bv.user_id = ${user.id}
+          ORDER BY bv.created_at DESC
+          LIMIT ${limit}
+        `
 
     return { success: true, data: result }
   } catch (error: any) {
