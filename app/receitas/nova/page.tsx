@@ -103,9 +103,21 @@ export default function NovaReceitaPage() {
     setLoading(true)
 
     try {
+      // Preparar medicamentos no formato correto
+      const medicationData = medications
+        .filter((m) => m.medicationName)
+        .map((m) => ({
+          name: m.medicationName,
+          dosage: m.dosage,
+          frequency: m.frequency,
+          duration: m.duration,
+          quantity: m.quantity || 1,
+          instructions: m.instructions || undefined,
+        }))
+
       const result = await createDigitalPrescription({
         patientId: formData.patientId,
-        medications: medications.filter((m) => m.medicationName),
+        medications: medicationData,
         cid10Code: formData.cid10Code || undefined,
         cid10Description: formData.cid10Description || undefined,
         clinicalIndication: formData.clinicalIndication || undefined,
@@ -116,8 +128,10 @@ export default function NovaReceitaPage() {
 
       if (result.error) {
         setError(result.error)
+      } else if (result.prescriptionId) {
+        router.push(`/receitas/assinar/${result.prescriptionId}`)
       } else {
-        router.push(`/receitas/assinar/${result.digitalPrescriptionId}`)
+        setError("Erro ao criar receita: ID não retornado")
       }
     } catch (err) {
       console.error("[v0] Error creating prescription:", err)
