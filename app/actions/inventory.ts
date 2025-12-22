@@ -3,7 +3,7 @@
 import { getDb } from '@/lib/db'
 import { verifyToken } from '@/lib/session'
 import { cookies } from 'next/headers'
-import { setUserContext } from '@/lib/db-init'
+import { setFullContext } from '@/lib/db-init'
 
 export async function createInventoryItem(data: {
   name: string
@@ -28,7 +28,7 @@ export async function createInventoryItem(data: {
     const user = await verifyToken(token)
     if (!user) return { error: 'Token invalido' }
 
-    await setUserContext(user.id)
+    await setFullContext(user.id)
     const db = await getDb()
 
     const result = await db`
@@ -77,7 +77,7 @@ export async function updateInventoryItem(id: string, data: {
     const user = await verifyToken(token)
     if (!user) return { error: 'Token invalido' }
 
-    await setUserContext(user.id)
+    await setFullContext(user.id)
     const db = await getDb()
 
     const result = await db`
@@ -126,7 +126,7 @@ export async function createInventoryMovement(data: {
     const user = await verifyToken(token)
     if (!user) return { error: 'Token invalido' }
 
-    await setUserContext(user.id)
+    await setFullContext(user.id)
     const db = await getDb()
 
     // Get current stock
@@ -193,7 +193,7 @@ export async function getInventoryItems(filters?: {
     const user = await verifyToken(token)
     if (!user) return { error: 'Token invalido' }
 
-    await setUserContext(user.id)
+    await setFullContext(user.id)
     const db = await getDb()
 
     const result = await db`
@@ -222,7 +222,7 @@ export async function getInventoryAlerts() {
     const user = await verifyToken(token)
     if (!user) return { error: 'Token invalido' }
 
-    await setUserContext(user.id)
+    await setFullContext(user.id)
     const db = await getDb()
 
     // Get items with low stock
@@ -258,7 +258,7 @@ export async function getInventoryMovements(item_id?: string, limit: number = 50
     const user = await verifyToken(token)
     if (!user) return { error: 'Token invalido' }
 
-    await setUserContext(user.id)
+    await setFullContext(user.id)
     const db = await getDb()
 
     const result = item_id
@@ -298,7 +298,7 @@ export async function deleteInventoryItem(item_id: string) {
     const user = await verifyToken(token)
     if (!user) return { error: 'Token invalido' }
 
-    await setUserContext(user.id)
+    await setFullContext(user.id)
     const db = await getDb()
 
     const result = await db`
@@ -325,7 +325,7 @@ export async function getInventoryStats() {
     const user = await verifyToken(token)
     if (!user) return { error: 'Token invalido' }
 
-    await setUserContext(user.id)
+    await setFullContext(user.id)
     const db = await getDb()
 
     const stats = await db`

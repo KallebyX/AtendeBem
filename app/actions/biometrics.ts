@@ -3,7 +3,7 @@
 import { getDb } from "@/lib/db"
 import { verifyToken } from "@/lib/session"
 import { cookies } from "next/headers"
-import { setUserContext } from "@/lib/db-init"
+import { setFullContext } from "@/lib/db-init"
 import crypto from "crypto"
 
 // Função helper para gerar hash de template (simulação)
@@ -30,7 +30,7 @@ export async function enrollBiometric(data: {
     const user = await verifyToken(token)
     if (!user) return { error: "Token invalido" }
 
-    await setUserContext(user.id)
+    await setFullContext(user.id)
     const db = await getDb()
 
     // Gerar template simulado se não fornecido
@@ -75,7 +75,7 @@ export async function verifyBiometric(data: {
     const user = await verifyToken(token)
     if (!user) return { error: "Token invalido" }
 
-    await setUserContext(user.id)
+    await setFullContext(user.id)
     const db = await getDb()
 
     // Buscar templates ativos do paciente
@@ -142,7 +142,7 @@ export async function getBiometricTemplates(patient_id?: string) {
     const user = await verifyToken(token)
     if (!user) return { error: "Token invalido" }
 
-    await setUserContext(user.id)
+    await setFullContext(user.id)
     const db = await getDb()
 
     const result = patient_id
@@ -185,7 +185,7 @@ export async function deactivateBiometricTemplate(template_id: string) {
     const user = await verifyToken(token)
     if (!user) return { error: "Token invalido" }
 
-    await setUserContext(user.id)
+    await setFullContext(user.id)
     const db = await getDb()
 
     const result = await db`
@@ -210,7 +210,7 @@ export async function deleteBiometricTemplate(template_id: string) {
     const user = await verifyToken(token)
     if (!user) return { error: "Token invalido" }
 
-    await setUserContext(user.id)
+    await setFullContext(user.id)
     const db = await getDb()
 
     const result = await db`
@@ -235,7 +235,7 @@ export async function getVerificationHistory(patient_id?: string, limit: number 
     const user = await verifyToken(token)
     if (!user) return { error: "Token invalido" }
 
-    await setUserContext(user.id)
+    await setFullContext(user.id)
     const db = await getDb()
 
     const result = patient_id

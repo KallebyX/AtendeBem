@@ -3,7 +3,7 @@
 import { getDb } from "@/lib/db"
 import { verifyToken } from "@/lib/session"
 import { cookies } from "next/headers"
-import { setUserContext } from "@/lib/db-init"
+import { setFullContext } from "@/lib/db-init"
 
 export async function createMedicalImage(data: {
   patient_id: string
@@ -23,7 +23,7 @@ export async function createMedicalImage(data: {
     const user = await verifyToken(token)
     if (!user) return { error: "Token invalido" }
 
-    await setUserContext(user.id)
+    await setFullContext(user.id)
     const db = await getDb()
 
     const studyUID = `1.2.826.0.1.${Date.now()}.${user.id.slice(0, 8)}`
@@ -61,7 +61,7 @@ export async function getMedicalImages(filters?: {
     const user = await verifyToken(token)
     if (!user) return { error: "Token invalido" }
 
-    await setUserContext(user.id)
+    await setFullContext(user.id)
     const db = await getDb()
 
     const result = await db`
@@ -98,7 +98,7 @@ export async function addImageReport(data: {
     const user = await verifyToken(token)
     if (!user) return { error: "Token invalido" }
 
-    await setUserContext(user.id)
+    await setFullContext(user.id)
     const db = await getDb()
 
     const result = await db`
@@ -138,7 +138,7 @@ export async function createImageAnnotation(data: {
     const user = await verifyToken(token)
     if (!user) return { error: "Token inválido" }
 
-    await setUserContext(user.id)
+    await setFullContext(user.id)
     const db = await getDb()
 
     const result = await db`
@@ -168,7 +168,7 @@ export async function deleteMedicalImage(image_id: string) {
     const user = await verifyToken(token)
     if (!user) return { error: "Token inválido" }
 
-    await setUserContext(user.id)
+    await setFullContext(user.id)
     const db = await getDb()
 
     const result = await db`
@@ -204,7 +204,7 @@ export async function uploadMedicalImage(data: {
     const user = await verifyToken(token)
     if (!user) return { error: "Token invalido" }
 
-    await setUserContext(user.id)
+    await setFullContext(user.id)
     const db = await getDb()
 
     const studyUID = `1.2.826.0.1.${Date.now()}.${user.id.slice(0, 8)}`

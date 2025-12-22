@@ -186,3 +186,46 @@ export async function setUserContext(userId: string) {
     console.warn("[db-init] Could not set user context (non-critical):", error)
   }
 }
+
+export async function setTenantContext(tenantId: string) {
+  try {
+    const sql = await getDb()
+    await sql.unsafe(`SET LOCAL app.current_tenant_id = '${tenantId}'`)
+  } catch (error) {
+    console.warn("[db-init] Could not set tenant context (non-critical):", error)
+  }
+}
+
+export async function getUserTenantId(userId: string): Promise<string | null> {
+  try {
+    const sql = await getDb()
+    const result = await sql`
+      SELECT tenant_id FROM users WHERE id = ${userId}
+    `
+    return result[0]?.tenant_id || null
+  } catch (error) {
+    console.warn("[db-init] Could not get user tenant_id:", error)
+    return null
+  }
+}
+
+export async function setFullContext(userId: string) {
+  try {
+    const sql = await getDb()
+
+    // Set user context
+    await sql.unsafe(`SET LOCAL app.current_user_id = '${userId}'`)
+
+    // Get and set tenant context
+    const result = await sql`
+      SELECT tenant_id FROM users WHERE id = ${userId}
+    `
+    const tenantId = result[0]?.tenant_id || '00000000-0000-0000-0000-000000000001'
+    await sql.unsafe(`SET LOCAL app.current_tenant_id = '${tenantId}'`)
+
+    return tenantId
+  } catch (error) {
+    console.warn("[db-init] Could not set full context:", error)
+    return '00000000-0000-0000-0000-000000000001'
+  }
+}
