@@ -33,9 +33,9 @@ export default function DashboardPage() {
     // Core Actions
     {
       icon: Plus,
-      title: "Novo atendimento",
-      description: "Registrar um novo atendimento médico",
-      href: "/atendimento/novo",
+      title: "Nova Consulta",
+      description: "Atendimento completo integrado",
+      href: "/consulta",
       color: "bg-secondary text-primary",
       category: "Atendimento",
     },
